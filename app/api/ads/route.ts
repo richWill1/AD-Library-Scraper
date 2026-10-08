@@ -1,4 +1,5 @@
 import {NextRequest, NextResponse} from 'next/server';
+import {brandQuery} from '@/lib/brand-search';
 export const runtime='nodejs';
 const buckets=new Map<string,{at:number,count:number}>();
 const cache=new Map<string,{at:number,data:unknown}>();
@@ -8,13 +9,15 @@ export async function GET(req:NextRequest){
  const key=req.headers.get('x-forwarded-for')?.split(',')[0]||'shared';const now=Date.now();
  if(buckets.size>1000)for(const [k,v]of buckets)if(now-v.at>60000)buckets.delete(k);
  const bucket=buckets.get(key);if(bucket&&now-bucket.at<60000){if(bucket.count>=20)return NextResponse.json({error:'Please wait a minute before searching again.'},{status:429});bucket.count++;}else buckets.set(key,{at:now,count:1});
+ const coverage=req.nextUrl.searchParams.get('coverage')||'GB';if(!['GB','EU_UK'].includes(coverage))return NextResponse.json({error:'Choose United Kingdom or UK + EU coverage.'},{status:400});
+ const countries=coverage==='EU_UK'?['GB','AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']:['GB'];
  const discovering=req.nextUrl.searchParams.get('discover')==='1';
  const q=(req.nextUrl.searchParams.get('q')||'').trim();const page=req.nextUrl.searchParams.get('page')||'';const after=req.nextUrl.searchParams.get('after')||'';
  if((!q&&!page)||q.length>200||(page&&!/^\d{1,30}$/.test(page))||after.length>2000)return NextResponse.json({error:'Enter a brand, website URL or valid advertiser Page ID.'},{status:400});
- let term=q;try{if(/^(https?:\/\/|www\.)/i.test(q)||/^(?:[\w-]+\.)+[a-z]{2,}(\/.*)?$/i.test(q))term=new URL(/^https?:/i.test(q)?q:`https://${q}`).hostname.replace(/^www\./,'').replace(/\.(co\.uk|com|org|net)$/i,'').replace(/[-_]/g,' ');}catch{return NextResponse.json({error:'Please check the website URL.'},{status:400});}
- const pageId=page||(/^\d{1,30}$/.test(q)?q:'')||(/^(sharps|sharps fitted furniture)$/i.test(term)?'280531915302272':'');
- const params=new URLSearchParams({ad_reached_countries:'["GB"]',ad_type:'ALL',ad_active_status:'ACTIVE',limit:'50',fields:'id,page_id,page_name,ad_creative_bodies,ad_creative_link_titles,ad_delivery_start_time,ad_delivery_stop_time,publisher_platforms,impressions,total_reach_by_location,target_locations,target_ages'});
- if(discovering)params.set('fields','id,page_id,page_name');
+ let parsed;try{parsed=brandQuery(q);}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Please check the website URL.'},{status:400});}
+ const term=parsed.term;const pageId=page||parsed.pageId||(/^(sharps|sharps fitted furniture)$/i.test(term)?'280531915302272':'');
+ const params=new URLSearchParams({ad_reached_countries:JSON.stringify(countries),ad_type:'ALL',ad_active_status:'ACTIVE',limit:'50',fields:'id,page_id,page_name,ad_creative_bodies,ad_creative_link_titles,ad_delivery_start_time,ad_delivery_stop_time,publisher_platforms,impressions,total_reach_by_location,target_locations,target_ages'});
+ if(discovering){params.set('fields','id,page_id,page_name');params.set('limit','100');}
  if(pageId)params.set('search_page_ids',JSON.stringify([pageId]));else params.set('search_terms',term);
  if(after)params.set('after',after);
  const cacheKey=params.toString()+String(discovering);const hit=cache.get(cacheKey);if(hit&&now-hit.at<300000)return NextResponse.json(hit.data);

@@ -31,3 +31,9 @@ Our own media route reads `data/collected-media.json`, a batch of video URLs mat
 Videos start muted inline, loop, pause off-screen/background, and appear in the detail panel too. Actual file playback failure shows a Meta link. Each collected card labels its collection date. Autoplay remains subject to browser policy.
 
 The next collection milestone is an owned service that refreshes these records for each selected advertiser. A direct public HTTP test received Meta's browser challenge; do not treat bypassing that challenge or borrowing the operator's login cookies as a production solution. Accounts, billing, durable research storage and fully automatic collection are not implemented yet.
+
+## Brand discovery improvements
+
+Editing the search field immediately removes stale advertiser results and automatically discovers advertisers after a 700 ms typing pause (minimum two characters). Superseded browser requests are aborted and ignored. Closest advertiser-name matches appear first; discovery retrieves up to 100 ads per page and supports further pagination. Searches support business domains, Facebook Page URLs and numeric Page IDs. Domain normalization handles subdomains and common multipart suffixes. Website queries remain hints, not verified domain-to-Page ownership.
+
+Search coverage can be United Kingdom or UK + EU (all 27 EU countries). The selected coverage persists with the research session. Both discovery and Page ID searches request active ads within that scope. This is not worldwide commercial-ad coverage or a complete advertiser directory. UK reach remains explicitly UK reach even for EU searches; missing UK reach is unavailable. Broader search does not automatically collect media.
