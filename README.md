@@ -21,3 +21,9 @@ Cards show platforms, UK reach when available, start date, elapsed days, target 
 ## Health
 
 GET /api/health reports server health and whether a token is configured, not token validity. Live validity must be checked with an actual search. Expired credentials receive a safe renewal message without exposing Meta response details.
+
+## Session and media previews
+
+Refresh restores the current research session, selected advertiser, loaded records, filters and open details from this tab's sessionStorage. Metadata retains its original retrieval date; refresh the live search explicitly to fetch new data. Autoplay preference persists in localStorage.
+
+Optional live media requires a private SCRAPECREATORS_API_KEY on Render. The media adapter calls the documented ad-details endpoint for visible cards only, caches results for one hour in memory, deduplicates concurrent requests and limits uncached requests per client to 30/minute. Each uncached provider request may consume credits; configure the key only after approval for provider use. No provider account or key is provisioned by source deployment. Static ads render as images, videos start muted and inline, pause off-screen and in background tabs, and retain controls for manual playback/unmute. Browser policy may still require a user action. Signed media URLs can expire; missing/failed previews retain a Meta link. Supports videos, images and carousel card variants.
