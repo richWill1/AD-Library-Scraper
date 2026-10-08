@@ -1,0 +1,11 @@
+import fs from 'node:fs';import ts from 'typescript';import assert from 'node:assert/strict';
+const compile=p=>ts.transpileModule(fs.readFileSync(p,'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const media='data:text/javascript;base64,'+Buffer.from(compile('lib/media.ts')).toString('base64');
+const {collectionItems}=await import('data:text/javascript;base64,'+Buffer.from(compile('lib/collected-media.ts').replace("'./media'",JSON.stringify(media))).toString('base64'));
+const now=Date.now(),url='https://video-test.xx.fbcdn.net/a.mp4';const c={collectedAt:new Date(now).toISOString(),source:'meta-library-browser',records:[{id:'123',url},{id:'123',url},{id:'999',url}]};
+assert.equal(collectionItems(c,'123',now).length,1);assert.equal(collectionItems(c,'404',now).length,0);
+assert.equal(collectionItems({...c,collectedAt:new Date(now-7*3600000).toISOString()},'123',now).length,0);
+assert.equal(collectionItems({...c,collectedAt:'bad'},'123',now).length,0);
+assert.equal(collectionItems({...c,records:[{id:'123',url:url+'?oe=00000001'}]},'123',now).length,0);
+assert.equal(collectionItems({...c,records:[{id:'123',url:'https://evil.example/a'}]},'123',now).length,0);
+const actual=JSON.parse(fs.readFileSync('data/collected-media.json'));assert(collectionItems(actual,'1675773394116893',now).length);console.log('Collection checks passed: exact ad matching, duplicate removal, batch expiry, signed expiry, unsafe URL rejection and real Sharps collection.');
