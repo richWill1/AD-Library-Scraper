@@ -37,3 +37,9 @@ The next collection milestone is an owned service that refreshes these records f
 Editing the search field immediately removes stale advertiser results and automatically discovers advertisers after a 700 ms typing pause (minimum two characters). Superseded browser requests are aborted and ignored. Closest advertiser-name matches appear first; discovery retrieves up to 100 ads per page and supports further pagination. Searches support business domains, Facebook Page URLs and numeric Page IDs. Domain normalization handles subdomains and common multipart suffixes. Website queries remain hints, not verified domain-to-Page ownership.
 
 Search coverage can be United Kingdom or UK + EU (all 27 EU countries). The selected coverage persists with the research session. Both discovery and Page ID searches request active ads within that scope. This is not worldwide commercial-ad coverage or a complete advertiser directory. UK reach remains explicitly UK reach even for EU searches; missing UK reach is unavailable. Broader search does not automatically collect media.
+
+## Messaging map
+
+The Messaging map tab maps the loaded, filtered ad text into hooks, benefits, offers, proof/reassurance and next steps. Deterministic text rules detect themes; this is not AI visual analysis, verified brand claims or measured performance. Each theme includes its exact text evidence, overlapping ad count, and distinct full-copy patterns. Evidence examples rank by available UK reach and open the existing ad/brief panel. Full-copy groups may share the same short evidence excerpt.
+
+Users can edit a test direction per theme. Notes persist locally per advertiser and are included in the plain-text map export. The map view itself persists with the research session. Theme rules currently recognise English phrases; other languages and ads without usable text may have no detected themes. More pages or changed filters rebuild the map from the current loaded records.
