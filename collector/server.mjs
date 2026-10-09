@@ -9,7 +9,7 @@ function acquire(){if(active<maximum){active++;return Promise.resolve();}if(wait
 function release(){const next=waiting.shift();if(next)next.resolve();else active--;}
 async function browser(){if(!browserPromise)browserPromise=chromium.launch({headless:true}).then(b=>{b.on('disconnected',()=>browserPromise=null);return b;}).catch(()=>{browserPromise=null;throw Error('COLLECTOR_UNAVAILABLE');});return browserPromise;}
 async function collect(id,token){
- let context;
+ let context;let phase='browser';const started=Date.now();
  try{
   const b=await browser();context=await b.newContext({viewport:{width:680,height:900},locale:'en-GB'});const page=await context.newPage();const streamed=new Map();const jsonItems=[];const reads=[];
   page.on('request',request=>{const candidate=videoCandidate(request.url());if(candidate)streamed.set(candidate.url,candidate.score);});
@@ -23,18 +23,18 @@ async function collect(id,token){
   await page.route('**/*',route=>{const req=route.request();let host;try{host=new URL(req.url()).hostname;}catch{return route.abort();}if(!/\.(facebook\.com|fbcdn\.net|fbsbx\.com)$/.test('.'+host)||['media','font'].includes(req.resourceType()))return route.abort();return route.continue();});
   // The token is used only in Meta's official snapshot URL; never in the incoming URL or logs.
   const url=new URL('https://www.facebook.com/ads/archive/render_ad/');url.searchParams.set('id',id);url.searchParams.set('access_token',token);
-  const response=await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:25000});
+  phase='snapshot';const response=await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:25000});
   if(!response?.ok())throw Error('META_BLOCKED');
-  await page.getByText(`Library ID: ${id}`,{exact:true}).waitFor({state:'visible',timeout:20000});
+  phase='ad-identity';await page.getByText(`Library ID: ${id}`,{exact:true}).waitFor({state:'visible',timeout:20000});
   const root=page.getByRole('main');
-  await root.locator('video,img').filter({visible:true}).first().waitFor({state:'visible',timeout:10000});
+  phase='creative-elements';await root.locator('video,img').filter({visible:true}).first().waitFor({state:'visible',timeout:10000});
   // Wait for a real creative, not the advertiser's small profile image.
-  await page.waitForFunction(()=>Array.from(document.querySelectorAll('video,img')).some(el=>el.tagName==='VIDEO'||el.tagName==='IMG'&&el.getBoundingClientRect().width>=200&&el.getBoundingClientRect().height>=150&&/\.fbcdn\.net\//.test(el.currentSrc||el.src)),null,{timeout:15000});
+  phase='creative-ready';await page.waitForFunction(()=>Array.from(document.querySelectorAll('video,img')).some(el=>el.tagName==='VIDEO'||el.tagName==='IMG'&&el.getBoundingClientRect().width>=200&&el.getBoundingClientRect().height>=150&&/\.fbcdn\.net\//.test(el.currentSrc||el.src)),null,{timeout:15000});
   const readRecords=()=>root.locator('video,img').evaluateAll(elements=>elements.map(el=>{
    const r=el.getBoundingClientRect();if(el.tagName==='IMG'&&(r.width<200||r.height<150||el.closest('[aria-label="Video player"]')))return null;
    return {kind:el.tagName==='VIDEO'?'video':'image',url:el.currentSrc||el.src,poster:el.tagName==='VIDEO'?el.poster:undefined};
   }).filter(Boolean));
-  let records=await readRecords();
+  phase='media-source';let records=await readRecords();
   if(records.some(r=>r.kind==='video')&&!records.some(r=>r.kind==='video'&&safe(r.url))){const play=root.getByRole('button',{name:'Play Video',exact:true});if(await play.count())await play.first().click({timeout:3000}).catch(()=>{});}
   for(let attempt=0;attempt<7;attempt++){await Promise.allSettled(reads);records=await readRecords();if(records.some(r=>safe(r.url))||jsonItems.length||streamed.size)break;await page.waitForTimeout(1000);}
   await Promise.allSettled(reads);
@@ -43,7 +43,7 @@ async function collect(id,token){
   const items=[];for(const r of [...records,...jsonItems]){const url=safe(r.url);if(url&&!items.some(v=>v.url===url))items.push({kind:r.kind,url,poster:safe(r.poster)||undefined});}
   const posters=new Set(items.filter(i=>i.kind==='video').map(i=>i.poster));const filtered=items.filter(i=>i.kind!=='image'||!posters.has(i.url)).slice(0,20);
   return {items:filtered,collectedAt:new Date().toISOString(),code:filtered.length?'COLLECTED':'NO_MEDIA',source:'meta-official-snapshot'};
- }finally{await context?.close();}
+ }catch(error){error.collectionPhase=phase;error.collectionMs=Date.now()-started;throw error;}finally{await context?.close();}
 }
 const inflight=new Map();
 const server=http.createServer(async(req,res)=>{
@@ -53,6 +53,6 @@ const server=http.createServer(async(req,res)=>{
  const id=url.searchParams.get('id')||'',token=req.headers['x-meta-token'];if(req.method!=='GET'||url.pathname!=='/creative'||!/^\d{1,30}$/.test(id)||typeof token!=='string'||token.length<20||token.length>4096||/[\s\x00-\x1f]/.test(token))return reply(400,{code:'INVALID_REQUEST',items:[]});
  const key=createHash('sha256').update(token).digest('hex')+':'+id,hit=cache.get(key);if(url.searchParams.get('refresh')!=='1'&&hit&&Date.now()<hit.until)return reply(200,hit.result);
  let work=inflight.get(key);if(!work){work=(async()=>{await acquire();try{const result=await collect(id,token);if(result.items.length){if(cache.size>=200)cache.delete(cache.keys().next().value);cache.set(key,{until:expiry(result.items),result});}return result;}finally{release();}})();inflight.set(key,work);work.finally(()=>inflight.delete(key)).catch(()=>{});}
- try{reply(200,await work);}catch(error){const code=['META_BLOCKED','BUSY','COLLECTOR_UNAVAILABLE'].includes(error.message)?error.message:error.name==='TimeoutError'?'META_PREVIEW_UNAVAILABLE':'COLLECTOR_ERROR';console.log(JSON.stringify({event:'collection_failed',ad:id,code}));reply(code==='BUSY'?429:502,{code,items:[],retryAfter:4});}
+ try{reply(200,await work);}catch(error){const code=['META_BLOCKED','BUSY','COLLECTOR_UNAVAILABLE'].includes(error.message)?error.message:error.name==='TimeoutError'?'META_PREVIEW_UNAVAILABLE':'COLLECTOR_ERROR';const phase=['browser','snapshot','ad-identity','creative-elements','creative-ready','media-source'].includes(error.collectionPhase)?error.collectionPhase:'queue';console.log(JSON.stringify({event:'collection_failed',ad:id,code,phase,durationMs:error.collectionMs||null}));reply(code==='BUSY'?429:502,{code,items:[],retryAfter:4});}
 });server.listen(Number(process.env.PORT||10000),'0.0.0.0');
 for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>server.close(async()=>{await(await browserPromise)?.close();process.exit(0);}));

@@ -14,6 +14,8 @@ Keep Meta's official Ad Library API as the primary data source for UK competitor
 - Both website and collector are on free Render web-service compute, one instance each, in Frankfurt. Neither has an explicit HTTP health-check path configured.
 - Collector memory limit: 512 MiB. Sparse idle observations around 66–73 MB do not demonstrate capacity under browser load or prove out-of-memory failures.
 - Fresh public media requests returned a Sharps image in 19 seconds and a Neville Johnson video in 16 seconds. Both returned COLLECTED. This two-ad sample does not establish broad brand coverage.
+- A top-ranked Sharps ad (1675773394116893) subsequently failed in the collector after 34 seconds with META_PREVIEW_UNAVAILABLE while Meta’s own browser preview displayed a video. Source availability alone does not prove collector compatibility. Safe per-stage diagnostics were added to separate identity, creative-readiness and media-source failures.
+- Deployed metadata endpoint returned 50 Sharps records in 1.6 seconds; separate classification completed in 1 second and classified 25 records. This is a single observation, not a service-level target.
 - Earlier collector logs contain BUSY and META_PREVIEW_UNAVAILABLE. No failures appeared in the queried post-18:08 UTC log window, which is not an availability guarantee.
 - Sharps pagination returned 50 records followed by 12 additional unique records. Live interface confirmed 62 loaded ads. The next-page control is now available beside the brand name.
 - Current search caches and creative URL caches are process-local and lost on restart. Media files are not stored in an owned object-storage bucket. Signed Meta CDN URLs still expire.
