@@ -29,7 +29,7 @@ async function collect(id,token){
   const root=page.getByRole('main');
   await root.locator('video,img').filter({visible:true}).first().waitFor({state:'visible',timeout:10000});
   // Wait for a real creative, not the advertiser's small profile image.
-  await page.waitForFunction(()=>Array.from(document.querySelectorAll('video,img')).some(el=>el.tagName==='VIDEO'&&/\.fbcdn\.net\//.test(el.currentSrc||el.src)||el.tagName==='IMG'&&el.getBoundingClientRect().width>=200&&el.getBoundingClientRect().height>=150&&/\.fbcdn\.net\//.test(el.currentSrc||el.src)),null,{timeout:15000});
+  await page.waitForFunction(()=>Array.from(document.querySelectorAll('video,img')).some(el=>el.tagName==='VIDEO'||el.tagName==='IMG'&&el.getBoundingClientRect().width>=200&&el.getBoundingClientRect().height>=150&&/\.fbcdn\.net\//.test(el.currentSrc||el.src)),null,{timeout:15000});
   const readRecords=()=>root.locator('video,img').evaluateAll(elements=>elements.map(el=>{
    const r=el.getBoundingClientRect();if(el.tagName==='IMG'&&(r.width<200||r.height<150||el.closest('[aria-label="Video player"]')))return null;
    return {kind:el.tagName==='VIDEO'?'video':'image',url:el.currentSrc||el.src,poster:el.tagName==='VIDEO'?el.poster:undefined};
