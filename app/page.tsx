@@ -40,6 +40,13 @@ export default function Home(){
  }
  useEffect(()=>{if(!ready||resumed.current||new URLSearchParams(window.location.search).get('resume')!=='1')return;resumed.current=true;window.history.replaceState({},'',window.location.pathname);try{const pending=JSON.parse(sessionStorage.getItem('ad-research-retry-v1')||'null');sessionStorage.removeItem('ad-research-retry-v1');if(validRecoveryRequest(pending))void load(pending.query,pending.page,pending.after,pending.coverage);}catch{}},[ready]);
  const retrySearch=()=>{if(pendingResearch)void load(pendingResearch.query,pendingResearch.page,pendingResearch.after,pendingResearch.coverage);};
+ // Format analysis must never hold up search results or creative previews.
+ const formatIds=live&&!discovery?rows.map(a=>a.id).slice(-200).join(','):'';
+ useEffect(()=>{if(!formatIds||!page)return;const controller=new AbortController();const ids=formatIds.split(',');
+  fetch('/api/formats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({page,coverage,ids}),signal:controller.signal}).then(async response=>response.ok?response.json():null).then(data=>{
+   if(controller.signal.aborted||!data?.formats)return;setRows(old=>old.map(ad=>{const format=data.formats[ad.id];return ad.format==='Unknown'&&['Video','Image','Mixed'].includes(format)?{...ad,format}:ad;}));
+  }).catch(()=>{});return()=>controller.abort();
+ },[page,coverage,formatIds]);
  const previousResearch=()=>{if(!lastResearch)return;activeSearch.current?.abort();request.current++;if(searchTimer.current)clearTimeout(searchTimer.current);editing.current=false;setLoading(false);setError('');setErrorCode('');restoreSnapshot(lastResearch);};
  const openBoard=()=>{activeSearch.current?.abort();request.current++;if(searchTimer.current)clearTimeout(searchTimer.current);editing.current=false;setLoading(false);setError('');setErrorCode('');setTab('saved');setView('ads');setDiscovery(false);};
  useEffect(()=>{if(!ready||!editing.current)return;const value=query.trim();if(value.length<2)return;searchTimer.current=setTimeout(()=>void load(value),700);return()=>{if(searchTimer.current)clearTimeout(searchTimer.current);};},[query,ready,coverage]);

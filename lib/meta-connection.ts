@@ -1,5 +1,6 @@
 // Server-only connection observations; no credentials or raw Meta errors are returned.
 import {credentialsView,getMetaCredential} from '@/lib/meta-token-store';
+import {metaFetch} from '@/lib/meta-api';
 export type ConnectionState = 'not-configured'|'connected'|'renew-soon'|'expired'|'reconnect'|'access-denied'|'unavailable';
 type Observation = {state:ConnectionState;checkedAt:string};
 let observation:Observation|null=null;
@@ -25,6 +26,7 @@ export function connectionSummary(now=Date.now()){
  return {state,message:messages[state],checkedAt:observedToken===token?observation?.checkedAt||null:null,expiresAt:expiresAt===null?null:new Date(expiresAt).toISOString(),daysRemaining,expiryKnown:expiresAt!==null};
 }
 export function metaFailure(error:{code?:number;error_subcode?:number}|undefined){
+ if([4,17,32,613].includes(error?.code||0))return {state:'unavailable' as ConnectionState,code:'META_RATE_LIMITED',error:'Meta is limiting requests. Please wait a minute before trying again.'};
  const state:ConnectionState=error?.code===190?(error.error_subcode===463?'expired':'reconnect'):[10,200].includes(error?.code||0)?'access-denied':'unavailable';
  const code=state==='expired'?'META_EXPIRED':state==='reconnect'?'META_RECONNECT':state==='access-denied'?'META_ACCESS_DENIED':'META_UNAVAILABLE';
  return {state,code,error:messages[state]};
@@ -39,7 +41,7 @@ export async function checkMetaConnection(force=false){
  pending=(async()=>{
   try{
    const params=new URLSearchParams({ad_reached_countries:'["GB"]',ad_type:'ALL',ad_active_status:'ACTIVE',search_page_ids:'["280531915302272"]',fields:'id',limit:'1'});
-   const response=await fetch(`https://graph.facebook.com/v26.0/ads_archive?${params}`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(8000),cache:'no-store'});
+   const response=await metaFetch(`https://graph.facebook.com/v26.0/ads_archive?${params}`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(8000),cache:'no-store'});
    const body=await response.json();
    recordMetaConnection(response.ok&&!body.error&&Array.isArray(body.data)?'connected':metaFailure(body.error).state);
   }catch{recordMetaConnection('unavailable');}

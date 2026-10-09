@@ -3,10 +3,11 @@ import {brandQuery} from '@/lib/brand-search';
 import {connectionSummary,metaFailure,recordMetaConnection} from '@/lib/meta-connection';
 import {getMetaCredential} from '@/lib/meta-token-store';
 import {createHash} from 'node:crypto';
-import {adFormats} from '@/lib/ad-formats';
+import {metaFetch} from '@/lib/meta-api';
 export const runtime='nodejs';
 const buckets=new Map<string,{at:number,count:number}>();
 const cache=new Map<string,{at:number,data:unknown}>();
+const inflight=new Map<string,Promise<any>>();
 export async function GET(req:NextRequest){
  let token:string;try{token=(await getMetaCredential()).token;}catch{return NextResponse.json({error:'The research connection is temporarily unavailable. Your research board remains available.',code:'META_STORAGE_UNAVAILABLE'},{status:503});}
  if(!token)return NextResponse.json({error:'Live Meta search is awaiting connection. You can still explore the verified sample.',code:'NOT_CONFIGURED'},{status:503});
@@ -26,13 +27,17 @@ export async function GET(req:NextRequest){
  if(pageId)params.set('search_page_ids',JSON.stringify([pageId]));else params.set('search_terms',term);
  if(after)params.set('after',after);
  const cacheKey=createHash('sha256').update(token).digest('hex')+params.toString()+String(discovering);const hit=cache.get(cacheKey);if(hit&&now-hit.at<300000)return NextResponse.json(hit.data);
+ if(inflight.has(cacheKey)){const result=await inflight.get(cacheKey);return NextResponse.json(result,{status:result.error?result.code==='META_RATE_LIMITED'?429:502:200});}
+ if(inflight.size>=40)return NextResponse.json({error:'Research is busy. Please try again shortly.',code:'RATE_LIMITED'},{status:429});
+ const work=(async()=>{
  try{
- const response=await fetch(`https://graph.facebook.com/v26.0/ads_archive?${params}`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(20000),cache:'no-store'});const body=await response.json();
- if(!response.ok||body.error){const failure=metaFailure(body.error);recordMetaConnection(failure.state);return NextResponse.json({error:failure.error,code:failure.code},{status:502});}
+ const response=await metaFetch(`https://graph.facebook.com/v26.0/ads_archive?${params}`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(20000),cache:'no-store'});const body=await response.json();
+ if(!response.ok||body.error){const failure=metaFailure(body.error);recordMetaConnection(failure.state);return {error:failure.error,code:failure.code};}
  recordMetaConnection('connected');
  const rows=(body.data||[]).map((a:any)=>{const copy=Array.from(new Set<string>(a.ad_creative_bodies||[])).join('\n\n');const offer=/sale|discount|% off|book|free design/i.test(copy);const product=/collection|wardrobe|storage/i.test(copy);return {id:String(a.id),pageId:String(a.page_id),pageName:a.page_name||'Advertiser',title:a.ad_creative_link_titles?.[0]||'Ad creative',copy:copy||'No ad copy provided by Meta.',start:a.ad_delivery_start_time?.slice(0,10)||'',stop:a.ad_delivery_stop_time?.slice(0,10)||null,impressions:a.impressions||null,format:'Unknown',angle:offer?'Offer':product?'Product':'Brand',image:'',source:'Meta API',analysis:'Funnel stage is an editorial estimate based on the ad copy. It is not a Meta metric or a measure of performance.',funnel:offer?'BOFU':product?'MOFU':'TOFU',platforms:a.publisher_platforms||[],reach:a.total_reach_by_location?.find((r:any)=>(r.key??r.location)==='GB')?.value??a.total_reach_by_location?.find((r:any)=>r.location==='GB')?.reach??null,locations:a.target_locations||[],ages:a.target_ages||[]};});
- if(!discovering&&pageId&&rows.length){const formats=await adFormats(token,pageId,countries,rows.map((a:any)=>a.id));for(const row of rows)row.format=formats.get(row.id)||'Unknown';}
  const result={ads:rows,pageId:discovering?null:pageId||null,discovery:discovering||!pageId,capturedAt:new Date().toISOString(),nextCursor:body.paging?.next?body.paging?.cursors?.after||null:null};
- if(cache.size>100)cache.clear();cache.set(cacheKey,{at:now,data:result});return NextResponse.json(result);
- }catch{return NextResponse.json({error:'Meta is taking too long to respond. Please try again.',code:'META_UNAVAILABLE'},{status:502});}
+ if(cache.size>100)cache.clear();cache.set(cacheKey,{at:now,data:result});return result;
+ }catch{return {error:'Meta is taking too long to respond. Please try again.',code:'META_UNAVAILABLE'};}
+ })();inflight.set(cacheKey,work);
+ try{const result=await work;return NextResponse.json(result,{status:'error' in result?result.code==='META_RATE_LIMITED'?429:502:200});}finally{inflight.delete(cacheKey);}
 }
