@@ -12,7 +12,7 @@ export async function GET(req:NextRequest){
  const connection=connectionSummary();if(connection.state==='expired'&&connection.expiresAt)return NextResponse.json({error:connection.message,code:'META_EXPIRED'},{status:503});
  const key=req.headers.get('x-forwarded-for')?.split(',')[0]||'shared';const now=Date.now();
  if(buckets.size>1000)for(const [k,v]of buckets)if(now-v.at>60000)buckets.delete(k);
- const bucket=buckets.get(key);if(bucket&&now-bucket.at<60000){if(bucket.count>=20)return NextResponse.json({error:'Please wait a minute before searching again.'},{status:429});bucket.count++;}else buckets.set(key,{at:now,count:1});
+ const bucket=buckets.get(key);if(bucket&&now-bucket.at<60000){if(bucket.count>=20)return NextResponse.json({error:'Please wait a minute before searching again.',code:'RATE_LIMITED'},{status:429,headers:{'Retry-After':'60'}});bucket.count++;}else buckets.set(key,{at:now,count:1});
  const coverage=req.nextUrl.searchParams.get('coverage')||'GB';if(!['GB','EU_UK'].includes(coverage))return NextResponse.json({error:'Choose United Kingdom or UK + EU coverage.'},{status:400});
  const countries=coverage==='EU_UK'?['GB','AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']:['GB'];
  const discovering=req.nextUrl.searchParams.get('discover')==='1';
@@ -32,5 +32,5 @@ export async function GET(req:NextRequest){
  const rows=(body.data||[]).map((a:any)=>{const copy=Array.from(new Set<string>(a.ad_creative_bodies||[])).join('\n\n');const offer=/sale|discount|% off|book|free design/i.test(copy);const product=/collection|wardrobe|storage/i.test(copy);return {id:String(a.id),pageId:String(a.page_id),pageName:a.page_name||'Advertiser',title:a.ad_creative_link_titles?.[0]||'Ad creative',copy:copy||'No ad copy provided by Meta.',start:a.ad_delivery_start_time?.slice(0,10)||'',stop:a.ad_delivery_stop_time?.slice(0,10)||null,impressions:a.impressions||null,format:'Unknown',angle:offer?'Offer':product?'Product':'Brand',image:'',source:'Meta API',analysis:'Funnel stage is an editorial estimate based on the ad copy. It is not a Meta metric or a measure of performance.',funnel:offer?'BOFU':product?'MOFU':'TOFU',platforms:a.publisher_platforms||[],reach:a.total_reach_by_location?.find((r:any)=>(r.key??r.location)==='GB')?.value??a.total_reach_by_location?.find((r:any)=>r.location==='GB')?.reach??null,locations:a.target_locations||[],ages:a.target_ages||[]};});
  const result={ads:rows,pageId:discovering?null:pageId||null,discovery:discovering||!pageId,capturedAt:new Date().toISOString(),nextCursor:body.paging?.next?body.paging?.cursors?.after||null:null};
  if(cache.size>100)cache.clear();cache.set(cacheKey,{at:now,data:result});return NextResponse.json(result);
- }catch{return NextResponse.json({error:'Meta is taking too long to respond. Please try again.'},{status:502});}
+ }catch{return NextResponse.json({error:'Meta is taking too long to respond. Please try again.',code:'META_UNAVAILABLE'},{status:502});}
 }
