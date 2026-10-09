@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "start": "node scripts/start.mjs"
+    "start": "node scripts/start.mjs",
+    "meta:connect": "node scripts/meta-token.mjs"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",

@@ -1,3 +1,6 @@
 import collection from '@/data/collected-media.json';
 import {collectionItems} from '@/lib/collected-media';
-export function GET() { const count=new Set(collection.records.filter(r=>collectionItems(collection,r.id).length).map(r=>r.id)).size;return Response.json({status:'ok',mediaConfigured:true,mediaMode:'direct-meta-collected-batch',mediaAds:count,mediaCollectedAt:collection.collectedAt,mode:process.env.META_ACCESS_TOKEN?'live-api-configured':'awaiting-meta-connection'}); }
+import {checkMetaConnection} from '@/lib/meta-connection';
+export const runtime='nodejs';
+export const dynamic='force-dynamic';
+export async function GET() { const connection=await checkMetaConnection();const count=new Set(collection.records.filter(r=>collectionItems(collection,r.id).length).map(r=>r.id)).size;return Response.json({status:'ok',connection,mediaConfigured:true,mediaMode:'direct-meta-collected-batch',mediaAds:count,mediaCollectedAt:collection.collectedAt,mode:['connected','renew-soon'].includes(connection.state)?'live-api-verified':'meta-connection-needs-attention'},{headers:{'Cache-Control':'no-store'}}); }

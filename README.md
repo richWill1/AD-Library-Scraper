@@ -20,7 +20,7 @@ Cards show platforms, UK reach when available, start date, elapsed days, target 
 
 ## Health
 
-GET /api/health reports server health and whether a token is configured, not token validity. Live validity must be checked with an actual search. Expired credentials receive a safe renewal message without exposing Meta response details.
+GET /api/health reports application health separately from the Meta connection. It probes the actual Ad Library endpoint (one ID, no ad copy), shares concurrent checks and caches observations for two minutes per server instance. Successful searches also update the observation. Credential presence alone is never reported as a verified connection. Expired, rejected, access-denied and unavailable states have distinct safe messages. No raw Meta error, token or account ID is exposed. Known token and data-access expiry are tracked; the earlier date governs the seven-day renewal warning. The dashboard shows this warning when opened. This is not a scheduled email alert or automatic renewal.
 
 ## Session and media previews
 
@@ -53,3 +53,13 @@ The source-reviewed companion prototype in `companion/` is packaged at `/downloa
 ## Creative Lab interface
 
 The research UI uses warm paper surfaces, navy display typography, an orange primary action, and lavender/mint/pink/yellow messaging accents. An original inline SVG moodboard and eye mark provide the playful visual identity; the illustration is decorative, not an actual ad or a media preview. Branding remains AD Library Scraper. Responsive layouts were checked at desktop size and 390 px, including theme clicks and the ad detail panel. This visual update does not change API coverage or complete the unverified creative companion.
+
+## Private Meta renewal
+
+Graph API Explorer user tokens are temporary. Use Meta’s long-lived user-token exchange (typically around 60 days), not another unextended Explorer token. Expiry and revocation still require reauthorization; there is no permanent-token guarantee.
+
+For the operator only, run `npm run meta:connect` in an interactive terminal. It asks for the app ID, app secret and fresh user token without echoing credentials. It checks the app/user token, exchanges it with Meta, verifies the returned token and expiry/data-access dates, and tests the actual Ad Library endpoint. It refuses expired/rejected tokens, app mismatches and replacements with less than seven days of access. It writes only the verified replacement plus expiry values into a new ignored `.env.meta-renewal-*` file with owner-only permissions. The app secret stays in memory and is never saved. Do not put secrets in command-line arguments. Optional private process variables are META_APP_ID, META_APP_SECRET and META_FRESH_TOKEN.
+
+Import META_ACCESS_TOKEN, META_TOKEN_EXPIRES_AT (ISO UTC) and META_DATA_ACCESS_EXPIRES_AT (ISO UTC, empty if not supplied by Meta) together into the main Render service. Preserve unrelated variables. Wait for the deployment and verify `/api/health` shows `live-api-verified`, then test advertiser discovery. Remove the local renewal file after installation. Never commit it or send credentials to customers. Alternatively use Meta’s Access Token Debugger to extend the token and inspect the actual expiry values before installing all three privately in Render.
+
+Renewal is intentionally restricted to the operator terminal and hosting dashboard; the public website cannot set or exchange tokens. A full authenticated owner reconnection screen, durable server token store and scheduled notifications remain future work. No app secret needs to be stored in the public web service for this operator workflow. [Meta’s long-lived token documentation](https://developers.facebook.com/documentation/facebook-login/guides/access-tokens/get-long-lived).

@@ -1,11 +1,13 @@
 import {NextRequest, NextResponse} from 'next/server';
 import {brandQuery} from '@/lib/brand-search';
+import {connectionSummary,metaFailure,recordMetaConnection} from '@/lib/meta-connection';
 export const runtime='nodejs';
 const buckets=new Map<string,{at:number,count:number}>();
 const cache=new Map<string,{at:number,data:unknown}>();
 export async function GET(req:NextRequest){
  const token=process.env.META_ACCESS_TOKEN;
  if(!token)return NextResponse.json({error:'Live Meta search is awaiting connection. You can still explore the verified sample.',code:'NOT_CONFIGURED'},{status:503});
+ const connection=connectionSummary();if(connection.state==='expired'&&connection.expiresAt)return NextResponse.json({error:connection.message,code:'META_EXPIRED'},{status:503});
  const key=req.headers.get('x-forwarded-for')?.split(',')[0]||'shared';const now=Date.now();
  if(buckets.size>1000)for(const [k,v]of buckets)if(now-v.at>60000)buckets.delete(k);
  const bucket=buckets.get(key);if(bucket&&now-bucket.at<60000){if(bucket.count>=20)return NextResponse.json({error:'Please wait a minute before searching again.'},{status:429});bucket.count++;}else buckets.set(key,{at:now,count:1});
@@ -23,7 +25,8 @@ export async function GET(req:NextRequest){
  const cacheKey=params.toString()+String(discovering);const hit=cache.get(cacheKey);if(hit&&now-hit.at<300000)return NextResponse.json(hit.data);
  try{
  const response=await fetch(`https://graph.facebook.com/v26.0/ads_archive?${params}`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(20000),cache:'no-store'});const body=await response.json();
- if(!response.ok||body.error)return NextResponse.json({error:body.error?.code===190?'The Meta connection has expired. Please renew the server token.':'Meta could not complete this search. Check API access or try again later.'},{status:502});
+ if(!response.ok||body.error){const failure=metaFailure(body.error);recordMetaConnection(failure.state);return NextResponse.json({error:failure.error,code:failure.code},{status:502});}
+ recordMetaConnection('connected');
  const rows=(body.data||[]).map((a:any)=>{const copy=Array.from(new Set<string>(a.ad_creative_bodies||[])).join('\n\n');const offer=/sale|discount|% off|book|free design/i.test(copy);const product=/collection|wardrobe|storage/i.test(copy);return {id:String(a.id),pageId:String(a.page_id),pageName:a.page_name||'Advertiser',title:a.ad_creative_link_titles?.[0]||'Ad creative',copy:copy||'No ad copy provided by Meta.',start:a.ad_delivery_start_time?.slice(0,10)||'',stop:a.ad_delivery_stop_time?.slice(0,10)||null,impressions:a.impressions||null,format:'Unknown',angle:offer?'Offer':product?'Product':'Brand',image:'',source:'Meta API',analysis:'Funnel stage is an editorial estimate based on the ad copy. It is not a Meta metric or a measure of performance.',funnel:offer?'BOFU':product?'MOFU':'TOFU',platforms:a.publisher_platforms||[],reach:a.total_reach_by_location?.find((r:any)=>(r.key??r.location)==='GB')?.value??a.total_reach_by_location?.find((r:any)=>r.location==='GB')?.reach??null,locations:a.target_locations||[],ages:a.target_ages||[]};});
  const result={ads:rows,pageId:discovering?null:pageId||null,discovery:discovering||!pageId,capturedAt:new Date().toISOString(),nextCursor:body.paging?.next?body.paging?.cursors?.after||null:null};
  if(cache.size>100)cache.clear();cache.set(cacheKey,{at:now,data:result});return NextResponse.json(result);
