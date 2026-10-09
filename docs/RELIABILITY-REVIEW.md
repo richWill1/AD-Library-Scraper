@@ -28,7 +28,7 @@ Keep Meta's official Ad Library API as the primary data source for UK competitor
 - Concurrent format requests for a brand share one classification job.
 - Meta throttling codes and HTTP 429 pause further Graph requests for the credential within the current process. Full X-App-Usage windows are also respected when Meta supplies that header. Throttling no longer triggers the normal temporary-error retry loop.
 - Format results only fill unknown formats, preserving classifications observed from actual creatives.
-- Stage diagnostics isolated a real timeout in creative readiness: some Meta snapshots expose a video-player placeholder before creating a video element. The collector now recognises that placeholder and presses Play before waiting for its media source. Verify this against live cases; it does not remove Meta availability constraints.
+- Stage diagnostics isolated a real timeout in creative readiness: some Meta snapshots expose a video-player placeholder before creating a video element. The first placeholder-only change did not resolve the test ad. The collector additionally waits for the semantic Play control or validated media evidence from the exact verified snapshot, including video requests that precede DOM creation. Structural diagnostics record failures without content or credentials. These changes require live regression checks and do not remove Meta availability constraints.
 - Existing format scan remains bounded to two 100-record pages per media type. Unmatched formats are explicitly unclassified; this is not a cap on the ads that can be loaded.
 
 ## Options considered
