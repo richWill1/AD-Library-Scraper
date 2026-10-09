@@ -9,26 +9,30 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "node scripts/start.mjs",
-    "meta:connect": "node scripts/meta-token.mjs"
+    "meta:connect": "node scripts/meta-token.mjs",
+    "meta:check": "node scripts/meta-check.mjs"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "^1.31.0",
-    "next": "16.3.4",
+    "next": "16.3.8",
+    "pg": "^8.23.1",
     "radix-ui": "^1.6.7",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
+    "@types/pg": "^8.23.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "tailwindcss": "4.2.1",
-    "typescript": "5.9.3",
-    "tw-animate-css": "1.4.0"
+    "tw-animate-css": "1.4.0",
+    "typescript": "5.9.3"
   },
   "type": "module"
 }

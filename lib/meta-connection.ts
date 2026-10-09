@@ -1,4 +1,5 @@
 // Server-only connection observations; no credentials or raw Meta errors are returned.
+import {credentialsView,getMetaCredential} from '@/lib/meta-token-store';
 export type ConnectionState = 'not-configured'|'connected'|'renew-soon'|'expired'|'reconnect'|'access-denied'|'unavailable';
 type Observation = {state:ConnectionState;checkedAt:string};
 let observation:Observation|null=null;
@@ -15,8 +16,8 @@ const messages:Record<ConnectionState,string>={
 };
 function expiry(value:string|undefined){const time=Date.parse(value||'');return Number.isFinite(time)?time:null;}
 export function connectionSummary(now=Date.now()){
- const token=process.env.META_ACCESS_TOKEN||'';
- const times=[expiry(process.env.META_TOKEN_EXPIRES_AT),expiry(process.env.META_DATA_ACCESS_EXPIRES_AT)].filter((v):v is number=>v!==null);
+ const credential=credentialsView();const token=credential.token;
+ const times=[expiry(credential.expiresAt),expiry(credential.dataAccessExpiresAt)].filter((v):v is number=>v!==null);
  const expiresAt=times.length?Math.min(...times):null;
  const daysRemaining=expiresAt===null?null:Math.max(0,Math.ceil((expiresAt-now)/86400000));
  let state:ConnectionState=!token?'not-configured':expiresAt!==null&&expiresAt<=now?'expired':observation&&observedToken===token?observation.state:'unavailable';
@@ -28,12 +29,12 @@ export function metaFailure(error:{code?:number;error_subcode?:number}|undefined
  const code=state==='expired'?'META_EXPIRED':state==='reconnect'?'META_RECONNECT':state==='access-denied'?'META_ACCESS_DENIED':'META_UNAVAILABLE';
  return {state,code,error:messages[state]};
 }
-export function recordMetaConnection(state:ConnectionState){observedToken=process.env.META_ACCESS_TOKEN||'';observation={state,checkedAt:new Date().toISOString()};}
-export async function checkMetaConnection(){
- const token=process.env.META_ACCESS_TOKEN;
+export function recordMetaConnection(state:ConnectionState){observedToken=credentialsView().token;observation={state,checkedAt:new Date().toISOString()};}
+export async function checkMetaConnection(force=false){
+ let token:string;try{token=(await getMetaCredential()).token;}catch{return {...connectionSummary(),state:'unavailable' as ConnectionState,message:'The research connection is temporarily unavailable. Your research board remains available.'};}
  const summary=connectionSummary();
  if(!token||summary.state==='expired')return summary;
- if(observation&&observedToken===token&&Date.now()-Date.parse(observation.checkedAt)<120000)return summary;
+ if(!force&&observation&&observedToken===token&&Date.now()-Date.parse(observation.checkedAt)<120000)return summary;
  if(pending)return pending;
  pending=(async()=>{
   try{

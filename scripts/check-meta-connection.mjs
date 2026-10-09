@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import ts from 'typescript';
 import {extendMetaToken} from './meta-token.mjs';
-const source=ts.transpileModule(fs.readFileSync('lib/meta-connection.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
-const {connectionSummary,checkMetaConnection,recordMetaConnection,metaFailure}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+import {moduleLoader} from './test-module.mjs';
+const {connectionSummary,checkMetaConnection,recordMetaConnection,metaFailure}=await moduleLoader()('lib/meta-connection.ts');
 delete process.env.META_ACCESS_TOKEN;
 assert.equal(connectionSummary().state,'not-configured');
 process.env.META_ACCESS_TOKEN='private-test';

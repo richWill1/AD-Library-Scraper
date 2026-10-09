@@ -1,11 +1,13 @@
 import {NextRequest, NextResponse} from 'next/server';
 import {brandQuery} from '@/lib/brand-search';
 import {connectionSummary,metaFailure,recordMetaConnection} from '@/lib/meta-connection';
+import {getMetaCredential} from '@/lib/meta-token-store';
+import {createHash} from 'node:crypto';
 export const runtime='nodejs';
 const buckets=new Map<string,{at:number,count:number}>();
 const cache=new Map<string,{at:number,data:unknown}>();
 export async function GET(req:NextRequest){
- const token=process.env.META_ACCESS_TOKEN;
+ let token:string;try{token=(await getMetaCredential()).token;}catch{return NextResponse.json({error:'The research connection is temporarily unavailable. Your research board remains available.',code:'META_STORAGE_UNAVAILABLE'},{status:503});}
  if(!token)return NextResponse.json({error:'Live Meta search is awaiting connection. You can still explore the verified sample.',code:'NOT_CONFIGURED'},{status:503});
  const connection=connectionSummary();if(connection.state==='expired'&&connection.expiresAt)return NextResponse.json({error:connection.message,code:'META_EXPIRED'},{status:503});
  const key=req.headers.get('x-forwarded-for')?.split(',')[0]||'shared';const now=Date.now();
@@ -22,7 +24,7 @@ export async function GET(req:NextRequest){
  if(discovering){params.set('fields','id,page_id,page_name');params.set('limit','100');}
  if(pageId)params.set('search_page_ids',JSON.stringify([pageId]));else params.set('search_terms',term);
  if(after)params.set('after',after);
- const cacheKey=params.toString()+String(discovering);const hit=cache.get(cacheKey);if(hit&&now-hit.at<300000)return NextResponse.json(hit.data);
+ const cacheKey=createHash('sha256').update(token).digest('hex')+params.toString()+String(discovering);const hit=cache.get(cacheKey);if(hit&&now-hit.at<300000)return NextResponse.json(hit.data);
  try{
  const response=await fetch(`https://graph.facebook.com/v26.0/ads_archive?${params}`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(20000),cache:'no-store'});const body=await response.json();
  if(!response.ok||body.error){const failure=metaFailure(body.error);recordMetaConnection(failure.state);return NextResponse.json({error:failure.error,code:failure.code},{status:502});}
