@@ -1,8 +1,9 @@
 import http from 'node:http';
 import {timingSafeEqual,createHash} from 'node:crypto';
 import {chromium} from 'playwright';
+import {safe,videoCandidate} from './media.mjs';
 const cache=new Map();let browserPromise=null;let active=0;const waiting=[];const maximum=2;
-const safe=input=>{try{const u=new URL(input);return u.protocol==='https:'&&u.hostname.endsWith('.fbcdn.net')&&!u.username&&!u.password&&!u.searchParams.has('access_token')?u.href:null;}catch{return null;}};
+
 function expiry(items){return Math.min(Date.now()+900000,...items.flatMap(i=>[i.url,i.poster].filter(Boolean).map(u=>{const oe=new URL(u).searchParams.get('oe');return oe&&/^[a-f\d]+$/i.test(oe)?parseInt(oe,16)*1000-60000:Infinity;})));}
 function acquire(){if(active<maximum){active++;return Promise.resolve();}if(waiting.length>=20)return Promise.reject(Error('BUSY'));return new Promise((resolve,reject)=>{const ticket={resolve:null,timer:null};ticket.resolve=()=>{clearTimeout(ticket.timer);resolve();};ticket.timer=setTimeout(()=>{const at=waiting.indexOf(ticket);if(at>=0)waiting.splice(at,1);reject(Error('BUSY'));},75000);waiting.push(ticket);});}
 function release(){const next=waiting.shift();if(next)next.resolve();else active--;}
@@ -10,7 +11,15 @@ async function browser(){if(!browserPromise)browserPromise=chromium.launch({head
 async function collect(id,token){
  let context;
  try{
-  const b=await browser();context=await b.newContext({viewport:{width:680,height:900},locale:'en-GB'});const page=await context.newPage();
+  const b=await browser();context=await b.newContext({viewport:{width:680,height:900},locale:'en-GB'});const page=await context.newPage();const streamed=new Map();const jsonItems=[];const reads=[];
+  page.on('request',request=>{const candidate=videoCandidate(request.url());if(candidate)streamed.set(candidate.url,candidate.score);});
+  page.on('response',response=>{if(!response.url().startsWith('https://www.facebook.com/api/graphql')||reads.length>=20)return;reads.push((async()=>{try{const text=await response.text();if(text.length>2000000||!text.includes(id))return;let visited=0;
+   const walk=(value,depth=0)=>{if(!value||typeof value!=='object'||depth>30||++visited>10000)return;if(Array.isArray(value)){for(const child of value)walk(child,depth+1);return;}
+    const video=safe(value.video_hd_url||value.video_sd_url||value.browser_native_hd_url||value.browser_native_sd_url);if(video)jsonItems.push({kind:'video',url:video,poster:safe(value.video_preview_image_url)||undefined});
+    const image=safe(value.original_image_url||value.resized_image_url);if(image)jsonItems.push({kind:'image',url:image});
+    for(const child of Object.values(value))walk(child,depth+1);
+   };for(const line of text.replace(/^for \(;;\);\s*/, '').split('\n')){try{walk(JSON.parse(line));}catch{}}
+  }catch{}})());});
   await page.route('**/*',route=>{const req=route.request();let host;try{host=new URL(req.url()).hostname;}catch{return route.abort();}if(!/\.(facebook\.com|fbcdn\.net|fbsbx\.com)$/.test('.'+host)||['media','font'].includes(req.resourceType()))return route.abort();return route.continue();});
   // The token is used only in Meta's official snapshot URL; never in the incoming URL or logs.
   const url=new URL('https://www.facebook.com/ads/archive/render_ad/');url.searchParams.set('id',id);url.searchParams.set('access_token',token);
@@ -25,7 +34,11 @@ async function collect(id,token){
    const r=el.getBoundingClientRect();if(el.tagName==='IMG'&&(r.width<200||r.height<150||el.closest('[aria-label="Video player"]')))return null;
    return {kind:el.tagName==='VIDEO'?'video':'image',url:el.currentSrc||el.src,poster:el.tagName==='VIDEO'?el.poster:undefined};
   }).filter(Boolean));
-  const items=[];for(const r of records){const url=safe(r.url);if(url&&!items.some(v=>v.url===url))items.push({kind:r.kind,url,poster:safe(r.poster)||undefined});}
+  if(records.some(r=>r.kind==='video')&&!records.some(r=>r.kind==='video'&&safe(r.url))){const play=root.getByRole('button',{name:'Play Video',exact:true});if(await play.count())await play.first().click({timeout:3000}).catch(()=>{});await page.waitForTimeout(1200);}
+  await Promise.allSettled(reads);
+  const fallback=[...streamed.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0];
+  if(fallback&&records.some(r=>r.kind==='video')&&!records.some(r=>r.kind==='video'&&safe(r.url)))records.push({kind:'video',url:fallback,poster:records.find(r=>r.kind==='video')?.poster});
+  const items=[];for(const r of [...records,...jsonItems]){const url=safe(r.url);if(url&&!items.some(v=>v.url===url))items.push({kind:r.kind,url,poster:safe(r.poster)||undefined});}
   const posters=new Set(items.filter(i=>i.kind==='video').map(i=>i.poster));const filtered=items.filter(i=>i.kind!=='image'||!posters.has(i.url)).slice(0,20);
   return {items:filtered,collectedAt:new Date().toISOString(),code:filtered.length?'COLLECTED':'NO_MEDIA',source:'meta-official-snapshot'};
  }finally{await context?.close();}
