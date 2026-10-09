@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {moduleLoader} from './test-module.mjs';
-const {GET}=await moduleLoader()('app/api/ads/route.ts');
+const {GET}=await moduleLoader({'@/lib/ad-formats':'data:text/javascript;base64,'+Buffer.from('export async function adFormats(token,page,countries,ids){return new Map(ids.map(id=>[id,"Unknown"]));}').toString('base64')})('app/api/ads/route.ts');
 const req=q=>({nextUrl:new URL('http://localhost/api/ads?'+q),headers:new Headers({'x-forwarded-for':'test'})});
 delete process.env.META_ACCESS_TOKEN;assert.equal((await GET(req('q=sharps'))).status,503);process.env.META_ACCESS_TOKEN='test-secret-never-return';assert.equal((await GET(req('page=invalid'))).status,400);
 let calls=0;globalThis.fetch=async(url,options)=>{calls++;assert.equal(options.headers.Authorization,'Bearer test-secret-never-return');assert.ok(!String(url).includes('test-secret'));assert.equal(new URL(url).searchParams.get('search_page_ids'),'["280531915302272"]');return Response.json({data:[{id:'123',page_id:'280531915302272',page_name:'Sharps',ad_creative_bodies:['Sale 20% off','Sale 20% off'],impressions:{lower_bound:'1000',upper_bound:'4999'},ad_delivery_start_time:'2026-10-07',publisher_platforms:['facebook'],total_reach_by_location:[{key:'GB',value:47}]}],paging:{next:'https://graph.facebook.com/?access_token=test-secret-never-return',cursors:{after:'opaque'}}});};

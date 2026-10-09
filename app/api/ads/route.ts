@@ -3,6 +3,7 @@ import {brandQuery} from '@/lib/brand-search';
 import {connectionSummary,metaFailure,recordMetaConnection} from '@/lib/meta-connection';
 import {getMetaCredential} from '@/lib/meta-token-store';
 import {createHash} from 'node:crypto';
+import {adFormats} from '@/lib/ad-formats';
 export const runtime='nodejs';
 const buckets=new Map<string,{at:number,count:number}>();
 const cache=new Map<string,{at:number,data:unknown}>();
@@ -30,6 +31,7 @@ export async function GET(req:NextRequest){
  if(!response.ok||body.error){const failure=metaFailure(body.error);recordMetaConnection(failure.state);return NextResponse.json({error:failure.error,code:failure.code},{status:502});}
  recordMetaConnection('connected');
  const rows=(body.data||[]).map((a:any)=>{const copy=Array.from(new Set<string>(a.ad_creative_bodies||[])).join('\n\n');const offer=/sale|discount|% off|book|free design/i.test(copy);const product=/collection|wardrobe|storage/i.test(copy);return {id:String(a.id),pageId:String(a.page_id),pageName:a.page_name||'Advertiser',title:a.ad_creative_link_titles?.[0]||'Ad creative',copy:copy||'No ad copy provided by Meta.',start:a.ad_delivery_start_time?.slice(0,10)||'',stop:a.ad_delivery_stop_time?.slice(0,10)||null,impressions:a.impressions||null,format:'Unknown',angle:offer?'Offer':product?'Product':'Brand',image:'',source:'Meta API',analysis:'Funnel stage is an editorial estimate based on the ad copy. It is not a Meta metric or a measure of performance.',funnel:offer?'BOFU':product?'MOFU':'TOFU',platforms:a.publisher_platforms||[],reach:a.total_reach_by_location?.find((r:any)=>(r.key??r.location)==='GB')?.value??a.total_reach_by_location?.find((r:any)=>r.location==='GB')?.reach??null,locations:a.target_locations||[],ages:a.target_ages||[]};});
+ if(!discovering&&pageId&&rows.length){const formats=await adFormats(token,pageId,countries,rows.map((a:any)=>a.id));for(const row of rows)row.format=formats.get(row.id)||'Unknown';}
  const result={ads:rows,pageId:discovering?null:pageId||null,discovery:discovering||!pageId,capturedAt:new Date().toISOString(),nextCursor:body.paging?.next?body.paging?.cursors?.after||null:null};
  if(cache.size>100)cache.clear();cache.set(cacheKey,{at:now,data:result});return NextResponse.json(result);
  }catch{return NextResponse.json({error:'Meta is taking too long to respond. Please try again.',code:'META_UNAVAILABLE'},{status:502});}
