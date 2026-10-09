@@ -30,11 +30,13 @@ async function collect(id,token){
   await root.locator('video,img').filter({visible:true}).first().waitFor({state:'visible',timeout:10000});
   // Wait for a real creative, not the advertiser's small profile image.
   await page.waitForFunction(()=>Array.from(document.querySelectorAll('video,img')).some(el=>el.tagName==='VIDEO'&&/\.fbcdn\.net\//.test(el.currentSrc||el.src)||el.tagName==='IMG'&&el.getBoundingClientRect().width>=200&&el.getBoundingClientRect().height>=150&&/\.fbcdn\.net\//.test(el.currentSrc||el.src)),null,{timeout:15000});
-  const records=await root.locator('video,img').evaluateAll(elements=>elements.map(el=>{
+  const readRecords=()=>root.locator('video,img').evaluateAll(elements=>elements.map(el=>{
    const r=el.getBoundingClientRect();if(el.tagName==='IMG'&&(r.width<200||r.height<150||el.closest('[aria-label="Video player"]')))return null;
    return {kind:el.tagName==='VIDEO'?'video':'image',url:el.currentSrc||el.src,poster:el.tagName==='VIDEO'?el.poster:undefined};
   }).filter(Boolean));
-  if(records.some(r=>r.kind==='video')&&!records.some(r=>r.kind==='video'&&safe(r.url))){const play=root.getByRole('button',{name:'Play Video',exact:true});if(await play.count())await play.first().click({timeout:3000}).catch(()=>{});await page.waitForTimeout(1200);}
+  let records=await readRecords();
+  if(records.some(r=>r.kind==='video')&&!records.some(r=>r.kind==='video'&&safe(r.url))){const play=root.getByRole('button',{name:'Play Video',exact:true});if(await play.count())await play.first().click({timeout:3000}).catch(()=>{});}
+  for(let attempt=0;attempt<7;attempt++){await Promise.allSettled(reads);records=await readRecords();if(records.some(r=>safe(r.url))||jsonItems.length||streamed.size)break;await page.waitForTimeout(1000);}
   await Promise.allSettled(reads);
   const fallback=[...streamed.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0];
   if(fallback&&records.some(r=>r.kind==='video')&&!records.some(r=>r.kind==='video'&&safe(r.url)))records.push({kind:'video',url:fallback,poster:records.find(r=>r.kind==='video')?.poster});
