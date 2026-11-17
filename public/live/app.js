@@ -4,7 +4,7 @@ const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g
 const homeUrl="https://ad-library-scraper-94t0.onrender.com";
 const storeKey="adsnoop-live-preview-saved-v1";
 const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],discovery:[],cursor:null,discoveryCursor:null,filter:"all",sort:"newest",loading:false,saved:new Map(),compare:new Map(),health:null};
-const mediaCache=new Map(),mediaRunning=new Set(),pendingMedia=[];
+const mediaCache=new Map(),mediaRunning=new Set(),pendingMedia=[];let collectorStatus="checking";
 let requestController=null,requestNumber=0,observer=null;
 try{const entries=JSON.parse(localStorage.getItem(storeKey)||"[]");for(const ad of Array.isArray(entries)?entries:[])if(ad&&/^\d{1,30}$/.test(ad.id)&&typeof ad.copy==="string")state.saved.set(ad.id,ad);}catch(e){}
 const metaUrl=id=>"https://www.facebook.com/ads/library/?id="+encodeURIComponent(id);
@@ -119,6 +119,7 @@ function mediaMessage(code){
  META_PREVIEW_UNAVAILABLE:["Meta preview unavailable","The official snapshot did not include extractable media."],
  NOT_CONFIGURED:["Creative connection needed","Media access is not currently configured."],
  META_STORAGE_UNAVAILABLE:["Connection unavailable","The private Meta token store cannot be reached."],
+ HOST_RATE_LIMITED:["Media hosting is rate-limited","The free media collector is returning HTTP 429. Open the ad on Meta while hosting access is restored."],
  COLLECTOR_UNAVAILABLE:["Collector unavailable","The media service did not respond. You can still inspect this ad on Meta."],
  BUSY:["Collector busy","The media service is currently processing other ads."],
  FAILED:["Preview unavailable","The image or video could not be played in this browser."]
@@ -150,6 +151,7 @@ function displayMedia(node,id,items){
 }
 function queueMedia(node,id,refresh=false){
  if(!node||!node.isConnected)return;
+ if(collectorStatus==="rate-limited"){mediaFallback(node,id,"HOST_RATE_LIMITED");return;}
  if(!refresh&&mediaCache.has(id)){const data=mediaCache.get(id);displayMedia(node,id,data.items);return}
  if(!refresh&&node.dataset.loaded==="loading")return;
  node.dataset.loaded="loading";
@@ -216,12 +218,22 @@ function setView(view){
 async function health(){
  const status=$("status"),details=$("serviceDetails");
  try{
+  const r=await fetch("/api/collector-status",{cache:"no-store",signal:AbortSignal.timeout(16000)});
+  const c=await r.json();
+  collectorStatus=c.status==="rate-limited"?"rate-limited":c.status==="reachable"?"reachable":"unavailable";
+  if(collectorStatus==="rate-limited"){
+   details.innerHTML='<div class="errmsg"><strong>Creative previews temporarily restricted by hosting.</strong> The media collector returns HTTP 429. Ad text and Meta Library links still work. <a href="https://dashboard.render.com/web/srv-db417f3bc2fs73c95390" target="_blank" rel="noopener noreferrer">Review collector on Render ↗</a></div>';
+   renderCards();
+  }
+ }catch{collectorStatus="unavailable";}
+
+ try{
   const h=await request("/api/health","GET",null,AbortSignal.timeout(20000));state.health=h;
   const s=h.connection?.state||"unknown",message=h.connection?.message||"";
   const connected=["connected","renew-soon"].includes(s);
   const media=h.mediaCollector?.configured===true;
   status.innerHTML='<span><i class="statusdot '+(connected?"ok":"bad")+'"></i>Meta API: '+esc(connected?"Connected":s.replace(/-/g," "))+'</span><span><i class="statusdot '+(media?"ok":"bad")+'"></i>Image/video collector: '+esc(media?"Configured":"Needs attention")+'</span>';
-  details.innerHTML=(!connected||!media)?'<div class="live-info">'+esc(message||(!connected?"Live Meta access needs attention.":""))+' '+(media?"":"Creative-media connection is not fully configured.")+' <a href="'+homeUrl+'/connection" target="_blank" rel="noopener noreferrer">Owner connection settings ↗</a></div>':"";
+  details.innerHTML+=(!connected||!media)?'<div class="live-info">'+esc(message||(!connected?"Live Meta access needs attention.":""))+' '+(media?"":"Creative-media connection is not fully configured.")+' <a href="'+homeUrl+'/connection" target="_blank" rel="noopener noreferrer">Owner connection settings ↗</a></div>':"";
  }catch{
   status.innerHTML='<span><i class="statusdot bad"></i>Could not verify the Meta API connection</span>';
   details.innerHTML='<div class="live-info">Live status could not be checked. Search may still work; if it fails, saved ideas remain available.</div>';
