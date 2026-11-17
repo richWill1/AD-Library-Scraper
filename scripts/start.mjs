@@ -7,6 +7,27 @@ child.on("exit", code => process.exit(code ?? 1));
 if (process.env.RENDER_SERVICE_NAME === "adsnoop-live-design-test") {
   // One-off safe connectivity diagnostic: never log credentials or raw API payloads.
   void (async () => {
+    const began = Date.now();
+    try {
+      const response = await fetch("https://ad-library-owned-collector.onrender.com/health", {
+        signal: AbortSignal.timeout(80000),
+        cache: "no-store",
+      });
+      const body = await response.json().catch(() => ({}));
+      console.info("[AdSnoop collector reachability]", JSON.stringify({
+        http: response.status,
+        status: body.status || "unknown",
+        collector: body.collector || "unknown",
+        elapsedMs: Date.now()-began,
+      }));
+    } catch (e) {
+      console.info("[AdSnoop collector reachability]", JSON.stringify({
+        code: e?.name || "network-error",
+        elapsedMs: Date.now()-began,
+      }));
+    }
+  })();
+  void (async () => {
     try {
       const response = await fetch("https://ad-library-scraper-94t0.onrender.com/api/health", {
         signal: AbortSignal.timeout(70000),
