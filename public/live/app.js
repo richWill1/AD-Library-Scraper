@@ -3,7 +3,7 @@
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const homeUrl="https://ad-library-scraper-94t0.onrender.com";
 const storeKey="adsnoop-live-preview-saved-v1";
-const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],discovery:[],cursor:null,discoveryCursor:null,filter:"all",sort:"newest",loading:false,saved:new Map(),compare:new Map(),health:null};
+const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"newest",loading:false,saved:new Map(),compare:new Map(),health:null};
 const mediaCache=new Map(),mediaRunning=new Set(),pendingMedia=[];let collectorStatus="checking";
 let requestController=null,requestNumber=0,observer=null;
 try{const entries=JSON.parse(localStorage.getItem(storeKey)||"[]");for(const ad of Array.isArray(entries)?entries:[])if(ad&&/^\d{1,30}$/.test(ad.id)&&typeof ad.copy==="string")state.saved.set(ad.id,ad);}catch(e){}
@@ -29,8 +29,14 @@ function searchClient(query){
  const q=String(query||"").trim();if(!q)return;
  state.view="discover";state.filter="all";
  const exact=directAdvertiser(q);
- if(exact){state.brand=exact.name;state.page=exact.id;void runSearch(q,exact.id);}
- else{state.brand="";state.page="";void runSearch(q);}
+ state.query=q;
+ state.choices.clear();
+ state.discoveryCursor=null;
+ state.canFindAlternates=Boolean(exact&&!/^\d{1,30}$/.test(q));
+ state.brand=exact?.name||"";
+ state.page=exact?.id||"";
+ if(exact)state.choices.set(exact.id,{id:exact.id,name:exact.name,count:0});
+ void runSearch(q,state.page);
 }
 const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T12:00:00Z":s);return Number.isFinite(d.getTime())?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"Unknown"};
 const reach=n=>typeof n==="number"&&Number.isFinite(n)?n.toLocaleString("en-GB"):"Not available";
@@ -72,80 +78,100 @@ function card(a){
 function renderCards(){
  if(observer)observer.disconnect();
  showHeader();
+ renderBrands();
  const rows=shownRows();
  $("cards").innerHTML=rows.length?rows.map(card).join(""):empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
- $("pager").innerHTML=state.view==="discover"&&state.cursor&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
+ $("pager").innerHTML=state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
  observeMedia();
 }
-function showBrands(data,append=false){
- const rows=Array.isArray(data.ads)?data.ads:[];
- const ids=new Map();
- for(const ad of [...(append?state.discovery:[]),...rows]){
-   if(!ad.pageId||!ad.pageName)continue;
-   const item=ids.get(ad.pageId);
-   if(item)item.count+=1;
-   else ids.set(ad.pageId,{id:ad.pageId,name:ad.pageName,count:1});
+function addBrands(rows){
+ for(const ad of rows){
+  if(!ad.pageId||!ad.pageName)continue;
+  const entry=state.choices.get(ad.pageId);
+  if(entry)entry.count++;
+  else state.choices.set(ad.pageId,{id:ad.pageId,name:ad.pageName,count:1});
  }
- state.discovery=[...ids.values()].flatMap(entry=>Array.from({length:entry.count},()=>({pageId:entry.id,pageName:entry.name})));
- const choices=Array.from(ids.values()).sort((a,b)=>b.count-a.count).slice(0,45);
- // Do not require an extra advertiser selection when a client can be identified confidently.
- if(!append&&choices.length){
-  const wanted=canonicalName(state.query);
-  const exact=choices.filter(c=>canonicalName(c.name)===wanted);
-  const match=exact.length===1?exact[0]:(choices.length===1?choices[0]:null);
-  if(match){
-   state.brand=match.name;state.page=match.id;
-   $("brands").hidden=true;
-   void runSearch(state.query,match.id);
-   return true;
-  }
- }
- $("brands").hidden=!choices.length;
- $("brands").innerHTML=choices.map(c=>'<button class="brandchoice" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'"><strong>'+esc(c.name)+'</strong><span>'+c.count+' matching ad records · Select advertiser ↗</span></button>').join("");
- state.discoveryCursor=data.nextCursor||null;
- if(state.discoveryCursor)$("brands").insertAdjacentHTML("beforeend",'<button class="brandchoice" data-action="morebrands"><strong>Find more matching pages →</strong><span>Retrieve the next page of advertiser results</span></button>');
- feedback(choices.length?"Several advertisers match this search. Choose the correct one to load its ads.":"No matching advertiser pages returned. Try another search.");
- return false;
+}
+function rankedBrands(){
+ const wanted=canonicalName(state.query);
+ const score=choice=>{
+  const name=canonicalName(choice.name);
+  return name===wanted?3:name.startsWith(wanted)?2:name.includes(wanted)?1:0;
+ };
+ return [...state.choices.values()].sort((a,b)=>score(b)-score(a)||b.count-a.count);
+}
+function renderBrands(){
+ const choices=rankedBrands().slice(0,45);
+ const selected=state.choices.get(state.page);
+ if(selected&&!choices.includes(selected))choices[choices.length-1]=selected;
+ const list=$("brands");
+ list.hidden=state.view!=="discover"||(!choices.length&&!state.discoveryCursor);
+ list.innerHTML=choices.map(c=>{
+  const active=c.id===state.page;
+  return '<button class="brandchoice'+(active?' selected':'')+'" aria-pressed="'+active+'" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'"><strong>'+esc(c.name)+'</strong><span>'+(active?'Selected advertiser':'Show this advertiser’s ads ↗')+'</span></button>';
+ }).join("");
+ if(state.discoveryCursor||state.canFindAlternates)list.insertAdjacentHTML("beforeend",'<button class="brandchoice" data-action="morebrands"><strong>Find other advertiser pages →</strong></button>');
 }
 async function request(path,method,body,signal){
  const resp=await fetch(path,{method:method||"GET",headers:body?{"Content-Type":"application/json"}:undefined,body:body?JSON.stringify(body):undefined,signal,cache:"no-store"});
  let data;
- try{data=await resp.json()}catch{throw Error("The server returned an invalid response.");}
+ try{data=await resp.json()}catch{
+  if(resp.status===429)throw Object.assign(new Error("The hosting service is rate-limiting searches."),{code:"RATE_LIMITED"});
+  throw Error("The research service is temporarily unavailable. Please try again.");
+ }
  if(!resp.ok||data.error){const ex=new Error(data.error||"Live search failed. Status "+resp.status);ex.code=data.code||"";throw ex;}
  return data;
 }
-async function runSearch(query,page="",after="",discoveryAppend=false){
+async function runSearch(query,page="",after="",moreBrands=false,appendAds=false){
  const q=(query||"").trim();if(!q&&!page)return;
  if(requestController)requestController.abort();
  const controller=new AbortController();requestController=controller;const rid=++requestNumber;
- error("");busy(true);feedback("Retrieving current advertising records from Meta…");
- if(!after){state.rows=[];state.cursor=null;if(!page){state.brand="";state.page="";state.discovery=[];$("brands").hidden=true;}}
+ error("");busy(true);
+ if(!moreBrands&&!after&&!appendAds){
+  state.rows=[];state.cursor=null;state.needsPageStart=false;
+  renderCards();
+ }
+ feedback(moreBrands?"Looking for more advertiser pages…":"Loading active ads from Meta…");
  const params=new URLSearchParams({q:q||page,coverage:state.coverage});
- if(page)params.set("page",page);else params.set("discover","1");
+ if(page)params.set("page",page);
  if(after)params.set("after",after);
  try{
   const data=await request("/api/ads?"+params,"GET",null,controller.signal);
   if(rid!==requestNumber)return;
+  const rows=Array.isArray(data.ads)?data.ads:[];
   state.query=q;
   if(!page){
-   state.brand="";state.rows=[];state.cursor=null;
-   if(!showBrands(data,discoveryAppend))renderCards();
+   addBrands(rows);
+   state.discoveryCursor=data.nextCursor||null;
+   if(moreBrands){
+    state.canFindAlternates=false;
+    renderBrands();
+    feedback(state.choices.size>1?"":"No other advertiser pages were found.");
+    return;
+   }
+   const match=rankedBrands()[0];
+   state.page=match?.id||"";
+   state.brand=match?.name||"";
+   state.rows=rows.filter(ad=>ad.pageId===state.page);
+   state.cursor=data.pageId===state.page?data.nextCursor||null:null;
+   // A term-search cursor cannot be used to paginate a specific advertiser.
+   state.needsPageStart=Boolean(match&&data.pageId!==state.page&&data.nextCursor);
   }else{
-   state.page=page;state.brand=state.brand||data.ads?.[0]?.pageName||q;
-   state.rows=after?[...state.rows,...(data.ads||[]).filter(a=>!state.rows.some(old=>old.id===a.id))]:data.ads||[];
+   state.page=page;state.brand=rows[0]?.pageName||state.brand||q;
+   const seen=new Set(state.rows.map(ad=>ad.id));
+   state.rows=after||appendAds?[...state.rows,...rows.filter(ad=>!seen.has(ad.id))]:rows;
    state.cursor=data.nextCursor||null;
-   $("brands").hidden=true;
-   feedback(state.rows.length?"":"Meta returned no active ads for this advertiser in the selected countries.");
-   renderCards();
+   state.needsPageStart=false;
   }
+  feedback(state.rows.length?"":page?"Meta returned no active ads for this advertiser in the selected countries.":"No matching advertiser pages returned. Try another search.");
+  renderCards();
  }catch(err){
   if(controller.signal.aborted)return;
   const code=err.code||"";
   const guidance=["META_EXPIRED","NOT_CONFIGURED","META_RECONNECT"].includes(code)?" The account owner may need to reconnect Meta on the original website.":code==="RATE_LIMITED"?" Try again in a minute.":"";
   error(String(err.message||"Search failed.")+guidance);
   feedback("");
-  if(!page)showHeader();
  }finally{if(rid===requestNumber)busy(false)}
 }
 function mediaMessage(code){
@@ -281,11 +307,11 @@ $("searchForm").addEventListener("submit",e=>{
  searchClient($("searchInput").value);
  $("research").scrollIntoView({behavior:"smooth"});
 });
-$("coverage").addEventListener("change",e=>{state.coverage=e.target.value;if(state.page)runSearch(state.query||state.brand,state.page);else if(state.query)runSearch(state.query)});
+$("coverage").addEventListener("change",e=>{state.coverage=e.target.value;if(state.query)searchClient(state.query)});
 $("sort").addEventListener("change",e=>{state.sort=e.target.value;renderCards()});
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
- b=e.target.closest("[data-page]");if(b){state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);return}
+ b=e.target.closest("[data-page]");if(b){if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
  b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;renderCards();return}
  b=e.target.closest("[data-action]");if(!b)return;
@@ -294,8 +320,8 @@ document.addEventListener("click",e=>{
  if(action==="save"){const a=findAd(id);if(a){if(state.saved.has(id))state.saved.delete(id);else state.saved.set(id,a);save();renderCards();}}
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}
  if(action==="retrymedia"){const node=b.closest("[data-media]");if(node){mediaCache.delete(id);node.innerHTML='<div class="creative-recovery"><span class="loadingring"></span><strong>Retrying preview…</strong></div>';queueMedia(node,id,true)}}
- if(action==="loadmore"&&state.cursor)runSearch(state.query||state.brand,state.page,state.cursor);
- if(action==="morebrands"&&state.discoveryCursor)runSearch(state.query,"",state.discoveryCursor,true);
+ if(action==="loadmore"&&(state.cursor||state.needsPageStart))runSearch(state.query||state.brand,state.page,state.cursor||"",false,state.needsPageStart);
+ if(action==="morebrands"&&!state.loading&&(state.discoveryCursor||state.canFindAlternates))runSearch(state.query,"",state.discoveryCursor||"",true);
 });
 $("closeModal").onclick=()=>$("modalOverlay").classList.remove("open");
 $("modalOverlay").onclick=e=>{if(e.target===$("modalOverlay"))$("modalOverlay").classList.remove("open")};
