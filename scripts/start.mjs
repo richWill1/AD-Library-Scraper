@@ -20,6 +20,37 @@ if (process.env.RENDER_SERVICE_NAME === "adsnoop-live-design-test") {
         mediaCollectorConfigured: data?.mediaCollector?.configured === true,
         ownerReconnectReady: data?.recovery?.ready === true,
       }));
+
+      if (response.ok && ["connected", "renew-soon"].includes(data?.connection?.state)) {
+        try {
+          const origin = "https://ad-library-scraper-94t0.onrender.com";
+          const query = new URL(origin + "/api/ads");
+          query.search = new URLSearchParams({ q: "Sharps", page: "280531915302272", coverage: "GB" }).toString();
+          const searchResponse = await fetch(query, { signal: AbortSignal.timeout(45000), cache: "no-store" });
+          const search = await searchResponse.json();
+          const id = Array.isArray(search.ads) && search.ads.find(a => /^\d{1,30}$/.test(a.id))?.id;
+          console.info("[AdSnoop data probe]", JSON.stringify({
+            http: searchResponse.status,
+            code: search.code || "OK",
+            adCount: Array.isArray(search.ads) ? search.ads.length : null,
+            hasValidAd: !!id,
+          }));
+          if (id && data?.mediaCollector?.configured === true) {
+            const mediaResponse = await fetch(origin + "/api/media?id=" + encodeURIComponent(id), {
+              signal: AbortSignal.timeout(125000), cache: "no-store",
+            });
+            const media = await mediaResponse.json();
+            console.info("[AdSnoop creative probe]", JSON.stringify({
+              http: mediaResponse.status,
+              code: media.code || "UNKNOWN",
+              itemCount: Array.isArray(media.items) ? media.items.length : 0,
+              kinds: Array.isArray(media.items) ? [...new Set(media.items.map(i => i.kind))] : [],
+            }));
+          }
+        } catch (e) {
+          console.info("[AdSnoop data or creative probe]", e?.name || "failed");
+        }
+      }
     } catch (error) {
       console.info("[AdSnoop preview diagnostics] upstream unavailable:", error?.name || "network-error");
     }
