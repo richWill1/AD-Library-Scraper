@@ -106,12 +106,18 @@ function renderBrands(){
  const selected=state.choices.get(state.page);
  if(selected&&!choices.includes(selected))choices[choices.length-1]=selected;
  const list=$("brands");
- list.hidden=state.view!=="discover"||(!choices.length&&!state.discoveryCursor);
- list.innerHTML=choices.map(c=>{
-  const active=c.id===state.page;
-  return '<button class="brandchoice'+(active?' selected':'')+'" aria-pressed="'+active+'" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'"><strong>'+esc(c.name)+'</strong><span>'+(active?'Selected advertiser':'Show this advertiser’s ads ↗')+'</span></button>';
- }).join("");
- if(state.discoveryCursor||state.canFindAlternates)list.insertAdjacentHTML("beforeend",'<button class="brandchoice" data-action="morebrands"><strong>Find other advertiser pages →</strong></button>');
+ list.hidden=state.view!=="discover"||!choices.length;
+ list.style.cssText="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0 24px";
+ if(list.hidden)list.style.display="none";
+ list.innerHTML='<label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#6e6e73;max-width:100%">Advertiser<select id="advertiserSelect" aria-label="Choose advertiser" style="min-width:0;max-width:260px;padding:9px 32px 9px 12px;border:1px solid #d2d2d7;border-radius:10px;background:#fff;color:#1d1d1f;font:inherit">'+choices.map(c=>'<option value="'+esc(c.id)+'"'+(c.id===state.page?' selected':'')+'>'+esc(c.name)+'</option>').join("")+'</select></label>';
+ if(state.discoveryCursor||state.canFindAlternates)list.insertAdjacentHTML("beforeend",'<button class="linkbutton" data-action="morebrands">Find another page</button>');
+ $("advertiserSelect").addEventListener("change",e=>{
+  const choice=state.choices.get(e.target.value);
+  if(!choice||choice.id===state.page)return;
+  state.brand=choice.name;
+  state.page=choice.id;
+  void runSearch(state.query,choice.id);
+ });
 }
 async function request(path,method,body,signal){
  const resp=await fetch(path,{method:method||"GET",headers:body?{"Content-Type":"application/json"}:undefined,body:body?JSON.stringify(body):undefined,signal,cache:"no-store"});
