@@ -3,7 +3,7 @@
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const homeUrl="https://ad-library-scraper-94t0.onrender.com";
 const storeKey="adsnoop-live-preview-saved-v1";
-const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"reach",limit:25,loading:false,saved:new Map(),compare:new Map(),health:null};
+const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"reach",limit:25,theme:"",loading:false,saved:new Map(),compare:new Map(),health:null};
 const mediaCache=new Map(),mediaState=new Map(),mediaQueue=[];let collectorStatus="checking",mediaActive=0;
 const MEDIA_CONCURRENCY=2,MEDIA_RETRY_CODES=["BUSY","COLLECTOR_UNAVAILABLE","RATE_LIMITED"],MEDIA_MAX_ATTEMPTS=3;
 let requestController=null,requestNumber=0,observer=null;
@@ -28,7 +28,7 @@ function directAdvertiser(query){
 }
 function searchClient(query){
  const q=String(query||"").trim();if(!q)return;
- state.view="discover";state.filter="all";state.limit=25;
+ state.view="discover";state.filter="all";state.limit=25;state.theme="";
  const exact=directAdvertiser(q);
  state.query=q;
  state.choices.clear();
@@ -56,9 +56,9 @@ function shownRows(){
  return rows.sort((a,b)=>state.sort==="oldest"?String(a.start||"").localeCompare(String(b.start||"")):state.sort==="reach"?(b.reach??-1)-(a.reach??-1):String(b.start||"").localeCompare(String(a.start||"")));
 }
 function showHeader(){
- $("heading").textContent=state.view==="saved"?"Your saved ideas.":state.view==="insights"?"Discover the patterns.":state.brand?state.brand+" — Active ads":"The creative library.";
- $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
- $("metrics").style.display=state.rows.length||state.view==="saved"?"grid":"none";
+ $("heading").textContent=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.brand?state.brand+" — Active ads":"The creative library.";
+ $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
+ $("metrics").style.display=state.view!=="insights"&&(state.rows.length||state.view==="saved")?"grid":"none";
  $("toolbar").style.display=state.rows.length||state.view==="saved"?"flex":"none";
  $("metricAds").textContent=String(shownRows().length).padStart(2,"0");
  $("metricBrands").textContent=state.view==="saved"?"Multiple":state.brand||"—";
@@ -83,7 +83,8 @@ function renderCards(){
  if(observer)observer.disconnect();
  showHeader();
  renderBrands();
- const all=shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
+ const all=state.view==="insights"?[]:shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
+ if(state.view==="insights"){$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();return}
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
  $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
@@ -298,19 +299,88 @@ function observeMedia(){
  },{rootMargin:"300px 0px",threshold:.01});
  document.querySelectorAll("[data-media]").forEach(el=>{observer.observe(el);paintMedia(el.dataset.media)});
 }
+// Messaging map: deterministic rules applied to loaded ad copy. Ported from
+// lib/messaging.ts so the preview and the original app classify identically.
+const messageCategories=[
+ {id:"hooks",label:"Hooks",question:"What earns attention?"},
+ {id:"benefits",label:"Benefits",question:"What changes for the customer?"},
+ {id:"offers",label:"Offers",question:"What makes acting attractive?"},
+ {id:"proof",label:"Proof & reassurance",question:"What builds confidence?"},
+ {id:"actions",label:"Next steps",question:"What does the ad ask people to do?"}
+];
+const messageRules=[
+ {id:"tension",category:"hooks",label:"Everyday frustrations",match:/\b(clutter|crammed|dark corners|nothing to wear|struggling|tired of|messy)\b/i,test:"Open with one frustration your customers actually describe. Show how your product addresses it; keep the offer unchanged."},
+ {id:"transformation",category:"hooks",label:"Transformation",match:/\b(transform\w*|makeover|before.?and.?after|refresh|renew|upgrade)\b/i,test:"Test a clear before-and-after story against your current opening. Use an outcome you can demonstrate."},
+ {id:"identity",category:"hooks",label:"Lifestyle & identity",match:/\b(your style|own unique|expression|way you live|things you love|home feels|unwind|relax)\b/i,test:"Test an opening about the customer’s desired way of life, followed by a concrete product benefit."},
+ {id:"discovery",category:"hooks",label:"Discovery & curiosity",match:/\b(discover|explore|introducing|meet|what.?s inside|inside that)\b/i,test:"Give the viewer a specific reason to keep watching. Reveal one useful product detail instead of a vague teaser."},
+ {id:"space",category:"benefits",label:"Space & organisation",match:/\b(storage|maximi[sz]\w*|more space|every inch|organi[sz]\w*|space.saving)\b/i,test:"Demonstrate one practical benefit visually. Compare the benefit-led opening against your existing creative."},
+ {id:"personal",category:"benefits",label:"Made for you",match:/\b(bespoke|tailored|fitted|personali[sz]\w*|designed around)\b/i,test:"Show how your solution adapts to a specific customer need. Keep the audience, offer and landing page consistent."},
+ {id:"choice",category:"benefits",label:"Style & choice",match:/\b(colou?rs?|styles?|finishes|collection)\b/i,test:"Help the customer picture one relevant option. Test a focused example against a broad product showcase."},
+ {id:"ease",category:"benefits",label:"Ease & comfort",match:/\b(easy|easier|effortless|smooth|comfort\w*|seamless\w*)\b/i,test:"Show a moment that becomes easier with your product. Measure qualified responses rather than attention alone."},
+ {id:"saving",category:"offers",label:"Price incentive",match:/\b(sale|half.price|discount|\d+\s*%\s*off|save\s*£|price match|match any)\b/i,test:"If you have a genuine offer, test clearer presentation of its value. Keep the actual offer and eligibility consistent."},
+ {id:"free",category:"offers",label:"Free first step",match:/\bfree\b/i,test:"Test a low-commitment first step that you actually provide. Compare lead quality as well as response volume."},
+ {id:"finance",category:"offers",label:"Payment flexibility",match:/\b(finance|deposit|pay monthly|interest.free)\b/i,test:"If payment options apply, test explaining them clearly with the relevant terms. Do not invent a financial offer."},
+ {id:"endorsement",category:"proof",label:"Ratings & endorsement",match:/\b(which|recommended|award\w*|accredited|rated|reviews?|stars?)\b/i,test:"Place your own substantiated endorsement beside the main benefit. Compare against the same ad without that proof."},
+ {id:"guarantee",category:"proof",label:"Guarantee & longevity",match:/\b(guarantee|warranty|\d+[- ]?year|years? of|since\s+\d{4}|craftsmanship|established)\b/i,test:"Address one buying objection with evidence you can substantiate. Test the placement of reassurance, not a borrowed competitor claim."},
+ {id:"trust",category:"proof",label:"Popularity & trust",match:/\b(trusted|no\.?\s*1|number one|customers?|homeowners|bestsell\w*|leading)\b/i,test:"Use your own customer evidence to support a specific benefit. Judge the test by qualified leads or purchases."},
+ {id:"book",category:"actions",label:"Book a visit",match:/\b(book|design visit|appointment)\b/i,test:"Make the next step and what happens afterwards explicit. Compare the CTA wording while holding the rest of the ad constant."},
+ {id:"brochure",category:"actions",label:"Download a brochure",match:/\b(download|brochure)\b/i,test:"Explain what the download helps someone decide. Track downstream lead quality, not just downloads."},
+ {id:"shop",category:"actions",label:"Shop or order",match:/\b(shop|buy|order)\b/i,test:"Test a direct purchase next step against your current CTA. Keep the destination and offer identical."},
+ {id:"learn",category:"actions",label:"Explore or learn",match:/\b(learn more|find out|discover|explore)\b/i,test:"Tell people exactly what they will find next. Compare a specific CTA against a generic learn-more prompt."}
+];
+const copyPattern=a=>String(a.copy||"").toLowerCase().replace(/\s+/g," ").trim();
+function messagingThemes(ads){
+ return messageRules.map(rule=>{
+  const evidence={};
+  const matched=ads.filter(ad=>{
+   const copy=ad.copy==="No ad copy provided by Meta."?"":String(ad.copy||"");
+   const title=ad.title==="Ad creative"?"":String(ad.title||"");
+   const sentence=(copy+"\n"+title).split(/(?<=[.!?])\s+|\n+/).map(s=>s.trim()).filter(Boolean).find(s=>rule.match.test(s));
+   if(sentence)evidence[ad.id]=sentence;return !!sentence;
+  });
+  return {...rule,ads:matched,evidence};
+ }).filter(t=>t.ads.length).sort((a,b)=>b.ads.length-a.ads.length||a.label.localeCompare(b.label));
+}
+function themeExamples(theme){
+ const seen=new Set();
+ return [...theme.ads].sort((a,b)=>(b.reach??-1)-(a.reach??-1)).filter(a=>{const k=copyPattern(a);if(seen.has(k))return false;seen.add(k);return true});
+}
+const notesKey=()=>"adsnoop-messaging-notes-v1:"+(state.page||state.brand);
+function readNotes(){try{const v=JSON.parse(localStorage.getItem(notesKey())||"{}");return v&&typeof v==="object"?v:{}}catch{return {}}}
+function writeNote(id,text){const n=readNotes();if(text)n[id]=text;else delete n[id];try{localStorage.setItem(notesKey(),JSON.stringify(n))}catch{}}
+function highlight(sentence,re){
+ const m=sentence.match(re);if(!m)return esc(sentence);
+ const i=m.index;return esc(sentence.slice(0,i))+"<mark>"+esc(m[0])+"</mark>"+esc(sentence.slice(i+m[0].length));
+}
+function messagingView(){
+ const ads=state.rows;
+ if(!ads.length)return empty("No messaging to map yet.","Search an advertiser above, then open Messaging to see its hooks, benefits, offers and proof points.");
+ const themes=messagingThemes(ads),total=ads.length,distinct=new Set(ads.map(copyPattern)).size;
+ const mapped=new Set(themes.flatMap(t=>t.ads.map(a=>a.id))).size;
+ if(!themes.some(t=>t.id===state.theme))state.theme=themes[0]?.id||"";
+ const cols=messageCategories.map(cat=>{
+  const list=themes.filter(t=>t.category===cat.id);
+  return '<section class="msg-col msg-'+cat.id+'"><div class="msg-colhead"><h3>'+esc(cat.label)+'</h3><span>'+list.length+'</span></div><p class="msg-q">'+esc(cat.question)+'</p>'+
+   (list.length?list.map(t=>{const pct=Math.round(t.ads.length/total*100);return '<button class="msg-theme'+(t.id===state.theme?' on':'')+'" data-theme="'+t.id+'" aria-pressed="'+(t.id===state.theme)+'"><span class="msg-label">'+esc(t.label)+'</span><span class="msg-count">'+t.ads.length+'</span><span class="msg-bar"><i style="width:'+pct+'%"></i></span><span class="msg-pct">'+pct+'% of ads</span></button>'}).join(""):'<p class="msg-none">Not detected in the loaded copy.</p>')+'</section>';
+ }).join("");
+ const t=themes.find(x=>x.id===state.theme);
+ let detail="";
+ if(t){
+  const ex=themeExamples(t),note=readNotes()[t.id]||"";
+  detail='<section class="msg-detail" aria-live="polite"><div class="msg-dhead"><div><p class="eyebrow">'+esc(messageCategories.find(c=>c.id===t.category).label)+'</p><h3>'+esc(t.label)+'</h3><p>'+t.ads.length+' of '+total+' ads ('+Math.round(t.ads.length/total*100)+'%) · '+ex.length+' distinct message'+(ex.length===1?'':'s')+'</p></div></div>'+
+   '<div class="msg-dgrid"><div><h4>How '+esc(state.brand||"they")+' say it</h4><ul class="msg-evidence">'+ex.slice(0,8).map(a=>'<li><blockquote>“'+highlight(t.evidence[a.id],t.match)+'”</blockquote><div class="msg-meta"><span>'+(a.reach!=null?'UK reach '+reach(a.reach):'Reach not reported')+' · since '+esc(formatDate(a.start))+'</span><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button></div></li>').join("")+'</ul>'+(ex.length>8?'<p class="msg-more">+ '+(ex.length-8)+' more variations in the loaded ads.</p>':'')+'</div>'+
+   '<div class="msg-test"><h4>Your test direction</h4><textarea data-note="'+t.id+'" rows="6" placeholder="'+esc(t.test)+'">'+esc(note)+'</textarea><p>Starts from a suggested direction; edit it for your brand. Saved in this browser.</p></div></div></section>';
+ }
+ return '<div class="msg-wrap"><div class="msg-top"><div><p class="eyebrow">Messaging map</p><h2>How '+esc(state.brand||"this advertiser")+' sells.</h2><p>'+total+' ads analysed · '+distinct+' distinct copy variations · '+themes.length+' themes · '+(total-mapped)+' ads with no detected theme</p></div><button class="ghost" data-action="exportmsg">Export map ↓</button></div><div class="msg-grid">'+cols+'</div>'+detail+'<p class="notice">Themes are detected from ad text with fixed rules; ads can appear in several themes. Claims are not verified, and this is not a measure of performance. English copy only.</p></div>';
+}
+function exportMessaging(){
+ const themes=messagingThemes(state.rows),notes=readNotes();
+ const text="MESSAGING MAP — "+(state.brand||"Advertiser")+"\nGenerated "+new Date().toISOString().slice(0,10)+" from "+state.rows.length+" loaded ads (UK). Themes are detected from ad text; claims are not verified.\n\n"+messageCategories.map(c=>c.label.toUpperCase()+"\n"+(themes.filter(t=>t.category===c.id).map(t=>"• "+t.label+" — "+t.ads.length+" ads\n  Test direction: "+(notes[t.id]||t.test)+"\n"+themeExamples(t).slice(0,5).map(a=>"  “"+t.evidence[a.id]+"”\n  "+metaUrl(a.id)).join("\n")).join("\n\n")||"  None detected")).join("\n\n");
+ const url=URL.createObjectURL(new Blob([text],{type:"text/plain;charset=utf-8"}));const link=document.createElement("a");link.href=url;link.download="adsnoop-messaging-"+(state.brand||"map").toLowerCase().replace(/[^a-z0-9]+/g,"-")+".txt";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
 function renderInsights(){
- const rows=allRows();
- const themes=[
- ["Offers and incentives",/\b(sale|discount|offer|save|free|half.price|% off|deal)\b/i],
- ["Benefits and outcomes",/\b(benefit|improve|feel|comfort|designed|transform|better|easy|quality)\b/i],
- ["Proof and trust",/\b(trusted|reviews|rated|guarantee|years|award|recommended|certified)\b/i],
- ["Next steps and action",/\b(shop|book|discover|explore|visit|learn|find|contact|order)\b/i]
- ];
- const total=Math.max(1,rows.length);
- $("themePanel").innerHTML=rows.length?themes.map(([label,re])=>{
- const n=rows.filter(a=>re.test((a.copy||"")+" "+(a.title||""))).length;
- return '<div class="themebar"><div class="rowtop"><span>'+esc(label)+'</span><span>'+n+' / '+rows.length+' loaded ads</span></div><div class="track"><div class="fill" style="width:'+Math.round(n/total*100)+'%"></div></div></div>';
- }).join(""):'<p>Select an advertiser to see recurring message themes.</p>';
+ const rows=state.rows,themes=messagingThemes(rows).slice(0,4),total=Math.max(1,rows.length);
+ $("themePanel").innerHTML=rows.length&&themes.length?themes.map(t=>'<div class="themebar"><div class="rowtop"><span>'+esc(t.label)+'</span><span>'+t.ads.length+' / '+rows.length+' ads</span></div><div class="track"><div class="fill" style="width:'+Math.round(t.ads.length/total*100)+'%"></div></div></div>').join("")+'<button class="pill sm" data-view="insights" style="margin-top:22px">Open the messaging map →</button>':'<p>Select an advertiser to see recurring message themes.</p>';
 }
 function findAd(id){return state.rows.find(a=>a.id===id)||state.saved.get(id)||state.compare.get(id)}
 function modal(title,content){$("modalTitle").textContent=title;$("modalContent").innerHTML=content;$("modalOverlay").classList.add("open");$("closeModal").focus();}
@@ -326,10 +396,10 @@ function setView(view){
  state.view=view;
  $("brands").hidden=true;
  if(view==="saved")feedback("Your saved creative records are stored locally in this browser. For an up-to-date ad, open its official Meta link.");
- else if(view==="insights"){feedback("");$("feature").scrollIntoView({behavior:"smooth"})}
+ else if(view==="insights")feedback("");
  else feedback(state.brand?"":"Search a brand above to discover active advertisers.");
  renderCards();
- if(view!=="insights")$("research").scrollIntoView({behavior:"smooth"});
+ $("research").scrollIntoView({behavior:"smooth"});
 }
 async function health(){
  const status=$("status"),details=$("serviceDetails");
@@ -367,6 +437,7 @@ document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
  b=e.target.closest("[data-page]");if(b){if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
+ b=e.target.closest("[data-theme]");if(b){state.theme=b.dataset.theme;renderCards();document.querySelector(".msg-detail")?.scrollIntoView({behavior:"smooth",block:"nearest"});return}
  b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;state.limit=25;renderCards();return}
  b=e.target.closest("[data-action]");if(!b)return;
  const {action,id}=b.dataset;
@@ -374,10 +445,12 @@ document.addEventListener("click",e=>{
  if(action==="save"){const a=findAd(id);if(a){if(state.saved.has(id))state.saved.delete(id);else state.saved.set(id,a);save();renderCards();}}
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}
  if(action==="showmore"){state.limit+=25;renderCards()}
+ if(action==="exportmsg")exportMessaging();
  if(action==="retrymedia")requestMedia(id,{refresh:true,priority:true});
  if(action==="loadmore"&&(state.cursor||state.needsPageStart)){state.limit+=25;runSearch(state.query||state.brand,state.page,state.cursor||"",false,state.needsPageStart)}
  if(action==="morebrands"&&!state.loading&&(state.discoveryCursor||state.canFindAlternates))runSearch(state.query,"",state.discoveryCursor||"",true);
 });
+document.addEventListener("input",e=>{const t=e.target.closest("[data-note]");if(t)writeNote(t.dataset.note,t.value.trim())});
 $("closeModal").onclick=()=>$("modalOverlay").classList.remove("open");
 $("modalOverlay").onclick=e=>{if(e.target===$("modalOverlay"))$("modalOverlay").classList.remove("open")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("modalOverlay").classList.remove("open")});
