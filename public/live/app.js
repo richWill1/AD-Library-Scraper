@@ -68,6 +68,9 @@ function showHeader(){
  $("comparisonBar").classList.toggle("show",state.compare.size>0);
  $("compareCount").textContent=state.compare.size+" of 3 selected";
 }
+function loadingCards(){
+ return '<div role="status" aria-live="polite" style="grid-column:1/-1;padding:28px 0"><style>@keyframes adsnoopPulse{50%{opacity:.4}}.search-placeholder{animation:adsnoopPulse 1.4s ease-in-out infinite;background:#f0f0f3;border-radius:16px;height:220px}@media(prefers-reduced-motion:reduce){.search-placeholder{animation:none}}</style><p style="font-size:20px;font-weight:600;margin:0 0 6px">Finding your next creative inspiration</p><p style="color:#6e6e73;margin:0 0 24px">Loading ads for '+esc(state.query||state.brand)+'…</p><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px" aria-hidden="true"><div class="search-placeholder"></div><div class="search-placeholder" style="animation-delay:.15s"></div><div class="search-placeholder" style="animation-delay:.3s"></div></div></div>';
+}
 function empty(title,detail){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p></div>'}
 function card(a){
  const platforms=(a.platforms||[]).join(", ")||"Platform not reported";
@@ -80,7 +83,7 @@ function renderCards(){
  showHeader();
  renderBrands();
  const rows=shownRows();
- $("cards").innerHTML=rows.length?rows.map(card).join(""):empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
+ $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
  $("pager").innerHTML=state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
  observeMedia();
@@ -171,6 +174,7 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
    state.needsPageStart=false;
   }
   feedback(state.rows.length?"":page?"Meta returned no active ads for this advertiser in the selected countries.":"No matching advertiser pages returned. Try another search.");
+  busy(false);
   renderCards();
  }catch(err){
   if(controller.signal.aborted)return;
@@ -178,6 +182,8 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
   const guidance=["META_EXPIRED","NOT_CONFIGURED","META_RECONNECT"].includes(code)?" The account owner may need to reconnect Meta on the original website.":code==="RATE_LIMITED"?" Try again in a minute.":"";
   error(String(err.message||"Search failed.")+guidance);
   feedback("");
+  busy(false);
+  renderCards();
  }finally{if(rid===requestNumber)busy(false)}
 }
 function mediaMessage(code){
