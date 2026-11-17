@@ -8,6 +8,30 @@ const mediaCache=new Map(),mediaRunning=new Set(),pendingMedia=[];let collectorS
 let requestController=null,requestNumber=0,observer=null;
 try{const entries=JSON.parse(localStorage.getItem(storeKey)||"[]");for(const ad of Array.isArray(entries)?entries:[])if(ad&&/^\d{1,30}$/.test(ad.id)&&typeof ad.copy==="string")state.saved.set(ad.id,ad);}catch(e){}
 const metaUrl=id=>"https://www.facebook.com/ads/library/?id="+encodeURIComponent(id);
+// Known Facebook pages were verified previously; they are identity shortcuts, not cached ad records.
+const knownPages=[
+ {id:"280531915302272", name:"Sharps Fitted Furniture", aliases:["sharps","sharps fitted furniture","sharps.co.uk"]},
+ {id:"384841908531592", name:"Neville Johnson", aliases:["neville johnson","nevillejohnson","nevillejohnson.co.uk"]},
+ {id:"180833751931315", name:"Hammonds", aliases:["hammonds","hammonds furniture","hammonds-uk.com"]}
+];
+function canonicalName(value){
+ let v=String(value||"").trim().toLowerCase();
+ try{if(/^(https?:\/\/|www\.)/.test(v)||/^[a-z\d.-]+\.(com|co\.uk|org|net|io)(\/|$)/.test(v)){const u=new URL(v.startsWith("http")?v:"https://"+v);v=u.hostname.replace(/^www\./,"").replace(/\.(co\.uk|com|org|net|io)$/,"");}}catch{}
+ return v.replace(/[^a-z\d]/g,"");
+}
+function directAdvertiser(query){
+ const q=String(query||"").trim();
+ if(/^\d{1,30}$/.test(q))return {id:q,name:"Facebook Page "+q};
+ const v=canonicalName(q);
+ return knownPages.find(p=>p.aliases.some(a=>canonicalName(a)===v)||canonicalName(p.name)===v)||null;
+}
+function searchClient(query){
+ const q=String(query||"").trim();if(!q)return;
+ state.view="discover";state.filter="all";
+ const exact=directAdvertiser(q);
+ if(exact){state.brand=exact.name;state.page=exact.id;void runSearch(q,exact.id);}
+ else{state.brand="";state.page="";void runSearch(q);}
+}
 const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T12:00:00Z":s);return Number.isFinite(d.getTime())?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"Unknown"};
 const reach=n=>typeof n==="number"&&Number.isFinite(n)?n.toLocaleString("en-GB"):"Not available";
 function error(msg){const el=$("error");el.textContent=msg;el.hidden=!msg;}
@@ -65,11 +89,24 @@ function showBrands(data,append=false){
  }
  state.discovery=[...ids.values()].flatMap(entry=>Array.from({length:entry.count},()=>({pageId:entry.id,pageName:entry.name})));
  const choices=Array.from(ids.values()).sort((a,b)=>b.count-a.count).slice(0,45);
+ // Do not require an extra advertiser selection when a client can be identified confidently.
+ if(!append&&choices.length){
+  const wanted=canonicalName(state.query);
+  const exact=choices.filter(c=>canonicalName(c.name)===wanted);
+  const match=exact.length===1?exact[0]:(choices.length===1?choices[0]:null);
+  if(match){
+   state.brand=match.name;state.page=match.id;
+   $("brands").hidden=true;
+   void runSearch(state.query,match.id);
+   return true;
+  }
+ }
  $("brands").hidden=!choices.length;
  $("brands").innerHTML=choices.map(c=>'<button class="brandchoice" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'"><strong>'+esc(c.name)+'</strong><span>'+c.count+' matching ad records · Select advertiser ↗</span></button>').join("");
  state.discoveryCursor=data.nextCursor||null;
  if(state.discoveryCursor)$("brands").insertAdjacentHTML("beforeend",'<button class="brandchoice" data-action="morebrands"><strong>Find more matching pages →</strong><span>Retrieve the next page of advertiser results</span></button>');
- feedback(choices.length?"Select the matching advertiser to load its full ad details. Names and website domains are search hints, not verified ownership.":"No matching advertiser pages returned. Try another search.");
+ feedback(choices.length?"Several advertisers match this search. Choose the correct one to load its ads.":"No matching advertiser pages returned. Try another search.");
+ return false;
 }
 async function request(path,method,body,signal){
  const resp=await fetch(path,{method:method||"GET",headers:body?{"Content-Type":"application/json"}:undefined,body:body?JSON.stringify(body):undefined,signal,cache:"no-store"});
@@ -93,7 +130,7 @@ async function runSearch(query,page="",after="",discoveryAppend=false){
   state.query=q;
   if(!page){
    state.brand="";state.rows=[];state.cursor=null;
-   showBrands(data,discoveryAppend);renderCards();
+   if(!showBrands(data,discoveryAppend))renderCards();
   }else{
    state.page=page;state.brand=state.brand||data.ads?.[0]?.pageName||q;
    state.rows=after?[...state.rows,...(data.ads||[]).filter(a=>!state.rows.some(old=>old.id===a.id))]:data.ads||[];
@@ -240,15 +277,14 @@ async function health(){
  }
 }
 $("searchForm").addEventListener("submit",e=>{
- e.preventDefault();state.view="discover";state.brand="";const q=$("searchInput").value.trim();
- if(/^\d{1,30}$/.test(q)){state.brand="Facebook Page "+q;runSearch(q,q)}
- else runSearch(q);
+ e.preventDefault();
+ searchClient($("searchInput").value);
  $("research").scrollIntoView({behavior:"smooth"});
 });
 $("coverage").addEventListener("change",e=>{state.coverage=e.target.value;if(state.page)runSearch(state.query||state.brand,state.page);else if(state.query)runSearch(state.query)});
 $("sort").addEventListener("change",e=>{state.sort=e.target.value;renderCards()});
 document.addEventListener("click",e=>{
- let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;state.view="discover";state.brand="";runSearch(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
+ let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
  b=e.target.closest("[data-page]");if(b){state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
  b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;renderCards();return}
