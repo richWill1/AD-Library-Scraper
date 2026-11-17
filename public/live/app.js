@@ -3,9 +3,9 @@
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const homeUrl="https://ad-library-scraper-94t0.onrender.com";
 const storeKey="adsnoop-live-preview-saved-v1";
-const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"reach",limit:25,theme:"",loading:false,saved:new Map(),compare:new Map(),health:null};
+const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"reach",limit:25,theme:"",revealAll:false,loading:false,saved:new Map(),compare:new Map(),health:null};
 const mediaCache=new Map(),mediaState=new Map(),mediaQueue=[];let collectorStatus="checking",mediaActive=0;
-const MEDIA_CONCURRENCY=2,MEDIA_RETRY_CODES=["BUSY","COLLECTOR_UNAVAILABLE","RATE_LIMITED"],MEDIA_MAX_ATTEMPTS=3;
+const MEDIA_CONCURRENCY=3,MEDIA_REVEAL_AFTER=40000,MEDIA_RETRY_CODES=["BUSY","COLLECTOR_UNAVAILABLE","RATE_LIMITED"],MEDIA_MAX_ATTEMPTS=3;
 let requestController=null,requestNumber=0,observer=null;
 try{const entries=JSON.parse(localStorage.getItem(storeKey)||"[]");for(const ad of Array.isArray(entries)?entries:[])if(ad&&/^\d{1,30}$/.test(ad.id)&&typeof ad.copy==="string")state.saved.set(ad.id,ad);}catch(e){}
 const metaUrl=id=>"https://www.facebook.com/ads/library/?id="+encodeURIComponent(id);
@@ -28,7 +28,7 @@ function directAdvertiser(query){
 }
 function searchClient(query){
  const q=String(query||"").trim();if(!q)return;
- state.view="discover";state.filter="all";state.limit=25;state.theme="";
+ state.view="discover";state.filter="all";state.limit=25;state.theme="";state.revealAll=false;
  const exact=directAdvertiser(q);
  state.query=q;
  state.choices.clear();
@@ -43,7 +43,7 @@ const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T1
 const reach=n=>typeof n==="number"&&Number.isFinite(n)?n.toLocaleString("en-GB"):"Not available";
 function error(msg){const el=$("error");el.textContent=msg;el.hidden=!msg;}
 function feedback(message){const el=$("feedback");el.textContent=message;el.hidden=!message;}
-function busy(v){state.loading=v;$("searchGo").disabled=v;$("searchGo").textContent=v?"Searching…":"Search ↗";}
+function busy(v){state.loading=v;if(v)setBar("search");else if(!state.rows.length)setBar("hide");else updateReveal(true);$("searchGo").disabled=v;$("searchGo").textContent=v?"Searching…":"Search ↗";}
 function safeMedia(input){try{const u=new URL(input);return u.protocol==="https:"&&u.hostname.endsWith(".fbcdn.net")&&!u.username&&!u.password&&!u.searchParams.has("access_token")?u.href:null}catch{return null}}
 function save(){try{localStorage.setItem(storeKey,JSON.stringify(Array.from(state.saved.values()).slice(0,300)))}catch(e){feedback("Saved research cannot be written to this browser. Use a local download for a backup.");}}
 function allRows(){return state.view==="saved"?Array.from(state.saved.values()):state.rows}
@@ -69,22 +69,20 @@ function showHeader(){
  $("comparisonBar").classList.toggle("show",state.compare.size>0);
  $("compareCount").textContent=state.compare.size+" of 3 selected";
 }
-function loadingCards(){
- return '<div role="status" aria-live="polite" style="grid-column:1/-1;padding:28px 0"><style>@keyframes adsnoopPulse{50%{opacity:.4}}.search-placeholder{animation:adsnoopPulse 1.4s ease-in-out infinite;background:#f0f0f3;border-radius:16px;height:220px}@media(prefers-reduced-motion:reduce){.search-placeholder{animation:none}}</style><p style="font-size:20px;font-weight:600;margin:0 0 6px">Finding your next creative inspiration</p><p style="color:#6e6e73;margin:0 0 24px">Loading ads for '+esc(state.query||state.brand)+'…</p><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px" aria-hidden="true"><div class="search-placeholder"></div><div class="search-placeholder" style="animation-delay:.15s"></div><div class="search-placeholder" style="animation-delay:.3s"></div></div></div>';
-}
+function loadingCards(){return ""}
 function empty(title,detail){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p></div>'}
 function card(a){
  const platforms=(a.platforms||[]).join(", ")||"Platform not reported";
  const format=a.format&&a.format!=="Unknown"?a.format:"Format to be verified";
  const isSaved=state.saved.has(a.id),isCompared=state.compare.has(a.id);
- return '<article class="adcard"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false"><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span>'+esc(a.pageName||state.brand||"Advertiser")+'</span><span class="tag">'+esc(format)+'</span></div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span>UK reach: '+esc(reach(a.reach))+'</span></div><div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
+ return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false"><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span>'+esc(a.pageName||state.brand||"Advertiser")+'</span><span class="tag">'+esc(format)+'</span></div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span>UK reach: '+esc(reach(a.reach))+'</span></div><div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
 }
 function renderCards(){
  if(observer)observer.disconnect();
  showHeader();
  renderBrands();
  const all=state.view==="insights"?[]:shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
- if(state.view==="insights"){$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();return}
+ if(state.view==="insights"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();return}
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
  $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
@@ -270,7 +268,7 @@ function pumpMedia(){
   if(!st||st.status!=="queued")continue;
   // The advertiser changed and this ad is no longer on the page.
   if(!mediaNodes(id).length){mediaState.delete(id);continue}
-  st.status="loading";mediaActive++;paintMedia(id);
+  st.status="loading";st.started=Date.now();mediaActive++;paintMedia(id);
   (async()=>{
    let data;
    try{
@@ -285,19 +283,63 @@ function pumpMedia(){
     setTimeout(()=>{if(mediaState.get(id)===st&&st.status==="queued"){mediaQueue.push(id);paintQueue();pumpMedia()}},Math.min(4000*st.attempts,12000));
    }
    else mediaState.set(id,{status:"failed",code:data.code||"NO_MEDIA",attempts:st.attempts});
-  })().finally(()=>{mediaActive--;paintMedia(id);paintQueue();pumpMedia()});
+  })().finally(()=>{mediaActive--;paintMedia(id);paintQueue();pumpMedia();updateReveal()});
  }
 }
 function observeMedia(){
- if(observer)observer.disconnect();
- observer=new IntersectionObserver(entries=>{
-  for(const e of entries){
-   const id=e.target.dataset.media;
-   // Cards in view jump the queue; cards scrolled past give way to them.
-   if(e.isIntersecting)requestMedia(id,{priority:true});else deprioritiseMedia(id);
+ // Collect the shown ads in display order so rows complete top to bottom.
+ const ids=[...document.querySelectorAll("#cards [data-media]")].map(el=>el.dataset.media);
+ for(const id of ids){paintMedia(id);requestMedia(id)}
+ updateReveal(true);
+}
+function tileResolved(id){
+ if(state.revealAll||mediaCache.has(id))return true;
+ const st=mediaState.get(id);
+ if(!st||st.status==="failed"||st.status==="done")return !st?false:true;
+ // Never hold a whole row back for one slow creative.
+ return st.status==="loading"&&st.started&&Date.now()-st.started>MEDIA_REVEAL_AFTER;
+}
+let revealTimer=null;
+function updateReveal(instant=false){
+ const tiles=[...document.querySelectorAll("#cards .adcard")];
+ document.querySelectorAll("#cards .tile-skel").forEach(e=>e.remove());
+ if(!tiles.length){$("pager").style.display="";if(!state.loading)setBar("hide");return}
+ const ids=tiles.map(t=>t.querySelector("[data-media]").dataset.media);
+ let k=0;while(k<ids.length&&tileResolved(ids[k]))k++;
+ const upTo=k===ids.length?k:Math.floor(k/3)*3;
+ let fresh=0;
+ tiles.forEach((t,i)=>{
+  if(i<upTo&&t.classList.contains("tile-hidden")){
+   t.classList.remove("tile-hidden");
+   if(!instant){t.classList.add("tile-in");t.style.animationDelay=(fresh++%3)*90+"ms"}
   }
- },{rootMargin:"300px 0px",threshold:.01});
- document.querySelectorAll("[data-media]").forEach(el=>{observer.observe(el);paintMedia(el.dataset.media)});
+ });
+ const ready=ids.filter(id=>mediaCache.has(id)||mediaState.get(id)?.status==="failed").length;
+ const complete=upTo===ids.length;
+ // Placeholder row where the next three tiles will appear.
+ if(!complete){const grid=$("cards");for(let i=0;i<Math.min(3,ids.length-upTo);i++)grid.insertAdjacentHTML("beforeend",'<div class="tile-skel" aria-hidden="true" style="animation-delay:'+i*.15+'s"></div>')}
+ $("pager").style.display=complete?"":"none";
+ if(complete&&ready===ids.length)setBar("done",ids.length,ids.length);
+ else if(complete)setBar("hide");
+ else setBar("progress",ready,ids.length);
+ clearTimeout(revealTimer);
+ // Re-check so a slow tile is released once it passes the reveal threshold.
+ if(!complete)revealTimer=setTimeout(()=>updateReveal(),5000);
+}
+let barTimer=null;
+function setBar(mode,ready=0,total=0){
+ const bar=$("loadbar");if(!bar)return;
+ clearTimeout(barTimer);
+ if(mode==="hide"){bar.hidden=true;return}
+ bar.hidden=false;bar.classList.toggle("indeterminate",mode==="search");bar.classList.toggle("complete",mode==="done");
+ const who=state.brand||state.query||"this advertiser";
+ const fill=bar.querySelector(".loadbar-fill");
+ if(mode==="search"){fill.style.width="";$("loadbarText").textContent="Searching Meta for "+who+"…";$("loadbarAll").hidden=true;return}
+ const pct=total?Math.max(6,Math.round(ready/total*100)):0;
+ fill.style.width=pct+"%";
+ $("loadbarAll").hidden=mode==="done";
+ if(mode==="done"){$("loadbarText").textContent="All "+total+" creatives ready";barTimer=setTimeout(()=>{bar.hidden=true},1600);return}
+ $("loadbarText").textContent="Loading "+who+"’s creatives · "+ready+" of "+total+" ready";
 }
 // Messaging map: deterministic rules applied to loaded ad copy. Ported from
 // lib/messaging.ts so the preview and the original app classify identically.
@@ -445,6 +487,7 @@ document.addEventListener("click",e=>{
  if(action==="save"){const a=findAd(id);if(a){if(state.saved.has(id))state.saved.delete(id);else state.saved.set(id,a);save();renderCards();}}
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}
  if(action==="showmore"){state.limit+=25;renderCards()}
+ if(action==="revealall"){state.revealAll=true;updateReveal()}
  if(action==="exportmsg")exportMessaging();
  if(action==="retrymedia")requestMedia(id,{refresh:true,priority:true});
  if(action==="loadmore"&&(state.cursor||state.needsPageStart)){state.limit+=25;runSearch(state.query||state.brand,state.page,state.cursor||"",false,state.needsPageStart)}
