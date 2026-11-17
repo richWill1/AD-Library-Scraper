@@ -467,8 +467,87 @@ async function health(){
   details.innerHTML='<div class="live-info">Live status could not be checked. Search may still work; if it fails, saved ideas remain available.</div>';
  }
 }
+// Brand suggestions while typing. Meta discovery matches ad text, so results
+// are grouped by Facebook Page and ranked by how closely the name matches.
+const suggest={items:[],active:-1,timer:null,controller:null,cache:new Map(),term:""};
+function suggestRank(term,list){
+ const want=canonicalName(term),lower=term.toLowerCase().trim();
+ const score=n=>{const c=canonicalName(n);if(c===want)return 4;if(c.startsWith(want))return 3;if(String(n).toLowerCase().split(/[\s&-]+/).some(w=>w.startsWith(lower)))return 2;return c.includes(want)?1:0};
+ const ranked=list.map(s=>({...s,score:score(s.name)})).sort((a,b)=>b.score-a.score||b.count-a.count);
+ // Prefer pages whose name matches; otherwise show the pages most often behind matching ads.
+ const named=ranked.filter(s=>s.score>0);
+ return (named.length?named:ranked).slice(0,6);
+}
+function knownMatches(term){
+ const want=canonicalName(term);if(want.length<2)return [];
+ return knownPages.filter(p=>canonicalName(p.name).includes(want)||p.aliases.some(a=>canonicalName(a).startsWith(want))).map(p=>({id:p.id,name:p.name,count:0,known:true}));
+}
+function mergeSuggestions(a,b){const m=new Map();for(const s of [...a,...b]){const e=m.get(s.id);if(e)e.count=Math.max(e.count,s.count);else m.set(s.id,{...s})}return [...m.values()]}
+function initials(name){return String(name||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase()}
+function renderSuggest(state_){
+ const box=$("suggest"),input=$("searchInput");
+ if(state_==="hide"||(!suggest.items.length&&state_!=="loading"&&state_!=="empty"&&state_!=="limited")){box.hidden=true;input.setAttribute("aria-expanded","false");return}
+ box.hidden=false;input.setAttribute("aria-expanded","true");
+ const head=state_==="loading"?'<li class="sg-status"><span class="sg-dots"><i></i><i></i><i></i></span>Finding advertisers…</li>':state_==="empty"?'<li class="sg-status">No advertisers found yet. Press Enter to search ads mentioning “'+esc(suggest.term)+'”.</li>':state_==="limited"?'<li class="sg-status">Keep typing, or press Enter to search.</li>':"";
+ box.innerHTML=head+suggest.items.map((s,i)=>'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'"><span class="sg-logo"><img alt="" src="https://graph.facebook.com/'+encodeURIComponent(s.id)+'/picture?type=square&width=64&height=64" onerror="this.remove()"><b>'+esc(initials(s.name))+'</b></span><span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.known?'Verified advertiser':s.count+' active UK ad'+(s.count===1?'':'s')+' found')+'</small></span><span class="sg-go">↗</span></li>').join("");
+ input.setAttribute("aria-activedescendant",suggest.active>=0?"sg-"+suggest.active:"");
+}
+async function fetchSuggestions(term){
+ const key=canonicalName(term);
+ if(suggest.cache.has(key))return suggest.cache.get(key);
+ if(suggest.controller)suggest.controller.abort();
+ const controller=new AbortController();suggest.controller=controller;
+ const params=new URLSearchParams({q:term,coverage:state.coverage,discover:"1"});
+ const resp=await fetch("/api/ads?"+params,{signal:controller.signal,cache:"no-store"});
+ if(resp.status===429)throw Object.assign(Error("limited"),{code:"RATE_LIMITED"});
+ const data=await resp.json();if(!resp.ok||data.error)throw Error(data.error||"failed");
+ const pages=new Map();for(const ad of data.ads||[]){if(!ad.pageId||!ad.pageName)continue;const e=pages.get(ad.pageId);if(e)e.count++;else pages.set(ad.pageId,{id:ad.pageId,name:ad.pageName,count:1})}
+ const list=[...pages.values()];suggest.cache.set(key,list);return list;
+}
+function onSearchInput(){
+ const term=$("searchInput").value.trim();suggest.term=term;suggest.active=-1;
+ clearTimeout(suggest.timer);
+ if(term.length<2){suggest.items=[];renderSuggest("hide");return}
+ // Known advertisers appear instantly; Meta results follow after a short pause.
+ const local=knownMatches(term);suggest.items=suggestRank(term,local);
+ const cached=suggest.cache.get(canonicalName(term));
+ if(cached){suggest.items=suggestRank(term,mergeSuggestions(local,cached));renderSuggest(suggest.items.length?"":"empty");return}
+ renderSuggest("loading");
+ suggest.timer=setTimeout(async()=>{
+  try{
+   const list=await fetchSuggestions(term);
+   if($("searchInput").value.trim()!==term)return;
+   suggest.items=suggestRank(term,mergeSuggestions(local,list));
+   renderSuggest(suggest.items.length?"":"empty");
+  }catch(err){
+   if(err.name==="AbortError")return;
+   renderSuggest(suggest.items.length?"":err.code==="RATE_LIMITED"?"limited":"hide");
+  }
+ },350);
+}
+function chooseSuggestion(i){
+ const s=suggest.items[i];if(!s)return;
+ $("searchInput").value=s.name;renderSuggest("hide");clearTimeout(suggest.timer);
+ state.view="discover";state.filter="all";state.limit=25;state.theme="";state.revealAll=false;
+ state.query=s.name;state.brand=s.name;state.page=s.id;state.discoveryCursor=null;state.canFindAlternates=true;
+ state.choices.clear();for(const o of suggest.items)state.choices.set(o.id,{id:o.id,name:o.name,count:o.count});
+ void runSearch(s.name,s.id);
+ $("research").scrollIntoView({behavior:"smooth"});
+}
+$("searchInput").addEventListener("input",onSearchInput);
+$("searchInput").addEventListener("focus",()=>{if(suggest.items.length)renderSuggest("")});
+$("searchInput").addEventListener("keydown",e=>{
+ const box=$("suggest");if(box.hidden||!suggest.items.length){if(e.key==="Escape")renderSuggest("hide");return}
+ if(e.key==="ArrowDown"){e.preventDefault();suggest.active=(suggest.active+1)%suggest.items.length;renderSuggest("")}
+ else if(e.key==="ArrowUp"){e.preventDefault();suggest.active=(suggest.active-1+suggest.items.length)%suggest.items.length;renderSuggest("")}
+ else if(e.key==="Enter"&&suggest.active>=0){e.preventDefault();chooseSuggestion(suggest.active)}
+ else if(e.key==="Escape"){renderSuggest("hide")}
+});
+$("suggest").addEventListener("mousedown",e=>{const li=e.target.closest("[data-sg]");if(li){e.preventDefault();chooseSuggestion(Number(li.dataset.sg))}});
+document.addEventListener("click",e=>{if(!e.target.closest("#searchForm"))renderSuggest("hide")});
 $("searchForm").addEventListener("submit",e=>{
  e.preventDefault();
+ renderSuggest("hide");clearTimeout(suggest.timer);
  searchClient($("searchInput").value);
  $("research").scrollIntoView({behavior:"smooth"});
 });
