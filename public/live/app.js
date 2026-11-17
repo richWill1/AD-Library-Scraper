@@ -3,8 +3,9 @@
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const homeUrl="https://ad-library-scraper-94t0.onrender.com";
 const storeKey="adsnoop-live-preview-saved-v1";
-const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"newest",loading:false,saved:new Map(),compare:new Map(),health:null};
-const mediaCache=new Map(),mediaRunning=new Set(),pendingMedia=[];let collectorStatus="checking";
+const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"reach",limit:25,loading:false,saved:new Map(),compare:new Map(),health:null};
+const mediaCache=new Map(),mediaState=new Map(),mediaQueue=[];let collectorStatus="checking",mediaActive=0;
+const MEDIA_CONCURRENCY=2,MEDIA_RETRY_CODES=["BUSY","COLLECTOR_UNAVAILABLE","RATE_LIMITED"],MEDIA_MAX_ATTEMPTS=3;
 let requestController=null,requestNumber=0,observer=null;
 try{const entries=JSON.parse(localStorage.getItem(storeKey)||"[]");for(const ad of Array.isArray(entries)?entries:[])if(ad&&/^\d{1,30}$/.test(ad.id)&&typeof ad.copy==="string")state.saved.set(ad.id,ad);}catch(e){}
 const metaUrl=id=>"https://www.facebook.com/ads/library/?id="+encodeURIComponent(id);
@@ -27,7 +28,7 @@ function directAdvertiser(query){
 }
 function searchClient(query){
  const q=String(query||"").trim();if(!q)return;
- state.view="discover";state.filter="all";
+ state.view="discover";state.filter="all";state.limit=25;
  const exact=directAdvertiser(q);
  state.query=q;
  state.choices.clear();
@@ -82,9 +83,9 @@ function renderCards(){
  if(observer)observer.disconnect();
  showHeader();
  renderBrands();
- const rows=shownRows();
+ const all=shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
- $("pager").innerHTML=state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
+ $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
  observeMedia();
 }
@@ -118,7 +119,7 @@ function renderBrands(){
   const choice=state.choices.get(e.target.value);
   if(!choice||choice.id===state.page)return;
   state.brand=choice.name;
-  state.page=choice.id;
+  state.page=choice.id;state.limit=25;
   void runSearch(state.query,choice.id);
  });
 }
@@ -196,7 +197,8 @@ function mediaMessage(code){
  META_STORAGE_UNAVAILABLE:["Connection unavailable","The private Meta token store cannot be reached."],
  HOST_RATE_LIMITED:["Media hosting is rate-limited","The free media collector is returning HTTP 429. Open the ad on Meta while hosting access is restored."],
  COLLECTOR_UNAVAILABLE:["Collector unavailable","The media service did not respond. You can still inspect this ad on Meta."],
- BUSY:["Collector busy","The media service is currently processing other ads."],
+ BUSY:["Collector busy","The media service is processing other ads. Retry in a moment."],
+ RATE_LIMITED:["Too many preview requests","Please wait a minute, then retry this preview."],
  FAILED:["Preview unavailable","The image or video could not be played in this browser."]
  };
  return messages[code]||["Creative preview unavailable","The creative could not be retrieved. Ad details remain available."];
@@ -213,9 +215,9 @@ function displayMedia(node,id,items){
  const media=document.createElement(item.kind==="video"?"video":"img");
  if(item.kind==="video"){media.controls=true;media.muted=true;media.loop=true;media.playsInline=true;media.preload="metadata";if(item.poster&&safeMedia(item.poster))media.poster=item.poster;media.setAttribute("aria-label","Meta ad video creative");}
  else media.alt="Original Meta Ad Library creative";
- media.onerror=()=>{mediaFallback(node,id,"FAILED")};
+ media.onerror=()=>{mediaCache.delete(id);mediaState.set(id,{status:"failed",code:"FAILED",attempts:0});mediaFallback(node,id,"FAILED");node.dataset.loaded="failed"};
  media.src=item.url;
- node.replaceChildren(media);
+ node.replaceChildren(media);node.dataset.loaded="done";
  if(items.length>1){
   const counter=document.createElement("button");
   counter.className="square";counter.style.cssText="position:absolute;bottom:12px;right:12px;background:white;width:auto;padding:0 12px;border-radius:50px;";
@@ -224,38 +226,77 @@ function displayMedia(node,id,items){
   node.appendChild(counter);
  }
 }
-function queueMedia(node,id,refresh=false){
- if(!node||!node.isConnected)return;
- if(collectorStatus==="rate-limited"){mediaFallback(node,id,"HOST_RATE_LIMITED");return;}
- if(!refresh&&mediaCache.has(id)){const data=mediaCache.get(id);displayMedia(node,id,data.items);return}
- if(!refresh&&node.dataset.loaded==="loading")return;
- node.dataset.loaded="loading";
- pendingMedia.push({node,id,refresh});
- pump();
+// Media loading is keyed by ad ID, not by DOM node, so re-rendering cards
+// (filters, saving, comparing) never discards finished or in-flight work.
+function mediaNodes(id){return Array.from(document.querySelectorAll('[data-media="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]'))}
+function mediaPending(node,title,detail){
+ if(node.dataset.loaded==="done")return;
+ const key=title+"|"+detail;if(node.dataset.loaded==="loading"&&node.dataset.pending===key)return;
+ node.dataset.loaded="loading";node.dataset.pending=key;
+ node.innerHTML='<div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>'+esc(title)+'</strong><small>'+esc(detail)+'</small></div>';
 }
-let mediaActive=0;
-function pump(){
- while(mediaActive<2&&pendingMedia.length){
-  const job=pendingMedia.shift();
-  if(!job.node.isConnected)continue;
-  mediaActive++;
+function paintMedia(id){
+ const nodes=mediaNodes(id);if(!nodes.length)return;
+ const cached=mediaCache.get(id),st=mediaState.get(id);
+ for(const node of nodes){
+  if(cached){if(node.dataset.loaded!=="done")displayMedia(node,id,cached.items);continue}
+  if(!st)continue;
+  if(st.status==="failed"){if(node.dataset.loaded!=="failed"){mediaFallback(node,id,st.code);node.dataset.loaded="failed"}continue}
+  if(st.status==="loading")mediaPending(node,st.attempts>0?"Retrying creative preview":"Collecting creative from Meta","This usually takes 10–20 seconds the first time.");
+  else{const ahead=mediaQueue.indexOf(id);mediaPending(node,"Queued for preview",ahead>0?ahead+" ahead of this ad":"Starting shortly…")}
+ }
+}
+function paintQueue(){for(const id of mediaQueue)paintMedia(id)}
+function requestMedia(id,{refresh=false,priority=false}={}){
+ if(!id)return;
+ if(collectorStatus==="rate-limited"){mediaState.set(id,{status:"failed",code:"HOST_RATE_LIMITED",attempts:0});paintMedia(id);return}
+ if(refresh){mediaCache.delete(id);mediaState.delete(id);for(const n of mediaNodes(id))n.dataset.loaded="false"}
+ if(mediaCache.has(id)){paintMedia(id);return}
+ const st=mediaState.get(id);
+ if(st&&(st.status==="loading"||st.status==="failed")){paintMedia(id);return}
+ if(st&&st.status==="queued"){if(priority){mediaQueue.splice(mediaQueue.indexOf(id),1);mediaQueue.unshift(id);paintQueue()}else paintMedia(id);return}
+ mediaState.set(id,{status:"queued",attempts:0,refresh});
+ if(priority)mediaQueue.unshift(id);else mediaQueue.push(id);
+ paintQueue();pumpMedia();
+}
+function deprioritiseMedia(id){
+ const at=mediaQueue.indexOf(id);if(at<0||at===mediaQueue.length-1)return;
+ mediaQueue.splice(at,1);mediaQueue.push(id);paintQueue();
+}
+function pumpMedia(){
+ while(mediaActive<MEDIA_CONCURRENCY&&mediaQueue.length){
+  const id=mediaQueue.shift(),st=mediaState.get(id);
+  if(!st||st.status!=="queued")continue;
+  // The advertiser changed and this ad is no longer on the page.
+  if(!mediaNodes(id).length){mediaState.delete(id);continue}
+  st.status="loading";mediaActive++;paintMedia(id);
   (async()=>{
-   let data=null;try{
-    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),115000);
-    try{const resp=await fetch("/api/media?id="+encodeURIComponent(job.id)+(job.refresh?"&refresh=1":""),{signal:controller.signal,cache:"no-store"});data=await resp.json();}finally{clearTimeout(timer)}
+   let data;
+   try{
+    const resp=await fetch("/api/media?id="+encodeURIComponent(id)+(st.refresh?"&refresh=1":""),{signal:AbortSignal.timeout(115000),cache:"no-store"});
+    data=await resp.json().catch(()=>({code:resp.status===429?"RATE_LIMITED":"COLLECTOR_UNAVAILABLE",items:[]}));
    }catch{data={code:"COLLECTOR_UNAVAILABLE",items:[]}}
-   if(!job.node.isConnected)return;
    const items=(Array.isArray(data.items)?data.items:[]).filter(i=>i&&["video","image"].includes(i.kind)&&safeMedia(i.url)).map(i=>({...i,url:safeMedia(i.url),poster:safeMedia(i.poster)}));
-   if(items.length){mediaCache.set(job.id,{items,collectedAt:data.collectedAt});displayMedia(job.node,job.id,items)}
-   else mediaFallback(job.node,job.id,data.code||"NO_MEDIA");
-   job.node.dataset.loaded="done";
-  })().finally(()=>{mediaActive--;pump()});
+   if(items.length){mediaCache.set(id,{items,collectedAt:data.collectedAt});mediaState.set(id,{status:"done",attempts:st.attempts})}
+   else if(MEDIA_RETRY_CODES.includes(data.code)&&st.attempts+1<MEDIA_MAX_ATTEMPTS){
+    st.attempts++;st.status="queued";st.refresh=false;
+    // Back off, then rejoin the queue behind ads that have not been tried yet.
+    setTimeout(()=>{if(mediaState.get(id)===st&&st.status==="queued"){mediaQueue.push(id);paintQueue();pumpMedia()}},Math.min(4000*st.attempts,12000));
+   }
+   else mediaState.set(id,{status:"failed",code:data.code||"NO_MEDIA",attempts:st.attempts});
+  })().finally(()=>{mediaActive--;paintMedia(id);paintQueue();pumpMedia()});
  }
 }
 function observeMedia(){
  if(observer)observer.disconnect();
- observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting){const el=e.target;observer.unobserve(el);queueMedia(el,el.dataset.media)}},{rootMargin:"250px 0px",threshold:.01});
- document.querySelectorAll("[data-media]").forEach(el=>observer.observe(el));
+ observer=new IntersectionObserver(entries=>{
+  for(const e of entries){
+   const id=e.target.dataset.media;
+   // Cards in view jump the queue; cards scrolled past give way to them.
+   if(e.isIntersecting)requestMedia(id,{priority:true});else deprioritiseMedia(id);
+  }
+ },{rootMargin:"300px 0px",threshold:.01});
+ document.querySelectorAll("[data-media]").forEach(el=>{observer.observe(el);paintMedia(el.dataset.media)});
 }
 function renderInsights(){
  const rows=allRows();
@@ -320,19 +361,21 @@ $("searchForm").addEventListener("submit",e=>{
  $("research").scrollIntoView({behavior:"smooth"});
 });
 $("coverage").addEventListener("change",e=>{state.coverage=e.target.value;if(state.query)searchClient(state.query)});
-$("sort").addEventListener("change",e=>{state.sort=e.target.value;renderCards()});
+$("sort").value=state.sort;
+$("sort").addEventListener("change",e=>{state.sort=e.target.value;state.limit=25;renderCards()});
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
  b=e.target.closest("[data-page]");if(b){if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
- b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;renderCards();return}
+ b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;state.limit=25;renderCards();return}
  b=e.target.closest("[data-action]");if(!b)return;
  const {action,id}=b.dataset;
  if(action==="detail")adDetails(id);
  if(action==="save"){const a=findAd(id);if(a){if(state.saved.has(id))state.saved.delete(id);else state.saved.set(id,a);save();renderCards();}}
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}
- if(action==="retrymedia"){const node=b.closest("[data-media]");if(node){mediaCache.delete(id);node.innerHTML='<div class="creative-recovery"><span class="loadingring"></span><strong>Retrying preview…</strong></div>';queueMedia(node,id,true)}}
- if(action==="loadmore"&&(state.cursor||state.needsPageStart))runSearch(state.query||state.brand,state.page,state.cursor||"",false,state.needsPageStart);
+ if(action==="showmore"){state.limit+=25;renderCards()}
+ if(action==="retrymedia")requestMedia(id,{refresh:true,priority:true});
+ if(action==="loadmore"&&(state.cursor||state.needsPageStart)){state.limit+=25;runSearch(state.query||state.brand,state.page,state.cursor||"",false,state.needsPageStart)}
  if(action==="morebrands"&&!state.loading&&(state.discoveryCursor||state.canFindAlternates))runSearch(state.query,"",state.discoveryCursor||"",true);
 });
 $("closeModal").onclick=()=>$("modalOverlay").classList.remove("open");
