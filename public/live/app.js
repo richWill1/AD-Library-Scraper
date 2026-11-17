@@ -48,12 +48,16 @@ function safeMedia(input){try{const u=new URL(input);return u.protocol==="https:
 function save(){try{localStorage.setItem(storeKey,JSON.stringify(Array.from(state.saved.values()).slice(0,300)))}catch(e){feedback("Saved research cannot be written to this browser. Use a local download for a backup.");}}
 function allRows(){return state.view==="saved"?Array.from(state.saved.values()):state.rows}
 function shownRows(){
+ const f=state.filter,added=new Set(state.changes?.added||[]);
  let rows=allRows().filter(a=>{
- if(state.filter==="video")return a.format==="Video"||a.format==="Mixed"||(mediaCache.get(a.id)?.items||[]).some(i=>i.kind==="video");
- if(state.filter==="all")return true;
- return (a.platforms||[]).map(p=>String(p).toLowerCase()).includes(state.filter);
+  if(f==="all")return true;
+  if(f==="video"||f==="static"||f==="carousel")return formatOf(a.id)===f;
+  if(f==="added")return added.has(a.id);
+  if(["new","testing","proven","long"].includes(f))return lifeStage(daysRunning(a))?.key===f;
+  return (a.platforms||[]).map(p=>String(p).toLowerCase()).includes(f);
  });
- return rows.sort((a,b)=>state.sort==="oldest"?String(a.start||"").localeCompare(String(b.start||"")):state.sort==="reach"?(b.reach??-1)-(a.reach??-1):String(b.start||"").localeCompare(String(a.start||"")));
+ const by={reach:(a,b)=>(b.reach??-1)-(a.reach??-1),longest:(a,b)=>String(a.start||"9").localeCompare(String(b.start||"9")),newest:(a,b)=>String(b.start||"").localeCompare(String(a.start||""))};
+ return rows.sort(by[state.sort]||by.reach);
 }
 // Advertiser logo = the Facebook Page profile picture, with initials underneath
 // so a missing or slow image never leaves an empty circle.
@@ -79,20 +83,23 @@ function showHeader(){
 function loadingCards(){return ""}
 function empty(title,detail){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p></div>'}
 function card(a){
+ const d=daysRunning(a),stage=lifeStage(d),vars=(state.variations&&state.variations.get(variationKey(a)))||1;
+ const badges='<div class="tilebadges">'+(stage?'<span class="lifebadge st-'+stage.key+'" title="'+esc(stage.hint)+'">'+esc(stage.label)+' · '+d+'d</span>':'')+(vars>1?'<span class="varbadge" title="Same copy running in '+vars+' ads, a sign the brand is scaling this message">×'+vars+' variations</span>':'')+'</div>';
  const platforms=(a.platforms||[]).join(", ")||"Platform not reported";
  const format=a.format&&a.format!=="Unknown"?a.format:"Format to be verified";
  const isSaved=state.saved.has(a.id),isCompared=state.compare.has(a.id);
- return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false"><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span class="adbrand">'+logoHTML(a.pageId,a.pageName||state.brand,"sm")+esc(a.pageName||state.brand||"Advertiser")+'</span><span class="tag">'+esc(format)+'</span></div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span>UK reach: '+esc(reach(a.reach))+'</span></div><div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
+ return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false">'+badges+'<span class="fmtbadge" data-fmt="'+esc(a.id)+'"></span><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span class="adbrand">'+logoHTML(a.pageId,a.pageName||state.brand,"sm")+esc(a.pageName||state.brand||"Advertiser")+'</span><span class="tag">'+esc(format)+'</span></div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span>UK reach: '+esc(reach(a.reach))+'</span></div><div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
 }
 function renderCards(){
  if(observer)observer.disconnect();
  showHeader();
  renderBrands();
  const all=state.view==="insights"?[]:shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
- if(state.view==="insights"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();return}
+ if(state.view==="insights"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();return}
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
  $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
+ renderIntel();
  observeMedia();
 }
 function addBrands(rows){
@@ -180,6 +187,8 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
    state.cursor=data.nextCursor||null;
    state.needsPageStart=false;
   }
+  state.variations=variationCounts(state.rows);
+  state.changes=after||appendAds?state.changes:compareWithLastVisit();
   if(state.page&&state.brand&&state.rows.length){rememberAdvertiser(state.page,state.brand,state.rows.length);rememberPageId(state.brand,state.page)}
   feedback(state.rows.length?"":page?"Meta returned no active ads for this advertiser in the selected countries.":"No matching advertiser pages returned. Try another search.");
   busy(false);
@@ -213,7 +222,9 @@ function mediaMessage(code){
 function mediaFallback(node,id,code){
  if(!node||!node.isConnected)return;
  const [title,desc]=mediaMessage(code);
+ const keepF=[...node.querySelectorAll(".tilebadges")];
  node.innerHTML='<div class="creative-recovery"><strong>'+esc(title)+'</strong><small>'+esc(desc)+'</small><a target="_blank" rel="noopener noreferrer" href="'+metaUrl(id)+'">View creative on Meta ↗</a><button data-action="retrymedia" data-id="'+esc(id)+'">Retry preview</button></div>';
+ node.append(...keepF);
 }
 function displayMedia(node,id,items){
  if(!node||!node.isConnected)return;
@@ -224,7 +235,8 @@ function displayMedia(node,id,items){
  else media.alt="Original Meta Ad Library creative";
  media.onerror=()=>{mediaCache.delete(id);mediaState.set(id,{status:"failed",code:"FAILED",attempts:0});mediaFallback(node,id,"FAILED");node.dataset.loaded="failed"};
  media.src=item.url;
- node.replaceChildren(media);node.dataset.loaded="done";
+ const keep=[...node.querySelectorAll(".tilebadges,.fmtbadge")];node.replaceChildren(media,...keep);node.dataset.loaded="done";
+ const fb=node.querySelector(".fmtbadge"),fm=formatOf(id);if(fb&&fm){fb.textContent=formatLabel[fm];fb.className="fmtbadge fmt-"+fm}
  if(items.length>1){
   const counter=document.createElement("button");
   counter.className="square";counter.style.cssText="position:absolute;bottom:12px;right:12px;background:white;width:auto;padding:0 12px;border-radius:50px;";
@@ -240,7 +252,9 @@ function mediaPending(node,title,detail){
  if(node.dataset.loaded==="done")return;
  const key=title+"|"+detail;if(node.dataset.loaded==="loading"&&node.dataset.pending===key)return;
  node.dataset.loaded="loading";node.dataset.pending=key;
+ const keepP=[...node.querySelectorAll(".tilebadges,.fmtbadge")];
  node.innerHTML='<div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>'+esc(title)+'</strong><small>'+esc(detail)+'</small></div>';
+ node.append(...keepP);
 }
 function paintMedia(id){
  const nodes=mediaNodes(id);if(!nodes.length)return;
@@ -330,6 +344,7 @@ function updateReveal(instant=false){
  if(complete&&ready===ids.length)setBar("done",ids.length,ids.length);
  else if(complete)setBar("hide");
  else setBar("progress",ready,ids.length);
+ renderIntel();
  clearTimeout(revealTimer);
  // Re-check so a slow tile is released once it passes the reveal threshold.
  if(!complete)revealTimer=setTimeout(()=>updateReveal(),5000);
@@ -427,6 +442,72 @@ function exportMessaging(){
  const themes=messagingThemes(state.rows),notes=readNotes();
  const text="MESSAGING MAP — "+(state.brand||"Advertiser")+"\nGenerated "+new Date().toISOString().slice(0,10)+" from "+state.rows.length+" loaded ads (UK). Themes are detected from ad text; claims are not verified.\n\n"+messageCategories.map(c=>c.label.toUpperCase()+"\n"+(themes.filter(t=>t.category===c.id).map(t=>"• "+t.label+" — "+t.ads.length+" ads\n  Test direction: "+(notes[t.id]||t.test)+"\n"+themeExamples(t).slice(0,5).map(a=>"  “"+t.evidence[a.id]+"”\n  "+metaUrl(a.id)).join("\n")).join("\n\n")||"  None detected")).join("\n\n");
  const url=URL.createObjectURL(new Blob([text],{type:"text/plain;charset=utf-8"}));const link=document.createElement("a");link.href=url;link.download="adsnoop-messaging-"+(state.brand||"map").toLowerCase().replace(/[^a-z0-9]+/g,"-")+".txt";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+// ---- Ad intelligence: format, longevity, launches, variations, changes ----
+// Longevity is the signal every ad-intelligence tool leans on: brands keep
+// paying for ads that work. It is a clue, not proof of performance.
+const DAY=86400000;
+function daysRunning(a){if(!a.start)return null;const t=Date.parse(a.start+"T00:00:00Z");return Number.isFinite(t)?Math.max(0,Math.floor((Date.now()-t)/DAY)):null}
+function lifeStage(d){if(d==null)return null;if(d<=7)return {key:"new",label:"New",hint:"Launched in the last 7 days"};if(d<30)return {key:"testing",label:"Testing",hint:"Live under 30 days"};if(d<90)return {key:"proven",label:"Proven",hint:"Live 30–89 days"};return {key:"long",label:"Long-runner",hint:"Live 90+ days, likely a winner"}}
+function formatOf(id){
+ const items=mediaCache.get(id)?.items;if(!items||!items.length)return null;
+ if(items.some(i=>i.kind==="video"))return "video";
+ return items.length>1?"carousel":"static";
+}
+const formatLabel={video:"Video",static:"Static",carousel:"Carousel"};
+function variationKey(a){return copyPattern(a)+"|"+String(a.title||"").toLowerCase().trim()}
+function variationCounts(rows){const m=new Map();for(const a of rows){const k=variationKey(a);m.set(k,(m.get(k)||0)+1)}return m}
+// Remember which ads were live on the last visit, per advertiser, to show changes.
+const seenKey=page=>"adsnoop-seen-v1:"+page;
+function compareWithLastVisit(){
+ if(!state.page||!state.rows.length)return null;
+ let prev=null;try{prev=JSON.parse(localStorage.getItem(seenKey(state.page))||"null")}catch{}
+ const ids=state.rows.map(a=>a.id),now=Date.now();
+ // Only treat ads as stopped when the full set of active ads was loaded.
+ const complete=!state.cursor&&!state.needsPageStart;
+ let result={first:!prev};
+ if(prev&&Array.isArray(prev.ids)){
+  const before=new Set(prev.ids),current=new Set(ids);
+  result={first:false,since:prev.at,added:ids.filter(id=>!before.has(id)),removed:complete&&prev.complete?prev.ids.filter(id=>!current.has(id)):null};
+ }
+ // Keep the baseline from the earlier visit until a day has passed, so
+ // repeated searches the same day still show what changed since that visit.
+ if(!prev||now-(prev.at||0)>DAY){try{localStorage.setItem(seenKey(state.page),JSON.stringify({ids,at:now,complete}))}catch{}}
+ return result;
+}
+function weeklyLaunches(rows,weeks=12){
+ const counts=Array(weeks).fill(0),now=Date.now();
+ for(const a of rows){const d=daysRunning(a);if(d==null)continue;const w=Math.floor(d/7);if(w<weeks)counts[weeks-1-w]++}
+ return counts;
+}
+function topCTAs(rows){
+ const themes=messagingThemes(rows).filter(t=>t.category==="actions");
+ return themes.slice(0,3).map(t=>({label:t.label,n:t.ads.length}));
+}
+function renderIntel(){
+ const box=$("intel");if(!box)return;
+ if(state.view!=="discover"||!state.rows.length){box.hidden=true;return}
+ box.hidden=false;
+ const rows=state.rows,total=rows.length;
+ const stages={new:0,testing:0,proven:0,long:0};let oldest=0;
+ for(const a of rows){const d=daysRunning(a),s=lifeStage(d);if(s)stages[s.key]++;if(d>oldest)oldest=d}
+ const fmt={video:0,static:0,carousel:0},collected=rows.filter(a=>mediaCache.has(a.id));
+ for(const a of collected){const f=formatOf(a.id);if(f)fmt[f]++}
+ const fTotal=Math.max(1,collected.length);
+ const weeks=weeklyLaunches(rows),wMax=Math.max(1,...weeks);
+ const vc=variationCounts(rows);const scaled=[...vc.values()].filter(n=>n>1);
+ const ctas=topCTAs(rows);
+ const changes=state.changes;
+ let changeHTML;
+ if(!changes||changes.first)changeHTML='<p class="intel-big">First look</p><p class="intel-sub">We’ll show new and stopped ads when you return.</p>';
+ else{const add=changes.added.length,rem=changes.removed;changeHTML='<p class="intel-big"><span class="up">+'+add+'</span>'+(rem?' <span class="down">−'+rem.length+'</span>':'')+'</p><p class="intel-sub">'+(add?add+' new':'No new ads')+(rem?' · '+rem.length+' no longer running':'')+' since '+esc(new Date(changes.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))+'</p>'+(add?'<button class="linkbutton" data-filter="added">Show new ads</button>':'');}
+ const chip=(key,label,n,cls)=>'<button class="stagechip '+cls+(state.filter===key?' on':'')+'" data-filter="'+key+'"><b>'+n+'</b>'+esc(label)+'</button>';
+ box.innerHTML=
+ '<div class="intel-card intel-wide"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days</p></div>'+
+ '<div class="intel-card"><p class="intel-k">Creative mix</p>'+(collected.length?'<div class="mixbar">'+["video","static","carousel"].map(k=>fmt[k]?'<i class="mix-'+k+'" style="width:'+(fmt[k]/fTotal*100)+'%"></i>':'').join("")+'</div><p class="intel-legend">'+["video","static","carousel"].map(k=>'<span><i class="dot mix-'+k+'"></i>'+formatLabel[k]+' '+Math.round(fmt[k]/fTotal*100)+'%</span>').join("")+'</p><p class="intel-sub">From '+collected.length+' collected creatives</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
+ '<div class="intel-card"><p class="intel-k">Since your last visit</p>'+changeHTML+'</div>'+
+ '<div class="intel-card"><p class="intel-k">Top calls to action</p>'+(ctas.length?'<ol class="ctalist">'+ctas.map(c=>'<li><span>'+esc(c.label)+'</span><b>'+Math.round(c.n/total*100)+'%</b></li>').join("")+'</ol>':'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(scaled.length?scaled.length+' message'+(scaled.length===1?'':'s')+' running in multiple variations':'Every ad uses unique copy')+'</p></div>'+
+ '<div class="intel-stages">'+chip("new","New this week",stages.new,"st-new")+chip("testing","Testing",stages.testing,"st-testing")+chip("proven","Proven 30d+",stages.proven,"st-proven")+chip("long","Long-runners 90d+",stages.long,"st-long")+'</div>';
 }
 function renderInsights(){
  const rows=state.rows,themes=messagingThemes(rows).slice(0,4),total=Math.max(1,rows.length);
