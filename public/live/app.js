@@ -491,7 +491,8 @@ function nameScore(term,name){
  if(String(name).toLowerCase().split(/[\s&.'’-]+/).some(w=>w&&w.startsWith(lower)))return 3;
  return want.length>=3&&c.includes(want)?1:0;
 }
-const sourceRank={history:3,meta:2,known:2,popular:1};
+// Advertisers you have searched and well-known UK brands outrank arbitrary pages.
+const sourceRank={history:4,known:3,popular:3,meta:1};
 function suggestRank(term,list){
  const best=new Map();
  for(const s of list){
