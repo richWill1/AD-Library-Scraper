@@ -55,13 +55,20 @@ function shownRows(){
  });
  return rows.sort((a,b)=>state.sort==="oldest"?String(a.start||"").localeCompare(String(b.start||"")):state.sort==="reach"?(b.reach??-1)-(a.reach??-1):String(b.start||"").localeCompare(String(a.start||"")));
 }
+// Advertiser logo = the Facebook Page profile picture, with initials underneath
+// so a missing or slow image never leaves an empty circle.
+function logoHTML(id,name,cls){
+ const ini=String(name||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
+ return '<span class="brandlogo '+(cls||"")+'" aria-hidden="true"><b>'+esc(ini)+'</b>'+(id&&/^\d{1,30}$/.test(id)?'<img alt="" loading="lazy" referrerpolicy="no-referrer" src="https://graph.facebook.com/'+encodeURIComponent(id)+'/picture?type=square&width=128&height=128" onerror="this.remove()">':'')+'</span>';
+}
 function showHeader(){
- $("heading").textContent=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.brand?state.brand+" — Active ads":"The creative library.";
+ {const title=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.brand?state.brand+" — Active ads":"The creative library.";
+ $("heading").innerHTML=(state.view!=="saved"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg"):"")+'<span>'+esc(title)+'</span>';}
  $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
  $("metrics").style.display=state.view!=="insights"&&(state.rows.length||state.view==="saved")?"grid":"none";
  $("toolbar").style.display=state.rows.length||state.view==="saved"?"flex":"none";
  $("metricAds").textContent=String(shownRows().length).padStart(2,"0");
- $("metricBrands").textContent=state.view==="saved"?"Multiple":state.brand||"—";
+ $("metricBrands").innerHTML=state.view==="saved"?"Multiple":state.brand?'<span class="metricbrand">'+logoHTML(state.page,state.brand,"md")+esc(state.brand)+'</span>':"—";
  $("metricSaved").textContent=String(state.saved.size).padStart(2,"0");
  $("savedCount").textContent=state.saved.size?"("+state.saved.size+")":"";
  document.querySelectorAll("[data-view]").forEach(el=>el.classList.toggle("active",el.dataset.view===state.view));
@@ -75,7 +82,7 @@ function card(a){
  const platforms=(a.platforms||[]).join(", ")||"Platform not reported";
  const format=a.format&&a.format!=="Unknown"?a.format:"Format to be verified";
  const isSaved=state.saved.has(a.id),isCompared=state.compare.has(a.id);
- return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false"><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span>'+esc(a.pageName||state.brand||"Advertiser")+'</span><span class="tag">'+esc(format)+'</span></div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span>UK reach: '+esc(reach(a.reach))+'</span></div><div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
+ return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false"><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span class="adbrand">'+logoHTML(a.pageId,a.pageName||state.brand,"sm")+esc(a.pageName||state.brand||"Advertiser")+'</span><span class="tag">'+esc(format)+'</span></div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span>UK reach: '+esc(reach(a.reach))+'</span></div><div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
 }
 function renderCards(){
  if(observer)observer.disconnect();
@@ -173,6 +180,7 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
    state.cursor=data.nextCursor||null;
    state.needsPageStart=false;
   }
+  if(state.page&&state.brand&&state.rows.length){rememberAdvertiser(state.page,state.brand,state.rows.length);rememberPageId(state.brand,state.page)}
   feedback(state.rows.length?"":page?"Meta returned no active ads for this advertiser in the selected countries.":"No matching advertiser pages returned. Try another search.");
   busy(false);
   renderCards();
@@ -467,29 +475,72 @@ async function health(){
   details.innerHTML='<div class="live-info">Live status could not be checked. Search may still work; if it fails, saved ideas remain available.</div>';
  }
 }
-// Brand suggestions while typing. Meta discovery matches ad text, so results
-// are grouped by Facebook Page and ranked by how closely the name matches.
+// Well-known UK advertisers for instant suggestions. Names only: choosing one
+// runs a normal search, which resolves the real Facebook Page from Meta.
+const ukBrands=["Wren Kitchens","Magnet Kitchens","Howdens","Benchmarx","Sharps","Hammonds","Neville Johnson","Dunelm","DFS","ScS","Furniture Village","Oak Furnitureland","Sofology","Barker and Stonehouse","Loaf","Made.com","Swoon","Habitat","IKEA","John Lewis","Marks & Spencer","Next","Argos","Wayfair","The Range","B&Q","Wickes","Homebase","Screwfix","Toolstation","Dulux","Farrow & Ball","Victorian Plumbing","Bathstore","Victoria Plum","Topps Tiles","Carpetright","Tapi Carpets","Hillarys","Thomas Sanderson","Safestyle","Anglian Home Improvements","Everest","Sainsbury's","Tesco","Asda","Morrisons","Aldi","Lidl","Waitrose","Ocado","Iceland","Co-op","HelloFresh","Gousto","Deliveroo","Just Eat","Uber Eats","Domino's","Greggs","Nando's","Costa Coffee","Pret A Manger","McDonald's","KFC","Burger King","Boots","Superdrug","Lookfantastic","Cult Beauty","Charlotte Tilbury","The Body Shop","Lush","Holland & Barrett","Specsavers","Vision Express","Boohoo","PrettyLittleThing","ASOS","Primark","River Island","New Look","Zara","H&M","Uniqlo","JD Sports","Sports Direct","Nike","Adidas","Gymshark","Fat Face","White Stuff","Joules","Seasalt Cornwall","Boden","Jigsaw","Reiss","Ted Baker","Mango","Matalan","TK Maxx","Very","Currys","AO.com","Apple","Samsung","Google","Amazon","eBay","Etsy","Vinted","Depop","Halfords","Kwik Fit","Cazoo","Cinch","Motorpoint","Arnold Clark","Auto Trader","WeBuyAnyCar","Admiral","Aviva","Direct Line","Churchill","Compare the Market","MoneySuperMarket","Go.Compare","Confused.com","Monzo","Starling Bank","Revolut","Barclays","Lloyds Bank","NatWest","HSBC UK","Santander UK","Nationwide","Halifax","Octopus Energy","British Gas","EDF","E.ON Next","OVO Energy","Sky","Virgin Media","BT","EE","Vodafone","Three","O2","giffgaff","Plusnet","TalkTalk","Netflix","Disney+","NOW","Spotify","Audible","Jet2holidays","TUI","easyJet","Ryanair","British Airways","loveholidays","On the Beach","Booking.com","Expedia","Airbnb","Trainline","Center Parcs","Butlin's","Haven","Hoseasons","Premier Inn","Travelodge","Pets at Home","Tails.com","Butternut Box","Lily's Kitchen","Purina","Nectar","Clarks","Schuh","Office","Dr. Martens","Pandora","Goldsmiths","Ernest Jones","H. Samuel","Moonpig","Funky Pigeon","Card Factory","Smyths Toys","The Entertainer","Hobbycraft","WHSmith","Waterstones","The Works","Lakeland","Robert Dyas","Dyson","Shark","Ninja Kitchen","Simba","Emma Mattress","Eve Sleep","Silentnight","Dreams","Bensons for Beds","Mattress Online","Simply Business","Rightmove","Zoopla","Purplebricks","Hargreaves Lansdown","Nutmeg","Trading 212","PureGym","The Gym Group","David Lloyd","Myprotein","Huel","Grenade","Innocent Drinks","Heinz","Cadbury","Walkers","Coca-Cola","Pepsi","Red Bull","Heineken","Guinness","Bloom & Wild","Interflora","Patch Plants","Thompson & Morgan","Crocus","Sofa.com","Snug Sofa","Cotswold Company","Neptune","Kettle and Toast","Cox & Cox","Graham & Green","The White Company","Laura Ashley","OKA","Heal's","Liberty","Selfridges","Harrods","Fenwick","Debenhams","Next Home","George at Asda","Tu Clothing","Sweaty Betty","Lululemon","M&S Food","Charles Tyrwhitt","Hawes & Curtis","Moss","Suitsupply","Crew Clothing","Superdry","Abercrombie & Fitch","Hollister","Jack Wills","Barbour","Hunter Boots","Mountain Warehouse","Go Outdoors","Cotswold Outdoor","Blacks","Decathlon","Ring","Hive","Tado","Ovo","Bulb","So Energy","Utility Warehouse","Lebara","Lyca Mobile","SMARTY","iD Mobile","Tesco Mobile","Sky Mobile","Virgin Mobile","Cuvva","Marshmallow","By Miles","Zego"];
+// Brand suggestions while typing. Meta's keyword search matches ad text, not
+// advertiser names, so we combine three sources and keep only name matches:
+// advertisers searched before here, well-known UK advertisers, and Meta pages.
 const suggest={items:[],active:-1,timer:null,controller:null,cache:new Map(),term:""};
+const historyKey="adsnoop-advertiser-history-v1";
+function readHistory(){try{const v=JSON.parse(localStorage.getItem(historyKey)||"[]");return Array.isArray(v)?v.filter(x=>x&&/^\d{1,30}$/.test(x.id)&&typeof x.name==="string"):[]}catch{return []}}
+function rememberAdvertiser(id,name,count){if(!id||!name)return;const list=readHistory().filter(x=>x.id!==id);list.unshift({id,name,count:count||0});try{localStorage.setItem(historyKey,JSON.stringify(list.slice(0,40)))}catch{}}
+function nameScore(term,name){
+ const want=canonicalName(term),lower=term.toLowerCase().trim(),c=canonicalName(name);
+ if(!want)return 0;if(c===want)return 5;if(c.startsWith(want))return 4;
+ if(String(name).toLowerCase().split(/[\s&.'’-]+/).some(w=>w&&w.startsWith(lower)))return 3;
+ return want.length>=3&&c.includes(want)?1:0;
+}
+const sourceRank={history:3,meta:2,known:2,popular:1};
 function suggestRank(term,list){
- const want=canonicalName(term),lower=term.toLowerCase().trim();
- const score=n=>{const c=canonicalName(n);if(c===want)return 4;if(c.startsWith(want))return 3;if(String(n).toLowerCase().split(/[\s&-]+/).some(w=>w.startsWith(lower)))return 2;return c.includes(want)?1:0};
- const ranked=list.map(s=>({...s,score:score(s.name)})).sort((a,b)=>b.score-a.score||b.count-a.count);
- // Prefer pages whose name matches; otherwise show the pages most often behind matching ads.
- const named=ranked.filter(s=>s.score>0);
- return (named.length?named:ranked).slice(0,6);
+ const best=new Map();
+ for(const s of list){
+  const score=nameScore(term,s.name);if(!score)continue;
+  const key=canonicalName(s.name),cur=best.get(key),item={...s,score};
+  // One row per advertiser name; prefer an entry that already has a Page ID.
+  if(!cur||(!cur.id&&item.id)||(Boolean(cur.id)===Boolean(item.id)&&(sourceRank[item.source]||0)>(sourceRank[cur.source]||0)))best.set(key,cur&&!item.count?{...item,count:cur.count}:item);
+ }
+ return [...best.values()].sort((a,b)=>b.score-a.score||(sourceRank[b.source]||0)-(sourceRank[a.source]||0)||(b.count||0)-(a.count||0)||a.name.localeCompare(b.name)).slice(0,7);
 }
-function knownMatches(term){
- const want=canonicalName(term);if(want.length<2)return [];
- return knownPages.filter(p=>canonicalName(p.name).includes(want)||p.aliases.some(a=>canonicalName(a).startsWith(want))).map(p=>({id:p.id,name:p.name,count:0,known:true}));
+const pageIdKey="adsnoop-page-ids-v1";
+function pageIds(){try{const v=JSON.parse(localStorage.getItem(pageIdKey)||"{}");return v&&typeof v==="object"?v:{}}catch{return {}}}
+function rememberPageId(name,id){if(!name||!/^\d{1,30}$/.test(id||""))return;const m=pageIds();m[canonicalName(name)]=id;try{localStorage.setItem(pageIdKey,JSON.stringify(m))}catch{}}
+const logoLookups=new Map();
+// Find the Page behind a well-known name so its logo can be shown. Results are
+// remembered in this browser; at most two lookups run per keystroke pause.
+function resolveLogos(){
+ const want=suggest.items.filter(s=>!s.id&&!logoLookups.has(canonicalName(s.name))).slice(0,2);
+ for(const s of want){
+  const key=canonicalName(s.name);
+  logoLookups.set(key,(async()=>{
+   try{
+    const params=new URLSearchParams({q:s.name,coverage:state.coverage,discover:"1"});
+    const data=await fetch("/api/ads?"+params,{cache:"no-store"}).then(r=>r.ok?r.json():null);
+    const hit=(data?.ads||[]).find(a=>a.pageId&&canonicalName(a.pageName)===key);
+    if(!hit)return;
+    rememberPageId(s.name,hit.pageId);
+    let changed=false;for(const it of suggest.items)if(canonicalName(it.name)===key&&!it.id){it.id=hit.pageId;changed=true}
+    if(changed&&!$("suggest").hidden)renderSuggest("");
+   }catch{}
+  })());
+ }
 }
-function mergeSuggestions(a,b){const m=new Map();for(const s of [...a,...b]){const e=m.get(s.id);if(e)e.count=Math.max(e.count,s.count);else m.set(s.id,{...s})}return [...m.values()]}
+function localSuggestions(term){
+ if(canonicalName(term).length<2)return [];
+ return [
+  ...readHistory().map(h=>({...h,source:"history"})),
+  ...knownPages.map(p=>({id:p.id,name:p.name,count:0,source:"known"})),
+  ...(()=>{const ids=pageIds();return ukBrands.map(n=>({id:ids[canonicalName(n)]||"",name:n,count:0,source:"popular"}))})()
+ ];
+}
+function mergeSuggestions(a,b){return [...a,...b]}
 function initials(name){return String(name||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase()}
 function renderSuggest(state_){
  const box=$("suggest"),input=$("searchInput");
  if(state_==="hide"||(!suggest.items.length&&state_!=="loading"&&state_!=="empty"&&state_!=="limited")){box.hidden=true;input.setAttribute("aria-expanded","false");return}
  box.hidden=false;input.setAttribute("aria-expanded","true");
  const head=state_==="loading"?'<li class="sg-status"><span class="sg-dots"><i></i><i></i><i></i></span>Finding advertisers…</li>':state_==="empty"?'<li class="sg-status">No advertisers found yet. Press Enter to search ads mentioning “'+esc(suggest.term)+'”.</li>':state_==="limited"?'<li class="sg-status">Keep typing, or press Enter to search.</li>':"";
- box.innerHTML=head+suggest.items.map((s,i)=>'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'"><span class="sg-logo"><img alt="" src="https://graph.facebook.com/'+encodeURIComponent(s.id)+'/picture?type=square&width=64&height=64" onerror="this.remove()"><b>'+esc(initials(s.name))+'</b></span><span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.known?'Verified advertiser':s.count+' active UK ad'+(s.count===1?'':'s')+' found')+'</small></span><span class="sg-go">↗</span></li>').join("");
+ box.innerHTML=head+suggest.items.map((s,i)=>'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'">'+logoHTML(s.id,s.name,"md sg-logo")+'<span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.source==="history"?'Searched before':s.source==="known"?'Verified advertiser':s.source==="popular"?'Popular UK advertiser':s.count+' active UK ad'+(s.count===1?'':'s')+' found')+'</small></span><span class="sg-go">↗</span></li>').join("");
  input.setAttribute("aria-activedescendant",suggest.active>=0?"sg-"+suggest.active:"");
 }
 async function fetchSuggestions(term){
@@ -502,23 +553,23 @@ async function fetchSuggestions(term){
  if(resp.status===429)throw Object.assign(Error("limited"),{code:"RATE_LIMITED"});
  const data=await resp.json();if(!resp.ok||data.error)throw Error(data.error||"failed");
  const pages=new Map();for(const ad of data.ads||[]){if(!ad.pageId||!ad.pageName)continue;const e=pages.get(ad.pageId);if(e)e.count++;else pages.set(ad.pageId,{id:ad.pageId,name:ad.pageName,count:1})}
- const list=[...pages.values()];suggest.cache.set(key,list);return list;
+ const list=[...pages.values()].map(p=>(rememberPageId(p.name,p.id),{...p,source:"meta"}));suggest.cache.set(key,list);return list;
 }
 function onSearchInput(){
  const term=$("searchInput").value.trim();suggest.term=term;suggest.active=-1;
  clearTimeout(suggest.timer);
  if(term.length<2){suggest.items=[];renderSuggest("hide");return}
  // Known advertisers appear instantly; Meta results follow after a short pause.
- const local=knownMatches(term);suggest.items=suggestRank(term,local);
+ const local=localSuggestions(term);suggest.items=suggestRank(term,local);
  const cached=suggest.cache.get(canonicalName(term));
- if(cached){suggest.items=suggestRank(term,mergeSuggestions(local,cached));renderSuggest(suggest.items.length?"":"empty");return}
- renderSuggest("loading");
+ if(cached){suggest.items=suggestRank(term,mergeSuggestions(local,cached));renderSuggest(suggest.items.length?"":"empty");resolveLogos();return}
+ renderSuggest(suggest.items.length?"":"loading");
  suggest.timer=setTimeout(async()=>{
   try{
    const list=await fetchSuggestions(term);
    if($("searchInput").value.trim()!==term)return;
    suggest.items=suggestRank(term,mergeSuggestions(local,list));
-   renderSuggest(suggest.items.length?"":"empty");
+   renderSuggest(suggest.items.length?"":"empty");resolveLogos();
   }catch(err){
    if(err.name==="AbortError")return;
    renderSuggest(suggest.items.length?"":err.code==="RATE_LIMITED"?"limited":"hide");
@@ -528,6 +579,7 @@ function onSearchInput(){
 function chooseSuggestion(i){
  const s=suggest.items[i];if(!s)return;
  $("searchInput").value=s.name;renderSuggest("hide");clearTimeout(suggest.timer);
+ if(!s.id){searchClient(s.name);$("research").scrollIntoView({behavior:"smooth"});return}
  state.view="discover";state.filter="all";state.limit=25;state.theme="";state.revealAll=false;
  state.query=s.name;state.brand=s.name;state.page=s.id;state.discoveryCursor=null;state.canFindAlternates=true;
  state.choices.clear();for(const o of suggest.items)state.choices.set(o.id,{id:o.id,name:o.name,count:o.count});
