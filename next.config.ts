@@ -6,6 +6,9 @@ import type { NextConfig } from "next";
 const backend = "https://ad-library-scraper-94t0.onrender.com";
 const nextConfig: NextConfig = {
   async rewrites() {
+    // A configured preview can use its own API routes without the public Render proxy.
+    if (process.env.META_ACCESS_TOKEN?.trim()) return [];
+
     return {
       beforeFiles: [
         { source: "/api/health", destination: `${backend}/api/health` },
