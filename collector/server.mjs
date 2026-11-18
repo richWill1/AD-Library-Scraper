@@ -12,6 +12,10 @@ function ctaOf(text,type,link,caption){const t=typeof text==='string'&&text.leng
 function expiry(items){return Math.min(Date.now()+3*86400000,...items.flatMap(i=>[i.url,i.poster].filter(Boolean).map(u=>{const oe=new URL(u).searchParams.get('oe');return oe&&/^[a-f\d]+$/i.test(oe)?parseInt(oe,16)*1000-600000:Infinity;})));}
 function acquire(){if(active<maximum){active++;return Promise.resolve();}if(waiting.length>=20)return Promise.reject(Error('BUSY'));return new Promise((resolve,reject)=>{const ticket={resolve:null,timer:null};ticket.resolve=()=>{clearTimeout(ticket.timer);resolve();};ticket.timer=setTimeout(()=>{const at=waiting.indexOf(ticket);if(at>=0)waiting.splice(at,1);reject(Error('BUSY'));},75000);waiting.push(ticket);});}
 function release(){const next=waiting.shift();if(next)next.resolve();else active--;}
+// Advertiser lookups load Meta's full Ad Library page, which is memory-heavy:
+// run them alone so they never overlap creative collection on a 512 MB instance.
+async function acquireExclusive(){const until=Date.now()+25000;while(active>0){if(Date.now()>until)throw Error('BUSY');await new Promise(r=>setTimeout(r,250));}active=maximum;}
+function releaseExclusive(){active=0;while(waiting.length&&active<maximum){active++;waiting.shift().resolve();}}
 async function browser(){if(!browserPromise)browserPromise=chromium.launch({headless:true}).then(b=>{b.on('disconnected',()=>browserPromise=null);return b;}).catch(()=>{browserPromise=null;throw Error('COLLECTOR_UNAVAILABLE');});return browserPromise;}
 async function collect(id,token){
  let context,page;let phase='browser';const started=Date.now();const streamed=new Map();const jsonItems=[];const shape={format:'',cards:0,own:false,cta:null};
@@ -72,10 +76,10 @@ const server=http.createServer(async(req,res)=>{
  // Advertiser lookup by name (Meta Ad Library advertiser search).
  if(req.method==='GET'&&url.pathname==='/advertisers'){
   const q=(url.searchParams.get('q')||'').trim();if(q.length<2||q.length>80||/[\x00-\x1f<>]/.test(q))return reply(400,{code:'INVALID_REQUEST',advertisers:[]});
-  try{await acquire();}catch{return reply(429,{code:'BUSY',advertisers:[]});}
+  try{await acquireExclusive();}catch{return reply(429,{code:'BUSY',advertisers:[]});}
   try{const advertisers=await findAdvertisers(await browser(),q);return reply(200,{advertisers,source:'meta-ad-library-search'});}
   catch(error){console.log(JSON.stringify({event:'advertiser_lookup_failed',reason:String(error?.message||'ERROR').slice(0,60)}));return reply(502,{code:'LOOKUP_FAILED',advertisers:[]});}
-  finally{release();}
+  finally{releaseExclusive();}
  }
  const id=url.searchParams.get('id')||'',token=req.headers['x-meta-token'];if(req.method!=='GET'||url.pathname!=='/creative'||!/^\d{1,30}$/.test(id)||typeof token!=='string'||token.length<20||token.length>4096||/[\s\x00-\x1f]/.test(token))return reply(400,{code:'INVALID_REQUEST',items:[]});
  const key=createHash('sha256').update(token).digest('hex')+':'+id,hit=cache.get(key);if(url.searchParams.get('refresh')!=='1'&&hit&&Date.now()<hit.until)return reply(200,hit.result);
