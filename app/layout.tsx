@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AD Library Scraper · Creative research",
-  description: "Explore brand ad creatives, filter messaging angles, and save your research. Interactive interface preview with verified Sharps sample data.",
+  title: "AdSnoop · Competitor advertising intelligence",
+  description: "Discover live competitor ads, creative trends and messaging intelligence with AdSnoop.",
   other: {
     "codex-preview": "development",
   },

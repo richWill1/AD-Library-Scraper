@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#000000">
-<title>AdSnoop — Apple-inspired design preview</title>
+<title>AdSnoop — Apple-inspired design preview</title><link rel="icon" type="image/svg+xml" href="/brand/favicon-light.svg"><link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="/brand/favicon-dark.svg">
 <meta name="description" content="An interactive visual design preview of AdSnoop. Sample content only; not connected to advertising APIs.">
 <style>
 :root{--blue:#0066cc;--blue-focus:#0071e3;--blue-dark:#2997ff;--ink:#1d1d1f;--muted:#6e6e73;--paper:#f5f5f7;--hairline:#e5e5e7;--pearl:#fafafc;--black:#000;--radius:18px}
@@ -13,11 +13,22 @@
 @media(max-width:660px){.nav-in,.sub-in,.wrap{padding-left:18px;padding-right:18px}.toplinks{gap:15px}.topmeta{display:none}.sub-title{font-size:17px}.sub-right .preview-chip{display:none}.hero{padding:58px 0 55px}.hero h1{font-size:39px}.hero-desc{font-size:17px}.searchform{padding:5px 6px 5px 14px}.searchform input{font-size:13px}.searchform .pill{padding:11px 13px}.main{padding:46px 0 60px}.metrics{gap:9px;margin-bottom:33px}.metric{padding:15px 12px}.metric .v{font-size:25px}.metric .k,.metric .sub{font-size:10px}.section-top{display:block}.section-top h2{font-size:29px}.section-top .hint{display:none}.cards{grid-template-columns:1fr}.visual{height:340px}.feature{padding:55px 0}.featurein{grid-template-columns:1fr}.featurepanel{padding:22px}.toolbar{align-items:start}.sortwrap{width:100%;justify-content:end}.cmpcols{grid-template-columns:1fr}.cmpbar{width:calc(100vw - 28px);justify-content:space-between}.footin{display:block}.footin span{display:block;margin-top:8px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
 </style>
-</head>
+<style id="adsnoop-essential-eyes">
+.brand{gap:0}
+.brand img.as-wordmark{display:block;width:132px;height:35px;object-fit:contain;flex:none}
+.as-search-stage[hidden]{display:none!important}
+.as-search-stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:166px;margin:24px auto 0;padding:24px 18px;border:1px solid #e3e7ef;border-radius:20px;background:linear-gradient(180deg,#fff,#f8faff);box-shadow:0 8px 30px rgba(11,23,52,.035);text-align:center}
+.as-search-stage img{width:78px;height:46px;object-fit:contain}
+.as-search-stage strong{font-size:17px;letter-spacing:-.035em;color:#0b1734;font-weight:680}
+.as-search-stage small{font-size:12px;color:#667085;letter-spacing:0}
+.loadbar-row{display:flex;align-items:center;gap:8px}
+.loadbar-row img.as-bar-eyes{width:35px;height:23px;object-fit:contain;flex:none}
+@media(max-width:660px){.brand img.as-wordmark{width:113px;height:30px}.as-search-stage{min-height:145px;padding:21px 14px}.as-search-stage strong{font-size:15px}.loadbar-row img.as-bar-eyes{width:28px}}
+</style></head>
 <body>
 <a href="#research" class="skip">Skip to research</a>
 <header class="topnav"><div class="nav-in"><a href="#" class="brand" aria-label="AdSnoop home">
-<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M3 16C6.5 9.2 10.9 6 16 6s9.5 3.2 13 10c-3.5 6.8-7.9 10-13 10S6.5 22.8 3 16Z" stroke="white" stroke-width="2.3"/><circle cx="16" cy="16" r="5" stroke="white" stroke-width="2.2"/><circle cx="16" cy="16" r="1.7" fill="#2997ff"/></svg>AdSnoop</a>
+<img class="as-wordmark" src="/brand/adsnoop-wordmark-light.svg" width="132" height="35" alt="AdSnoop"></a>
 <div class="toplinks"><button class="nav-btn active" data-view="discover">Discover</button><button class="nav-btn" data-view="saved">Saved <span id="savedCount"></span></button><button class="nav-btn" data-view="insights">Insights</button><span class="topmeta">DESIGN CONCEPT</span></div></div></header>
 <div class="subnav"><div class="sub-in"><span class="sub-title">Creative intelligence.</span><div class="sub-right"><span class="preview-chip">Interactive prototype · Sample data</span><a class="pill sm" href="https://ad-library-scraper-94t0.onrender.com" target="_blank" rel="noopener noreferrer">Original site ↗</a></div></div></div>
 <section class="hero"><div class="wrap"><p class="eyebrow">Find the ideas behind the ads</p><h1>See what your competitors<br><span class="blue">are putting out there.</span></h1><p class="hero-desc">A clearer view of the creatives, messaging and ideas shaping your category.</p>

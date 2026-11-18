@@ -43,7 +43,7 @@ const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T1
 const reach=n=>typeof n==="number"&&Number.isFinite(n)?n.toLocaleString("en-GB"):"Not available";
 function error(msg){const el=$("error");el.textContent=msg;el.hidden=!msg;}
 function feedback(message){const el=$("feedback");el.textContent=message;el.hidden=!message;}
-function busy(v){state.loading=v;if(v)setBar("search");else if(!state.rows.length)setBar("hide");else updateReveal(true);$("searchGo").disabled=v;$("searchGo").textContent=v?"Searching…":"Search ↗";}
+function busy(v){state.loading=v;const stage=$("as-search-stage");if(stage){stage.hidden=!v;if(v){const label=$("as-stage-query");if(label)label.textContent="Scanning "+(state.brand||state.query||"competitor")+"…";}}if(v)setBar("search");else if(!state.rows.length)setBar("hide");else updateReveal(true);$("searchGo").disabled=v;$("searchGo").textContent=v?"Searching…":"Search ↗";}
 function safeMedia(input){try{const u=new URL(input);return u.protocol==="https:"&&u.hostname.endsWith(".fbcdn.net")&&!u.username&&!u.password&&!u.searchParams.has("access_token")?u.href:null}catch{return null}}
 function save(){try{localStorage.setItem(storeKey,JSON.stringify(Array.from(state.saved.values()).slice(0,300)))}catch(e){feedback("Saved research cannot be written to this browser. Use a local download for a backup.");}}
 function allRows(){return state.view==="saved"?Array.from(state.saved.values()):state.rows}
@@ -51,13 +51,36 @@ function shownRows(){
  const f=state.filter,added=new Set(state.changes?.added||[]);
  let rows=allRows().filter(a=>{
   if(f==="all")return true;
-  if(f==="video"||f==="static"||f==="carousel")return formatOf(a.id)===f;
+  if(f==="video"||f==="static"||f==="carousel"||f==="catalogue")return formatOf(a.id)===f;
   if(f==="added")return added.has(a.id);
   if(["new","testing","proven","long"].includes(f))return lifeStage(daysRunning(a))?.key===f;
   return (a.platforms||[]).map(p=>String(p).toLowerCase()).includes(f);
  });
  const by={reach:(a,b)=>(b.reach??-1)-(a.reach??-1),longest:(a,b)=>String(a.start||"9").localeCompare(String(b.start||"9")),newest:(a,b)=>String(b.start||"").localeCompare(String(a.start||""))};
- return rows.sort(by[state.sort]||by.reach);
+ rows.sort(by[state.sort]||by.reach);
+ return groupRows(rows);
+}
+// Brands often run the same ad several times (one per audience or budget).
+// Identical copy + headline become one tile so the grid shows distinct ads.
+function groupKey(a){const c=copyPattern(a);return c.length>=15?variationKey(a):"id:"+a.id}
+function groupRows(rows){
+ state.groupMeta=new Map();
+ if(state.view==="saved")return rows;
+ const groups=new Map();
+ for(const a of rows){const k=groupKey(a);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(a)}
+ const lead=g=>g.reduce((m,a)=>(a.reach??-1)>(m.reach??-1)?a:m,g[0]);
+ const total=g=>g.some(a=>typeof a.reach==="number")?g.reduce((n,a)=>n+(typeof a.reach==="number"?a.reach:0),0):null;
+ let list=[...groups.entries()].map(([k,g])=>({k,g,lead:lead(g),total:total(g),first:g[0]}));
+ // Keep the user's chosen order, but rank by combined reach when sorting by reach.
+ if(state.sort==="reach"||!state.sort)list.sort((x,y)=>(y.total??-1)-(x.total??-1));
+ const out=[];
+ for(const x of list){
+  const open=state.expanded?.has(x.k)&&x.g.length>1;
+  const head=state.sort==="reach"||!state.sort?x.lead:x.first;
+  state.groupMeta.set(head.id,{key:x.k,n:x.g.length,total:x.total,open,head:true});out.push(head);
+  if(open)x.g.filter(a=>a!==head).forEach((a,i)=>{state.groupMeta.set(a.id,{key:x.k,n:x.g.length,open,head:false,pos:i+2});out.push(a)});
+ }
+ return out;
 }
 // Advertiser logo = the Facebook Page profile picture, with initials underneath
 // so a missing or slow image never leaves an empty circle.
@@ -69,9 +92,14 @@ function showHeader(){
  {const title=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.brand?state.brand+" — Active ads":"The creative library.";
  $("heading").innerHTML=(state.view!=="saved"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg"):"")+'<span>'+esc(title)+'</span>';}
  $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
+ renderViewTabs();
  $("metrics").style.display=state.view!=="insights"&&(state.rows.length||state.view==="saved")?"grid":"none";
  $("toolbar").style.display=state.rows.length||state.view==="saved"?"flex":"none";
- $("metricAds").textContent=String(shownRows().length).padStart(2,"0");
+ {const shown=shownRows(),distinct=state.view==="saved"?shown.length:[...(state.groupMeta||new Map()).values()].filter(m=>m.head).length,live=allRows().length;
+ $("metricAds").textContent=String(distinct).padStart(2,"0");
+ const k=$("metricAds").previousElementSibling,sub=$("metricAds").nextElementSibling;
+ if(k)k.textContent=state.view==="saved"?"Saved ads shown":"Distinct ads";
+ if(sub)sub.textContent=state.view==="saved"?"Stored in this browser":distinct<live?"From "+live+" live ads · repeats merged":"Live ads loaded";}
  $("metricBrands").innerHTML=state.view==="saved"?"Multiple":state.brand?'<span class="metricbrand">'+logoHTML(state.page,state.brand,"md")+esc(state.brand)+'</span>':"—";
  $("metricSaved").textContent=String(state.saved.size).padStart(2,"0");
  $("savedCount").textContent=state.saved.size?"("+state.saved.size+")":"";
@@ -81,14 +109,27 @@ function showHeader(){
  $("compareCount").textContent=state.compare.size+" of 3 selected";
 }
 function loadingCards(){return ""}
+// One-click switch between the ad grid (with the intelligence panel) and the
+// messaging map for the brand that is loaded.
+function renderViewTabs(){
+ const el=$("viewtabs");if(!el)return;
+ const show=!!state.brand&&state.rows.length>0&&(state.view==="discover"||state.view==="insights");
+ el.hidden=!show;document.body.classList.toggle("has-tabs",show);if(!show){el.innerHTML="";return}
+ const distinct=new Set(state.rows.map(groupKey)).size;
+ let themes=0;try{themes=messagingThemes(state.rows).length}catch{}
+ const tab=(view,label,count)=>'<button class="viewtab" role="tab" data-view="'+view+'" aria-selected="'+(state.view===view)+'" tabindex="'+(state.view===view?0:-1)+'">'+label+(count?'<small>'+count+'</small>':'')+'</button>';
+ el.innerHTML=tab("discover","Ads &amp; insights",(distinct||state.rows.length)+" ads")+tab("insights","Messaging",themes?themes+" themes":"");
+}
 function empty(title,detail){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p></div>'}
 function card(a){
- const d=daysRunning(a),stage=lifeStage(d),vars=(state.variations&&state.variations.get(variationKey(a)))||1;
- const badges='<div class="tilebadges">'+(stage?'<span class="lifebadge st-'+stage.key+'" title="'+esc(stage.hint)+'">'+esc(stage.label)+' · '+d+'d</span>':'')+(vars>1?'<span class="varbadge" title="Same copy running in '+vars+' ads, a sign the brand is scaling this message">×'+vars+' variations</span>':'')+'</div>';
+ const d=daysRunning(a),stage=lifeStage(d),gm=state.groupMeta?.get(a.id);
+ const grp=gm&&gm.n>1?(gm.head?'<button class="groupbadge'+(gm.open?' on':'')+'" data-action="group" data-id="'+esc(a.id)+'" title="The brand is running this same copy and headline as '+gm.n+' separate ads, usually for different audiences or budgets">'+(gm.open?'Hide '+(gm.n-1)+' similar':'Running as '+gm.n+' ads')+'</button>':'<span class="groupbadge sub">'+gm.pos+' of '+gm.n+' · same copy</span>'):'';
+ const badges='<div class="tilebadges">'+(stage?'<span class="lifebadge st-'+stage.key+'" title="'+esc(stage.hint)+'">'+esc(stage.label)+' · '+d+'d</span>':'')+grp+'</div>';
+ const reachText=gm&&gm.n>1&&gm.head&&!gm.open?'UK reach: '+reach(gm.total)+' across '+gm.n+' ads':'UK reach: '+reach(a.reach);
  const platforms=(a.platforms||[]).join(", ")||"Platform not reported";
  const format=a.format&&a.format!=="Unknown"?a.format:"Format to be verified";
  const isSaved=state.saved.has(a.id),isCompared=state.compare.has(a.id);
- return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false">'+badges+'<span class="fmtbadge" data-fmt="'+esc(a.id)+'"></span><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span class="adbrand">'+logoHTML(a.pageId,a.pageName||state.brand,"sm")+esc(a.pageName||state.brand||"Advertiser")+'</span><span class="tag">'+esc(format)+'</span></div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span>UK reach: '+esc(reach(a.reach))+'</span></div><div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
+ return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false">'+badges+'<span class="fmtbadge" data-fmt="'+esc(a.id)+'"></span><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span class="adbrand">'+logoHTML(a.pageId,a.pageName||state.brand,"sm")+esc(a.pageName||state.brand||"Advertiser")+'</span>'+(a.format&&a.format!=="Unknown"?'<span class="tag">'+esc(a.format)+'</span>':'')+'</div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span'+(gm&&gm.n>1&&gm.head&&!gm.open?' title="Sum of each ad\'s reach. People who saw more than one are counted more than once."':'')+'>'+esc(reachText)+'</span></div>'+ctaLineHTML(a.id)+'<div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
 }
 function renderCards(){
  if(observer)observer.disconnect();
@@ -210,7 +251,7 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
    else{const full=await collectPageAds(q,page,controller.signal,rows,data.nextCursor||null);if(rid!==requestNumber)return;state.rows=full.rows;state.cursor=full.cursor}
    state.needsPageStart=false;
   }
-  state.variations=variationCounts(state.rows);
+  state.variations=variationCounts(state.rows);state.expanded=new Set();
   state.changes=after||appendAds?state.changes:compareWithLastVisit();
   if(state.page&&state.brand&&state.rows.length){rememberAdvertiser(state.page,state.brand,state.rows.length);rememberPageId(state.brand,state.page)}
   feedback(state.rows.length?"":page?"Meta returned no active ads for this advertiser in the selected countries.":"No matching advertiser pages returned. Try another search.");
@@ -263,7 +304,7 @@ function displayMedia(node,id,items){
  if(items.length>1){
   const counter=document.createElement("button");
   counter.className="square";counter.style.cssText="position:absolute;bottom:12px;right:12px;background:white;width:auto;padding:0 12px;border-radius:50px;";
-  let index=0;const unit=formatOf(id)==="carousel"?"Card ":"Size ";counter.title=unit==="Card "?"Carousel cards":"Same creative in different placement sizes";counter.textContent=unit+"1 / "+items.length+" ›";
+  let index=0;const fk=formatOf(id),unit=fk==="carousel"?"Card ":fk==="catalogue"?"Product ":"Size ";counter.title=fk==="carousel"?"Carousel cards":fk==="catalogue"?"Catalogue ad: Meta shows each person products from the brand's catalogue":"Same creative in different placement sizes";counter.textContent=unit+"1 / "+items.length+" ›";
   counter.onclick=e=>{e.preventDefault();index=(index+1)%items.length;const next=items[index];const changed=document.createElement(next.kind==="video"?"video":"img");if(next.kind==="video"){changed.controls=true;changed.muted=true;changed.playsInline=true;changed.preload="metadata";if(next.poster)changed.poster=next.poster}else changed.alt="Meta ad creative";changed.onerror=()=>mediaFallback(node,id,"FAILED");changed.src=next.url;node.replaceChild(changed,node.firstChild);counter.textContent=unit+(index+1)+" / "+items.length+" ›";};
   node.appendChild(counter);
  }
@@ -320,8 +361,8 @@ function pumpMedia(){
     const resp=await fetch("/api/media?id="+encodeURIComponent(id)+(st.refresh?"&refresh=1":""),{signal:AbortSignal.timeout(115000),cache:"no-store"});
     data=await resp.json().catch(()=>({code:resp.status===429?"RATE_LIMITED":"COLLECTOR_UNAVAILABLE",items:[]}));
    }catch{data={code:"COLLECTOR_UNAVAILABLE",items:[]}}
-   const items=(Array.isArray(data.items)?data.items:[]).filter(i=>i&&["video","image"].includes(i.kind)&&safeMedia(i.url)).map(i=>({...i,url:safeMedia(i.url),poster:safeMedia(i.poster)}));
-   if(items.length){mediaCache.set(id,{items,collectedAt:data.collectedAt,displayFormat:typeof data.displayFormat==="string"?data.displayFormat:"",cards:Number(data.cards)||0});mediaState.set(id,{status:"done",attempts:st.attempts})}
+   const items=(Array.isArray(data.items)?data.items:[]).filter(i=>i&&["video","image"].includes(i.kind)&&safeMedia(i.url)).map(i=>({...i,url:safeMedia(i.url),poster:safeMedia(i.poster)})).filter((i,n,all)=>{const f=u=>{try{return new URL(u).pathname.split("/").pop()}catch{return u}};return all.findIndex(j=>f(j.url)===f(i.url))===n});
+   if(items.length){mediaCache.set(id,{items,collectedAt:data.collectedAt,displayFormat:typeof data.displayFormat==="string"?data.displayFormat:"",cards:Number(data.cards)||0,cta:cleanCta(data.cta)});paintCta(id);mediaState.set(id,{status:"done",attempts:st.attempts})}
    else if(MEDIA_RETRY_CODES.includes(data.code)&&st.attempts+1<MEDIA_MAX_ATTEMPTS){
     st.attempts++;st.status="queued";st.refresh=false;
     // Back off, then rejoin the queue behind ads that have not been tried yet.
@@ -479,10 +520,22 @@ function formatOf(id){
  const f=String(m.displayFormat||"").toUpperCase();
  if(f==="VIDEO")return "video";
  if(f==="CAROUSEL"||f==="MULTI_IMAGES"||f==="MULTI_VIDEOS"||(!f&&m.cards>1))return "carousel";
+ if(f==="DPA")return "catalogue";
  if(f==="IMAGE")return "static";
  return items.some(i=>i.kind==="video")?"video":"static";
 }
-const formatLabel={video:"Video",static:"Static",carousel:"Carousel"};
+const formatLabel={video:"Video",static:"Static",carousel:"Carousel",catalogue:"Catalogue"};
+// Real button and destination, read by the collector from Meta's own snapshot.
+function cleanCta(c){if(!c||typeof c!=="object")return null;const txt=v=>typeof v==="string"&&v.length<=80&&!/[<>\x00-\x1f]/.test(v)?v.trim():"";let url="";try{const u=new URL(String(c.url||""));if(/^https?:$/.test(u.protocol)&&!u.username&&!u.password)url=u.href}catch{}const type=typeof c.type==="string"&&/^[A-Z_]{2,40}$/.test(c.type)?c.type:"";const out={text:txt(c.text),type,url,caption:txt(c.caption)};return out.text||out.type||out.url?out:null}
+function ctaLabel(c){if(!c)return "";if(c.type==="NO_BUTTON")return "";if(c.text)return c.text;if(!c.type)return "";const t=c.type.toLowerCase().replace(/_/g," ");return t.charAt(0).toUpperCase()+t.slice(1)}
+function ctaHost(url){try{return new URL(url).hostname.replace(/^www\./,"")}catch{return ""}}
+function ctaPath(url){try{const u=new URL(url);return u.hostname.replace(/^www\./,"")+(u.pathname==="/"?"":u.pathname.replace(/\/$/,""))}catch{return ""}}
+function ctaLineHTML(id){
+ const c=mediaCache.get(id)?.cta,label=ctaLabel(c),host=c&&c.url?ctaHost(c.url):"";
+ if(!label&&!host)return '<div class="ctaline" data-cta="'+esc(id)+'"></div>';
+ return '<div class="ctaline has" data-cta="'+esc(id)+'">'+(label?'<span class="ctabtn">'+esc(label)+'</span>':'<span class="ctabtn none">No button</span>')+(host?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer nofollow" title="'+esc(c.url)+'">→ '+esc(ctaPath(c.url).slice(0,48))+'</a>':'')+'</div>';
+}
+function paintCta(id){const html=ctaLineHTML(id);document.querySelectorAll('[data-cta="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]').forEach(el=>{el.outerHTML=html})}
 function variationKey(a){return copyPattern(a)+"|"+String(a.title||"").toLowerCase().trim()}
 function variationCounts(rows){const m=new Map();for(const a of rows){const k=variationKey(a);m.set(k,(m.get(k)||0)+1)}return m}
 // Remember which ads were live on the last visit, per advertiser, to show changes.
@@ -513,8 +566,15 @@ function weeklyLaunches(rows,weeks=12){
  return counts;
 }
 function topCTAs(rows){
+ const real=rows.map(a=>mediaCache.get(a.id)?.cta).filter(Boolean);
+ if(real.length>=3){const m=new Map();for(const c of real){const l=ctaLabel(c)||"No button";m.set(l,(m.get(l)||0)+1)}return {real:true,base:real.length,list:[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4).map(([label,n])=>({label,n}))}}
  const themes=messagingThemes(rows).filter(t=>t.category==="actions");
- return themes.slice(0,3).map(t=>({label:t.label,n:t.ads.length}));
+ return {real:false,base:rows.length,list:themes.slice(0,3).map(t=>({label:t.label,n:t.ads.length}))};
+}
+function topLandings(rows){
+ const m=new Map();let base=0;
+ for(const a of rows){const c=mediaCache.get(a.id)?.cta;if(!c||!c.url)continue;base++;const k=ctaPath(c.url);const e=m.get(k)||{path:k,url:c.url,n:0};e.n++;m.set(k,e)}
+ return {base,list:[...m.values()].sort((a,b)=>b.n-a.n).slice(0,4)};
 }
 function renderIntel(){
  const box=$("intel");if(!box)return;
@@ -523,12 +583,12 @@ function renderIntel(){
  const rows=state.rows,total=rows.length;
  const stages={new:0,testing:0,proven:0,long:0};let oldest=0;
  for(const a of rows){const d=daysRunning(a),s=lifeStage(d);if(s)stages[s.key]++;if(d>oldest)oldest=d}
- const fmt={video:0,static:0,carousel:0},collected=rows.filter(a=>mediaCache.has(a.id));
+ const fmt={video:0,static:0,carousel:0,catalogue:0},collected=rows.filter(a=>mediaCache.has(a.id));
  for(const a of collected){const f=formatOf(a.id);if(f)fmt[f]++}
  const fTotal=Math.max(1,collected.length);
  const weeks=weeklyLaunches(rows),wMax=Math.max(1,...weeks);
  const vc=variationCounts(rows);const scaled=[...vc.values()].filter(n=>n>1);
- const ctas=topCTAs(rows);
+ const ctas=topCTAs(rows),lands=topLandings(rows);
  const changes=state.changes;
  let changeHTML;
  if(!changes||changes.first)changeHTML='<p class="intel-big">First look</p><p class="intel-sub">We’ll show new and stopped ads when you return.</p>';
@@ -536,9 +596,9 @@ function renderIntel(){
  const chip=(key,label,n,cls)=>'<button class="stagechip '+cls+(state.filter===key?' on':'')+'" data-filter="'+key+'"><b>'+n+'</b>'+esc(label)+'</button>';
  box.innerHTML=
  '<div class="intel-card intel-wide"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days · based on '+(state.cursor?'the newest '+total:'all '+total)+' live ads</p></div>'+
- '<div class="intel-card"><p class="intel-k">Creative mix</p>'+(collected.length?'<div class="mixbar">'+["video","static","carousel"].map(k=>fmt[k]?'<i class="mix-'+k+'" style="width:'+(fmt[k]/fTotal*100)+'%"></i>':'').join("")+'</div><p class="intel-legend">'+["video","static","carousel"].map(k=>'<span><i class="dot mix-'+k+'"></i>'+formatLabel[k]+' '+Math.round(fmt[k]/fTotal*100)+'%</span>').join("")+'</p><p class="intel-sub">From '+collected.length+' collected creatives</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
+ '<div class="intel-card"><p class="intel-k">Creative mix</p>'+(collected.length?'<div class="mixbar">'+["video","static","carousel","catalogue"].map(k=>fmt[k]?'<i class="mix-'+k+'" style="width:'+(fmt[k]/fTotal*100)+'%"></i>':'').join("")+'</div><p class="intel-legend">'+["video","static","carousel","catalogue"].map(k=>'<span><i class="dot mix-'+k+'"></i>'+formatLabel[k]+' '+Math.round(fmt[k]/fTotal*100)+'%</span>').join("")+'</p><p class="intel-sub">From '+collected.length+' collected creatives</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
  '<div class="intel-card"><p class="intel-k">Since your last visit</p>'+changeHTML+'</div>'+
- '<div class="intel-card"><p class="intel-k">Top calls to action</p>'+(ctas.length?'<ol class="ctalist">'+ctas.map(c=>'<li><span>'+esc(c.label)+'</span><b>'+Math.round(c.n/total*100)+'%</b></li>').join("")+'</ol>':'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(scaled.length?scaled.length+' message'+(scaled.length===1?'':'s')+' running in multiple variations':'Every ad uses unique copy')+'</p></div>'+
+ '<div class="intel-card"><p class="intel-k">'+(ctas.real?'Top buttons':'Top calls to action')+'</p>'+(ctas.list.length?'<ol class="ctalist">'+ctas.list.map(c=>'<li><span>'+esc(c.label)+'</span><b>'+Math.round(c.n/ctas.base*100)+'%</b></li>').join("")+'</ol>':'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(ctas.real?'Real buttons from '+ctas.base+' collected ads':'Read from ad text until creatives load')+(scaled.length?' · '+scaled.length+' message'+(scaled.length===1?' runs':'s run')+' as several ads':'')+'</p></div>'+'<div class="intel-card"><p class="intel-k">Top landing pages</p>'+(lands.list.length?'<ol class="ctalist landlist">'+lands.list.map(l=>'<li><a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer nofollow" title="'+esc(l.url)+'">'+esc(l.path.slice(0,40))+'</a><b>'+l.n+'</b></li>').join("")+'</ol><p class="intel-sub">From '+lands.base+' collected ads</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
  '<div class="intel-stages">'+chip("new","New this week",stages.new,"st-new")+chip("testing","Testing",stages.testing,"st-testing")+chip("proven","Proven 30d+",stages.proven,"st-proven")+chip("long","Long-runners 90d+",stages.long,"st-long")+'</div>';
 }
 function renderInsights(){
@@ -549,7 +609,7 @@ function findAd(id){return state.rows.find(a=>a.id===id)||state.saved.get(id)||s
 function modal(title,content){$("modalTitle").textContent=title;$("modalContent").innerHTML=content;$("modalOverlay").classList.add("open");$("closeModal").focus();}
 function adDetails(id){
  const a=findAd(id);if(!a)return;
- modal(a.pageName||"Ad creative",'<p>'+esc(a.title||"Meta advertising record")+'</p><div class="modalquote adtext">'+esc(a.copy||"No copy provided.")+'</div><div class="modal-row"><span>Meta Library ID</span><strong>'+esc(a.id)+'</strong></div><div class="modal-row"><span>Running since</span><strong>'+esc(formatDate(a.start))+'</strong></div><div class="modal-row"><span>Publisher platforms</span><strong>'+esc((a.platforms||[]).join(", ")||"Unknown")+'</strong></div><div class="modal-row"><span>UK reach</span><strong>'+esc(reach(a.reach))+'</strong></div><div class="modal-row"><span>Creative format</span><strong>'+esc(a.format||"Unknown")+'</strong></div><p class="notice">UK reach is reported when provided by the API and is not ad spend or performance.</p><a class="pill" href="'+metaUrl(a.id)+'" target="_blank" rel="noopener noreferrer">View on Meta ↗</a>');
+ modal(a.pageName||"Ad creative",'<p>'+esc(a.title||"Meta advertising record")+'</p><div class="modalquote adtext">'+esc(a.copy||"No copy provided.")+'</div><div class="modal-row"><span>Meta Library ID</span><strong>'+esc(a.id)+'</strong></div><div class="modal-row"><span>Running since</span><strong>'+esc(formatDate(a.start))+'</strong></div><div class="modal-row"><span>Publisher platforms</span><strong>'+esc((a.platforms||[]).join(", ")||"Unknown")+'</strong></div><div class="modal-row"><span>UK reach</span><strong>'+esc(reach(a.reach))+'</strong></div>'+(()=>{const c=mediaCache.get(a.id)?.cta;if(!c)return '';return (ctaLabel(c)?'<div class="modal-row"><span>Button</span><strong>'+esc(ctaLabel(c))+'</strong></div>':'')+(c.url?'<div class="modal-row"><span>Landing page</span><strong><a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(ctaPath(c.url).slice(0,60))+' ↗</a></strong></div>':'')})()+(()=>{const gm=state.groupMeta?.get(a.id);return gm&&gm.n>1?'<div class="modal-row"><span>Same copy runs as</span><strong>'+gm.n+' ads</strong></div>':''})()+'<div class="modal-row"><span>Creative format</span><strong>'+esc(a.format||"Unknown")+'</strong></div><p class="notice">UK reach is reported when provided by the API and is not ad spend or performance.</p><a class="pill" href="'+metaUrl(a.id)+'" target="_blank" rel="noopener noreferrer">View on Meta ↗</a>');
 }
 function compareView(){
  const items=Array.from(state.compare.values());if(!items.length)return;
@@ -562,7 +622,9 @@ function setView(view){
  else if(view==="insights")feedback("");
  else feedback(state.brand?"":"Search a brand above to discover active advertisers.");
  renderCards();
- $("research").scrollIntoView({behavior:"smooth"});
+ const tabs=$("viewtabs");
+ if(tabs&&!tabs.hidden){const prev=tabs.previousElementSibling,r=tabs.getBoundingClientRect();if(r.top<=1&&prev)window.scrollTo({top:Math.max(0,prev.getBoundingClientRect().bottom+scrollY-8),behavior:"smooth"});else if(r.top>innerHeight*.6)tabs.scrollIntoView({behavior:"smooth",block:"start"})}
+ else $("research").scrollIntoView({behavior:"smooth"});
 }
 async function health(){
  const status=$("status"),details=$("serviceDetails");
@@ -720,6 +782,7 @@ $("searchForm").addEventListener("submit",e=>{
 $("coverage").addEventListener("change",e=>{state.coverage=e.target.value;if(state.query)searchClient(state.query)});
 $("sort").value=state.sort;
 $("sort").addEventListener("change",e=>{state.sort=e.target.value;state.limit=25;renderCards()});
+document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest(".viewtab");if(!t||!["ArrowLeft","ArrowRight"].includes(e.key))return;const tabs=[...document.querySelectorAll(".viewtab")];const next=tabs[(tabs.indexOf(t)+(e.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];if(next){e.preventDefault();setView(next.dataset.view);requestAnimationFrame(()=>document.querySelector('.viewtab[aria-selected="true"]')?.focus())}});
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
  b=e.target.closest("[data-page]");if(b){if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
@@ -732,6 +795,7 @@ document.addEventListener("click",e=>{
  if(action==="save"){const a=findAd(id);if(a){if(state.saved.has(id))state.saved.delete(id);else state.saved.set(id,a);save();renderCards();}}
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}
  if(action==="showmore"){state.limit+=25;renderCards()}
+ if(action==="group"){const gm=state.groupMeta?.get(id);if(gm){state.expanded=state.expanded||new Set();if(state.expanded.has(gm.key))state.expanded.delete(gm.key);else{state.expanded.add(gm.key);state.revealAll=true}renderCards();for(const a of state.rows)if(groupKey(a)===gm.key)requestMedia(a.id,{priority:true})}}
  if(action==="revealall"){state.revealAll=true;updateReveal()}
  if(action==="exportmsg")exportMessaging();
  if(action==="retrymedia")requestMedia(id,{refresh:true,priority:true});
