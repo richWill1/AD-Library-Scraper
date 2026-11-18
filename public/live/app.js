@@ -65,7 +65,11 @@ async function resolveByName(q){
  const mentions=Array.isArray(d&&d.mentions)?d.mentions.filter(a=>a&&/^\d{3,30}$/.test(a.id)&&typeof a.name==="string"):[];
  const open=a=>{state.identity=a;state.brand=a.name;state.page=a.id;state.choices.clear();state.choices.set(a.id,{id:a.id,name:a.name,count:a.adCount||0});busy(false);void runSearch(q,a.id)};
  if(d&&list.length===1&&/^\d{3,30}$/.test(list[0].id)&&(d.status==="resolved"||(d.resolved===true&&!d.status))){open(list[0]);return}
- if(d&&list.length&&(d.status==="choose"||d.status==="resolved")){busy(false);feedback("");state.pick={q,kind:"choose",items:list.slice(0,8),message:d.message||""};renderCards();return}
+ if(d&&list.length&&(d.status==="choose"||d.status==="resolved")){
+  const choose={q,kind:"choose",items:list.slice(0,8),message:d.message||""};
+  // Only handle-only Pages (no usable Page id): look for real advertisers too.
+  if(!list.some(a=>/^\d{3,30}$/.test(a.id||""))){void discoverAdvertisers(q,rid,choose,open,list);return}
+  busy(false);feedback("");state.pick=choose;renderCards();return}
  const failed=!d||!ok||(d.status!=="not_found"&&(d.status==="lookup_failed"||["LOOKUP_FAILED","PAGE_METADATA_PERMISSION","NO_PAGE_TOKEN","HANDLE_UNRESOLVED","RATE_LIMITED"].includes(d.code)||!!d.message));
  const fallback=failed?{q,kind:"failed",items:[],message:(d&&(d.code==="RATE_LIMITED"?"Please wait a minute, then search again.":d.message))||"The lookup failed before a Page could be identified. This does not mean the advertiser has no ads."}
   :{q,kind:"missing",items:mentions,message:(d&&d.message)||"No Facebook Page could be identified from an official website or from a Page name in the Ad Library."};
@@ -74,7 +78,7 @@ async function resolveByName(q){
 // No exact Page match: read several hundred ads mentioning the words and rank
 // every advertiser using them by UK reach (for example "blinds" lists the big
 // blinds retailers). A multi-word search that clearly names one of them opens it.
-async function discoverAdvertisers(q,rid,fallback,open){
+async function discoverAdvertisers(q,rid,fallback,open,extra=[]){
  busy(true);feedback("Finding every advertiser running ads about “"+q+"”…");
  let d=null;
  try{const r=await fetch("/api/discover?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(70000)});if(r.ok)d=await r.json()}catch{}
@@ -88,7 +92,7 @@ async function discoverAdvertisers(q,rid,fallback,open){
  const pickOne=exact.length===1?exact[0]:!exact.length&&named.length===1?named[0]:null;
  if(pickOne){open({id:pickOne.id,name:pickOne.name,adCount:pickOne.ads});return}
  if(!list.length){state.pick=fallback;renderCards();return}
- state.pick={q,kind:"category",items:list.slice(0,24),scanned:d.scanned||0,more:!!d.more};
+ state.pick={q,kind:"category",items:list.slice(0,24).concat(extra.slice(0,2)),scanned:d.scanned||0,more:!!d.more};
  renderCards();
 }
 const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T12:00:00Z":s);return Number.isFinite(d.getTime())?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"Unknown"};
@@ -222,7 +226,7 @@ function pickHTML(){
  const cards=p.items.map((a,i)=>{
   let host="";if(a.website){try{host=new URL(a.website).hostname.replace(/^www\./,"")}catch{}}
   const ads=a.activeAds===false?"No active UK ads":a.activeAds===true?"Active UK ads":"";
-  const meta=p.kind==="category"?a.ads+" matching ad"+(a.ads===1?"":"s")+(a.reach?" · UK reach "+compactNumber(a.reach):""):p.kind==="missing"?(a.count||a.mentions||0)+" ads mention the words — not a Page match":[a.category,host,a.handle?"@"+a.handle:"",ads].filter(Boolean).join(" · ");
+  const meta=p.kind==="category"&&!/^\d{3,30}$/.test(a.id||"")?[host,a.handle?"@"+a.handle:"","Facebook Page"].filter(Boolean).join(" · "):p.kind==="category"?a.ads+" matching ad"+(a.ads===1?"":"s")+(a.reach?" · UK reach "+compactNumber(a.reach):""):p.kind==="missing"?(a.count||a.mentions||0)+" ads mention the words — not a Page match":[a.category,host,a.handle?"@"+a.handle:"",ads].filter(Boolean).join(" · ");
   const go=a.activeAds===false?"Open Page":"See their ads →";
   const body=logoHTML(a.id,a.name,"lg",a.picture,a.logo)+'<span><strong>'+esc(a.name)+'</strong><br><small>'+esc(meta||"Facebook Page")+'</small>'+(p.kind!=="missing"&&a.evidence?'<br><small>'+esc(a.evidence)+'</small>':'')+'</span><span class="go">'+go+'</span>';
   if(!/^\d{3,30}$/.test(a.id||"")){const href=a.handle?"https://www.facebook.com/"+encodeURIComponent(a.handle):(a.website||"");return href?'<a class="bcard" style="--i:'+i+'" href="'+esc(href)+'" target="_blank" rel="noopener noreferrer">'+body+'</a>':"";}
