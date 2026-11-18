@@ -686,34 +686,6 @@ function compareHTML(){
  return '<div class="cmp-wrap">'+hint+(insHTML?'<h3 class="cmp-h">What stands out</h3>'+insHTML:'')+'<h3 class="cmp-h">At a glance</h3><div class="cmp-scroll">'+stats+'</div><h3 class="cmp-h">Messaging matrix <small>Share of each brand’s ads using the theme'+(me?' · <em class="gapkey">gap</em> = 2+ competitors use it, you don’t':'')+'</small></h3><div class="cmp-scroll">'+matrix+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh data</button><span class="intel-sub">Based on each brand’s most recent live UK ads in Meta’s Ad Library. Themes come from ad text; claims aren’t verified.</span></div></div>';
 }
 // Messaging tab: what is rising, what lasts, and how it compares with your brand.
-function themeTrend(t,ads){
- const recent=ads.filter(a=>{const d=daysRunning(a);return d!=null&&d<=30}),older=ads.filter(a=>{const d=daysRunning(a);return d!=null&&d>30});
- if(recent.length<4||older.length<4)return 0;
- const ids=new Set(t.ads.map(a=>a.id));
- return pctOf(recent.filter(a=>ids.has(a.id)).length,recent.length)-pctOf(older.filter(a=>ids.has(a.id)).length,older.length);
-}
-function messagingInsights(ads,themes){
- const out=[],total=ads.length,overall=median(ads.map(daysRunning));
- const msgs=themes.filter(t=>t.category!=="actions");
- if(msgs[0])out.push({kind:"note",title:"Lead message: "+msgs[0].label,text:"In "+pctOf(msgs[0].ads.length,total)+"% of ads. "+(msgs[1]?"Then "+msgs[1].label+" ("+pctOf(msgs[1].ads.length,total)+"%).":"")+(themes.find(t=>t.category==="actions")?" Most ads ask people to "+themes.find(t=>t.category==="actions").label.toLowerCase()+".":"")});
- const trends=themes.map(t=>({t,d:themeTrend(t,ads)}));
- const up=trends.filter(x=>x.d>=10).sort((a,b)=>b.d-a.d)[0],down=trends.filter(x=>x.d<=-10).sort((a,b)=>a.d-b.d)[0];
- if(up)out.push({kind:"edge",title:"Rising: "+up.t.label,text:"+"+up.d+" points in ads launched in the last 30 days vs older ads. A message they’re actively testing."});
- if(down)out.push({kind:"gap",title:"Fading: "+down.t.label,text:down.d+" points in newer ads. They may be moving away from it."});
- if(overall!=null){const dur=themes.filter(t=>t.ads.length>=3).map(t=>({t,m:median(t.ads.map(daysRunning))})).filter(x=>x.m!=null&&x.m>=overall*1.3&&x.m-overall>=10).sort((a,b)=>b.m-a.m)[0];
-  if(dur)out.push({kind:"note",title:"Staying power: "+dur.t.label,text:"These ads have run a median "+dur.m+" days vs "+overall+" overall. Brands keep paying for what works."});}
- const offerIds=new Set(themes.filter(t=>t.category==="offers").flatMap(t=>t.ads.map(a=>a.id)));
- out.push({kind:"note",title:pctOf(offerIds.size,total)>=40?"Offer-led":"Offers: "+pctOf(offerIds.size,total)+"% of ads",text:pctOf(offerIds.size,total)>=40?pctOf(offerIds.size,total)+"% of ads carry a price, free or finance offer. Competing on value.":"Mostly sells on product and benefits rather than discounts."});
- const missing=messageCategories.filter(c=>!themes.some(t=>t.category===c.id));
- if(missing.length)out.push({kind:"edge",title:"Unused angle"+(missing.length>1?"s":""),text:"No "+missing.map(c=>c.label.toLowerCase()).join(" or ")+" detected. Space you could own."});
- const mine=myBrand(),md=mine&&mine.id!==state.page?cmp.data.get(mine.id):null;
- if(md&&md.rows&&md.rows.length){const ms=brandStats(md.rows);
-  const theirs=themes.filter(t=>pctOf(t.ads.length,total)>=15&&(ms.share[t.id]||0)<5).slice(0,2);
-  for(const t of theirs)out.push({kind:"gap",title:"They use, you don’t: "+t.label,text:esc0(state.brand)+" "+pctOf(t.ads.length,total)+"% vs "+mine.name+" "+(ms.share[t.id]||0)+"%.",tip:t.test});}
- else if(mine&&mine.id!==state.page&&!cmp.running&&!cmp.data.has(mine.id))setTimeout(()=>loadCompare(false,mine.id).then(()=>{if(state.view==="insights")renderCards()}),0);
- return out.slice(0,6);
-}
-const esc0=s=>String(s||"");
 // Messaging map: deterministic rules applied to loaded ad copy. Ported from
 // lib/messaging.ts so the preview and the original app classify identically.
 const messageCategories=[
@@ -756,10 +728,6 @@ function messagingThemes(ads){
   return {...rule,ads:matched,evidence};
  }).filter(t=>t.ads.length).sort((a,b)=>b.ads.length-a.ads.length||a.label.localeCompare(b.label));
 }
-function themeExamples(theme){
- const seen=new Set();
- return [...theme.ads].sort((a,b)=>(b.reach??-1)-(a.reach??-1)).filter(a=>{const k=copyPattern(a);if(seen.has(k))return false;seen.add(k);return true});
-}
 const notesKey=()=>"adsnoop-messaging-notes-v1:"+(state.page||state.brand);
 function readNotes(){try{const v=JSON.parse(localStorage.getItem(notesKey())||"{}");return v&&typeof v==="object"?v:{}}catch{return {}}}
 function writeNote(id,text){const n=readNotes();if(text)n[id]=text;else delete n[id];try{localStorage.setItem(notesKey(),JSON.stringify(n))}catch{}}
@@ -768,61 +736,117 @@ function highlight(sentence,re){
  const i=m.index;return esc(sentence.slice(0,i))+"<mark>"+esc(m[0])+"</mark>"+esc(sentence.slice(i+m[0].length));
 }
 const catColor={hooks:"#a347d1",benefits:"#0071e3",offers:"#e07800",proof:"#1f9d4c",actions:"#0a8fb5"};
-function strategyMap(themes,total,overallMed,trend){
- const pts=themes.map(t=>({t,x:pctOf(t.ads.length,total),y:median(t.ads.map(daysRunning))})).filter(p=>p.y!=null);
- if(pts.length<3||overallMed==null)return "";
- const W=600,H=340,L=44,R=16,T=16,B=40,xMax=Math.max(20,Math.ceil(Math.max(...pts.map(p=>p.x))/10)*10),yMax=Math.max(overallMed*2,Math.ceil(Math.max(...pts.map(p=>p.y))/10)*10,10);
- const xSplit=Math.min(xMax-1,Math.max(5,median(pts.map(p=>p.x)))),yTop=Math.max(overallMed+1,...pts.map(p=>p.y));
- const midX=(L+W-R)/2,midY=(T+H-B)/2;
- const xs=x=>x<=xSplit?L+(x/xSplit)*(midX-L):midX+((x-xSplit)/(xMax-xSplit))*(W-R-midX);
- const ys=y=>y<=overallMed?H-B-(y/Math.max(1,overallMed))*(H-B-midY):midY-(Math.sqrt(y-overallMed)/Math.sqrt(yTop-overallMed))*(midY-T-6);
- const qx=midX,qy=midY;
- const quad=(x,y,w,h,label,fill)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="'+fill+'"/><text x="'+(x+8)+'" y="'+(y+16)+'" class="sm-q">'+label+'</text>';
- let svg='<svg class="sm-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Strategy map: share of ads against median days live for each message theme">'+
-  quad(qx,T,W-R-qx,qy-T,"CORE MESSAGES","rgba(31,157,76,.06)")+quad(L,T,qx-L,qy-T,"QUIET PERFORMERS","rgba(0,113,227,.05)")+quad(qx,qy,W-R-qx,H-B-qy,"CURRENT PUSH","rgba(224,120,0,.06)")+quad(L,qy,qx-L,H-B-qy,"EXPERIMENTS","rgba(0,0,0,.025)")+
-  '<line x1="'+L+'" y1="'+(H-B)+'" x2="'+(W-R)+'" y2="'+(H-B)+'" class="sm-axis"/><line x1="'+L+'" y1="'+T+'" x2="'+L+'" y2="'+(H-B)+'" class="sm-axis"/>'+
-  '<text x="'+((L+W-R)/2)+'" y="'+(H-8)+'" class="sm-lab" text-anchor="middle">Share of ads →</text><text x="12" y="'+((T+H-B)/2)+'" class="sm-lab" text-anchor="middle" transform="rotate(-90 12 '+((T+H-B)/2)+')">Days live (median) →</text>'+
-  '<text x="'+(L-6)+'" y="'+(qy+4)+'" class="sm-tick" text-anchor="end">'+overallMed+'d</text><text x="'+qx+'" y="'+(H-B+14)+'" class="sm-tick" text-anchor="middle">'+Math.round(xSplit)+'%</text><text x="'+(W-R)+'" y="'+(H-B+14)+'" class="sm-tick" text-anchor="end">'+xMax+'%</text><text x="'+(L-6)+'" y="'+(T+10)+'" class="sm-tick" text-anchor="end">'+yTop+'d</text>';
- const placed=[];
- for(const p of [...pts].sort((a,b)=>b.t.ads.length-a.t.ads.length)){
-  const cx=xs(p.x),cy=ys(p.y),r=5+Math.sqrt(p.t.ads.length/total)*12,on=p.t.id===state.theme;
-  let ly=cy+4,lx=cx+r+5,anchor="start";if(cx>W-150){lx=cx-r-5;anchor="end"}
-  for(let k=0;k<6&&placed.some(q=>Math.abs(q.y-ly)<13&&Math.abs(q.x-lx)<110);k++)ly+=(k%2?-1:1)*13*(k+1);
-  placed.push({x:lx,y:ly});
-  svg+='<g class="sm-dot'+(on?' on':'')+'" data-theme="'+p.t.id+'" tabindex="0" role="button" aria-label="'+esc(p.t.label)+': '+p.x+'% of ads, median '+p.y+' days"><circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+catColor[p.t.category]+'"/><text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anchor+'">'+esc(p.t.label)+(trend[p.t.id]>=10?' ↑':trend[p.t.id]<=-10?' ↓':'')+'</text></g>';
+// ---- Messaging explorer: what is this advertiser saying, which ads prove it,
+// and what should we test in response? Everything is computed from loaded ads.
+const SUBSTANTIVE=new Set(["hooks","benefits","offers","proof"]);
+const BRIEF_DEFAULTS={
+ hooks:{constant:"Offer, product, landing page, audience and format.",metric:"3-second view rate (thumb-stop), then outbound CTR."},
+ benefits:{constant:"Hook, offer, visual style and landing page.",metric:"Outbound CTR and landing-page conversion rate."},
+ offers:{constant:"Creative, audience and landing page. Only test an offer you can genuinely run.",metric:"Conversion rate and cost per acquisition, checked against margin."},
+ proof:{constant:"Main message, offer and visual.",metric:"Conversion rate, with outbound CTR as a secondary signal."},
+ actions:{constant:"Everything except the call-to-action wording and button.",metric:"Outbound CTR and conversion rate."}
+};
+const normSentence=s=>String(s||"").toLowerCase().replace(/[^\p{L}\p{N}%£$€]+/gu," ").replace(/\s+/g," ").trim();
+const wordSet=s=>new Set(normSentence(s).split(" ").filter(w=>w.length>2));
+// Same wording give or take punctuation or a word: word overlap (Jaccard) of 75%+.
+function similar(a,b){const A=wordSet(a),B=wordSet(b);if(!A.size||!B.size)return normSentence(a)===normSentence(b);let n=0;for(const w of A)if(B.has(w))n++;return n/(A.size+B.size-n)>=.75}
+// Distinct wordings of a theme: grouped by the matched sentence (copy or headline),
+// so repeats count towards prevalence but appear once as evidence.
+function themeWordings(t){
+ const groups=[];
+ for(const a of t.ads){
+  const s=t.evidence[a.id];if(!s)continue;
+  const g=groups.find(x=>similar(x.sentence,s));
+  if(g){g.ads.push(a);if(a.start&&(!g.first||a.start<g.first))g.first=a.start;if(a.start&&(!g.last||a.start>g.last))g.last=a.start}
+  else groups.push({sentence:s,ads:[a],first:a.start||"",last:a.start||""});
  }
- svg+='</svg>';
- svg='<div class="sm-plot">'+svg+'</div>';
- const legend=messageCategories.map(c=>'<span><i style="background:'+catColor[c.id]+'"></i>'+esc(c.label)+'</span>').join("");
- return '<section class="sm"><div class="sm-text"><div class="sm-head"><h3>Strategy map</h3><p>Each dot is a message theme. Further right = used in more ads; higher = those ads stay live longer, a sign the brand keeps paying for them.</p></div><p class="sm-legend">'+legend+'</p><div class="sm-key"><p><b>Core messages</b> Used a lot and kept running: what they bank on.</p><p><b>Current push</b> Used a lot in newer ads: what they’re betting on now.</p><p><b>Quiet performers</b> Rare but long-running: worth testing.</p><p><b>Experiments</b> Small and new: being tried out.</p></div></div>'+svg+'</section>';
+ for(const g of groups)g.ads.sort((x,y)=>(y.start||"").localeCompare(x.start||""));
+ return groups.sort((x,y)=>y.ads.length-x.ads.length||(y.last||"").localeCompare(x.last||""));
+}
+// Kept for the CSV/text export: one representative ad per distinct wording.
+function themeExamples(t){return themeWordings(t).map(g=>g.ads[0])}
+// Compare launch periods only when the evidence supports it.
+const RECENT_DAYS=30,MIN_PERIOD=8,MIN_MATCHES=5;
+function periodComparison(t,ads){
+ const ids=new Set(t.ads.map(a=>a.id)),dated=ads.filter(a=>daysRunning(a)!=null);
+ const recent=dated.filter(a=>daysRunning(a)<=RECENT_DAYS),earlier=dated.filter(a=>daysRunning(a)>RECENT_DAYS);
+ const r=recent.filter(a=>ids.has(a.id)).length,e=earlier.filter(a=>ids.has(a.id)).length;
+ const out={recent:recent.length,earlier:earlier.length,r,e,undated:ads.length-dated.length,enough:recent.length>=MIN_PERIOD&&earlier.length>=MIN_PERIOD&&r+e>=MIN_MATCHES,claim:""};
+ if(out.enough){
+  const p1=r/recent.length,p2=e/earlier.length,p=(r+e)/(recent.length+earlier.length);
+  const se=Math.sqrt(p*(1-p)*(1/recent.length+1/earlier.length)),z=se?(p1-p2)/se:0,diff=Math.round((p1-p2)*100);
+  // Two-proportion test at 95% and at least a 10-point gap.
+  if(Math.abs(z)>=1.96&&Math.abs(diff)>=10)out.claim=diff>0?"more":"less";
+ }
+ return out;
+}
+function briefFields(t){
+ const n=readNotes(),d=BRIEF_DEFAULTS[t.category]||BRIEF_DEFAULTS.hooks;
+ return {challenger:n[t.id]||"",constant:n[t.id+":constant"]||"",metric:n[t.id+":metric"]||"",placeholders:{challenger:t.test,constant:d.constant,metric:d.metric}};
+}
+function observedLine(t,total,wordings){return (state.brand||"This advertiser")+" uses “"+t.label+"” in "+t.ads.length+" of "+total+" loaded ads ("+pctOf(t.ads.length,total)+"%), in "+wordings+" distinct wording"+(wordings===1?"":"s")+"."}
+function briefText(t){
+ const ads=state.rows,w=themeWordings(t),f=briefFields(t),ex=w[0];
+ const cat=messageCategories.find(c=>c.id===t.category)?.label||"";
+ const lines=["TEST BRIEF — "+t.label+" ("+cat+")","Competitor: "+(state.brand||"Advertiser")+" · AdSnoop, "+new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}),"",
+  "WHAT THEY’RE DOING (observed)",observedLine(t,ads.length,w.length)];
+ if(ex)lines.push("Example: “"+ex.sentence+"”"+(ex.ads.length>1?" (used in "+ex.ads.length+" ads)":""),"Source: "+metaUrl(ex.ads[0].id));
+ lines.push("","OUR TEST (proposed)","Challenger: "+(f.challenger||f.placeholders.challenger),"Hold constant: "+(f.constant||f.placeholders.constant),"Success metric: "+(f.metric||f.placeholders.metric),"",
+  "Source ads:",...w.slice(0,3).map(g=>"• “"+g.sentence.slice(0,90)+(g.sentence.length>90?"…":"")+"” "+metaUrl(g.ads[0].id)),"",
+  "Observations come from public ad text in Meta’s Ad Library. They describe what was published, not how it performed.");
+ return lines.join("\n");
+}
+async function copyBrief(id,btn){
+ const t=messagingThemes(state.rows).find(x=>x.id===id);if(!t)return;
+ const text=briefText(t);let ok=false;
+ try{await navigator.clipboard.writeText(text);ok=true}catch{
+  const ta=document.createElement("textarea");ta.value=text;ta.setAttribute("readonly","");ta.style.cssText="position:fixed;left:-9999px";document.body.appendChild(ta);ta.select();try{ok=document.execCommand("copy")}catch{}ta.remove();
+ }
+ const s=$("briefStatus");
+ if(s)s.textContent=ok?"Brief copied with "+Math.min(3,themeWordings(t).length)+" source link"+(themeWordings(t).length===1?"":"s")+".":"Couldn’t copy automatically. Select the brief text and copy it manually.";
+ if(btn&&ok){btn.textContent="Copied ✓";clearTimeout(btn._t);btn._t=setTimeout(()=>{btn.textContent="Copy brief"},2200)}
+ toast(ok?"Test brief copied":"Copy failed — try again");
 }
 function messagingView(){
- const ads=state.rows;
- if(!ads.length)return empty("No messaging to map yet.","Search an advertiser above, then open Messaging to see its hooks, benefits, offers and proof points.");
- const themes=messagingThemes(ads),total=ads.length,distinct=new Set(ads.map(copyPattern)).size;
+ const ads=state.rows,total=ads.length;
+ if(!total)return empty("No messaging to map yet.","Search an advertiser above, then open Messaging to see what they say and which ads prove it.");
+ const themes=messagingThemes(ads);
+ const lists={messages:themes.filter(t=>SUBSTANTIVE.has(t.category)),actions:themes.filter(t=>t.category==="actions")};
+ if(!state.msgFilter||!lists[state.msgFilter].length&&lists[state.msgFilter==="messages"?"actions":"messages"].length)state.msgFilter=lists.messages.length||!lists.actions.length?"messages":"actions";
+ const list=lists[state.msgFilter];
+ if(!list.some(t=>t.id===state.theme))state.theme=list[0]?.id||"";
  const mapped=new Set(themes.flatMap(t=>t.ads.map(a=>a.id))).size;
- if(!themes.some(t=>t.id===state.theme))state.theme=themes[0]?.id||"";
- const trend={};for(const t of themes)trend[t.id]=themeTrend(t,ads);
- const ins=messagingInsights(ads,themes),overallMed=median(ads.map(daysRunning));
- const story=ins.length?'<section class="story"><p class="eyebrow">The story</p><ul>'+ins.map(i=>'<li class="st-'+i.kind+'"><b>'+esc(i.title)+'.</b> '+esc(i.text)+(i.tip?' <span class="st-tip">Try: '+esc(i.tip)+'</span>':'')+'</li>').join("")+'</ul></section>':'';
- const momentum=d=>d>=10?'<span class="mom up">↑ +'+d+' pts</span>':d<=-10?'<span class="mom down">↓ '+d+' pts</span>':'<span class="mom">Steady</span>';
- const rows=messageCategories.map(cat=>{
-  const list=themes.filter(t=>t.category===cat.id);
-  const head='<tr class="mx-cat"><th colspan="6"><i style="background:'+catColor[cat.id]+'"></i>'+esc(cat.label)+' <small>'+esc(cat.question)+'</small></th></tr>';
-  if(!list.length)return head+'<tr class="mx-none"><td colspan="6">None detected: an angle you could own.</td></tr>';
-  return head+list.map(t=>{const pct=pctOf(t.ads.length,total),md=median(t.ads.map(daysRunning)),n30=t.ads.filter(a=>{const d=daysRunning(a);return d!=null&&d<=30}).length,cta=topCTAs(t.ads).list[0]?.label;
-   return '<tr class="mx-row'+(t.id===state.theme?' on':'')+'" data-theme="'+t.id+'" tabindex="0"><th scope="row">'+esc(t.label)+'</th><td class="mx-share"><span class="mx-bar"><i style="width:'+pct+'%;background:'+catColor[cat.id]+'"></i></span><b>'+pct+'%</b><small>'+t.ads.length+' ads</small></td><td>'+momentum(trend[t.id])+'</td><td>'+(md??"—")+(md!=null&&overallMed?(md>=overallMed*1.3?' <span class="mom up">long</span>':md<=overallMed*.6?' <span class="mom down">short</span>':''):'')+'</td><td>'+n30+'</td><td class="mx-cta">'+esc(cta||"—")+'</td></tr>'}).join("");
- }).join("");
- const matrix='<section class="mx"><div class="sm-head"><h3>Messaging matrix</h3><p>Pick a row to see the exact wording they use.</p></div><div class="cmp-scroll"><table class="mx-table"><thead><tr><th>Theme</th><th>Share of ads</th><th>Momentum <small>newer vs older ads</small></th><th>Median days live <small>overall '+(overallMed??"—")+'</small></th><th>New in 30 days</th><th>Usual CTA</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
- const t=themes.find(x=>x.id===state.theme);
- let detail="";
- if(t){
-  const ex=themeExamples(t),note=readNotes()[t.id]||"";
-  detail='<section class="msg-detail" aria-live="polite"><div class="msg-dhead"><div><p class="eyebrow" style="color:'+catColor[t.category]+'">'+esc(messageCategories.find(c=>c.id===t.category).label)+'</p><h3>'+esc(t.label)+'</h3><p>'+t.ads.length+' of '+total+' ads ('+pctOf(t.ads.length,total)+'%) · '+ex.length+' distinct message'+(ex.length===1?'':'s')+'</p></div></div>'+
-   '<div class="msg-dgrid"><div><h4>How '+esc(state.brand||"they")+' say it</h4><ul class="msg-evidence">'+ex.slice(0,8).map(a=>'<li><blockquote>“'+highlight(t.evidence[a.id],t.match)+'”</blockquote><div class="msg-meta"><span>'+(a.reach!=null?'UK reach '+reach(a.reach):'Reach not reported')+' · since '+esc(formatDate(a.start))+'</span><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button></div></li>').join("")+'</ul>'+(ex.length>8?'<p class="msg-more">+ '+(ex.length-8)+' more variations in the loaded ads.</p>':'')+'</div>'+
-   '<div class="msg-test"><h4>Your test direction</h4><textarea data-note="'+t.id+'" rows="6" placeholder="'+esc(t.test)+'">'+esc(note)+'</textarea><p>Starts from a suggested direction; edit it for your brand. Saved in this browser.</p></div></div></section>';
- }
- return '<div class="msg-wrap"><div class="msg-top" style="align-items:center"><div><p>'+total+' ads analysed · '+distinct+' distinct copy variations · '+themes.length+' themes · '+(total-mapped)+' ads with no detected theme</p></div><button class="ghost" data-action="exportmsg">Export map ↓</button></div>'+story+strategyMap(themes,total,overallMed,trend)+matrix+detail+'<p class="notice">Themes are detected from ad text with fixed rules; ads can appear in several themes. Days live and momentum are clues, not proof of performance. English copy only.</p></div>';
+ const head='<div class="mx-head"><div><p class="mx-base"><b>'+total+'</b> loaded ad'+(total===1?'':'s')+' from '+esc(state.brand||"this advertiser")+' · '+(total-mapped)+' with no detected theme</p><p class="mx-note">Shares are of all '+total+' loaded ads. An ad can match more than one theme, so shares can add up to more than 100%.</p></div><div class="mx-tools"><div class="seg" role="group" aria-label="Theme type"><button type="button" data-msgfilter="messages" aria-pressed="'+(state.msgFilter==="messages")+'">Messages <span>'+lists.messages.length+'</span></button><button type="button" data-msgfilter="actions" aria-pressed="'+(state.msgFilter==="actions")+'">Calls to action <span>'+lists.actions.length+'</span></button></div><button class="ghost" data-action="exportmsg">Export ↓</button></div></div>';
+ if(!themes.length)return '<div class="msg-wrap">'+head+'<div class="mx-empty"><h3>No themes detected</h3><p>None of the '+total+' loaded ad'+(total===1?'':'s')+' matched a hook, benefit, offer, proof point or call to action. Their copy may be very short, image-only or not in English. Open the ads in Ads &amp; insights to read them directly.</p></div></div>';
+ if(!list.length)return '<div class="msg-wrap">'+head+'<div class="mx-empty"><h3>Nothing in this view</h3><p>Switch the filter above to see the other themes.</p></div></div>';
+ const t=list.find(x=>x.id===state.theme);
+ let items="";
+ list.forEach((x,i)=>{
+  const pct=pctOf(x.ads.length,total),on=x.id===t.id,cat=messageCategories.find(c=>c.id===x.category);
+  items+='<button type="button" class="mx-item'+(on?' on':'')+'" data-theme="'+x.id+'" aria-pressed="'+on+'" aria-controls="mxDetail" style="grid-row:'+(i+1)+'"><span class="mx-rank">'+(i+1)+'</span><span class="mx-name">'+esc(x.label)+'<small><i style="background:'+catColor[x.category]+'"></i>'+esc(cat?.label||"")+'</small></span><span class="mx-num"><b>'+x.ads.length+'</b> ad'+(x.ads.length===1?'':'s')+'<small>'+pct+'% of '+total+'</small></span><span class="mx-track" aria-hidden="true"><i style="width:'+Math.max(2,pct)+'%;background:'+catColor[x.category]+'"></i></span></button>';
+  if(on)items+=detailPanel(x,ads,list.length);
+ });
+ return '<div class="msg-wrap">'+head+'<div class="mx2" style="--rows:'+list.length+'">'+items+'</div><p class="notice">Themes are detected from ad text with fixed rules and describe what was published, not how ads performed. English copy only.</p></div>';
+}
+function detailPanel(t,ads,rows){
+ const total=ads.length,w=themeWordings(t),cat=messageCategories.find(c=>c.id===t.category),f=briefFields(t),pc=periodComparison(t,ads);
+ const ds=t.ads.map(daysRunning).filter(d=>d!=null),med=median(ds);
+ const showAll=state.msgAllExamples===t.id,shown=showAll?w:w.slice(0,3);
+ const ex=shown.map(g=>{const a=g.ads[0],when=g.first?(g.first===g.last||!g.last?"Launched "+formatDate(g.first):"Launched "+formatDate(g.first)+" – "+formatDate(g.last)):"Launch date not available";
+  return '<li><blockquote>“'+highlight(g.sentence,t.match)+'”</blockquote><div class="mx-exmeta"><span>'+esc(when)+(g.ads.length>1?' · used in '+g.ads.length+' ads':'')+'</span><span class="mx-exlinks"><button type="button" class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button><a href="'+esc(metaUrl(a.id))+'" target="_blank" rel="noopener">Meta Ad Library ↗</a></span></div></li>'}).join("");
+ let timing;
+ if(!pc.enough)timing='Not enough dated ads to compare launch periods. '+pc.recent+' launched in the last '+RECENT_DAYS+' days and '+pc.earlier+' earlier; at least '+MIN_PERIOD+' in each and '+MIN_MATCHES+' matching ads are needed.';
+ else timing='Last '+RECENT_DAYS+' days: <b>'+pc.r+' of '+pc.recent+'</b> ads ('+pctOf(pc.r,pc.recent)+'%). Earlier: <b>'+pc.e+' of '+pc.earlier+'</b> ('+pctOf(pc.e,pc.earlier)+'%). '+(pc.claim?'<strong class="mx-claim">'+(pc.claim==="more"?'More':'Less')+' common in newer ads.</strong>':'No clear difference between the two periods.');
+ if(pc.undated)timing+=' '+pc.undated+' ad'+(pc.undated===1?' has':'s have')+' no launch date and '+(pc.undated===1?'is':'are')+' excluded.';
+ const field=(key,label,val,ph)=>'<label class="mx-field"><span>'+label+'</span><textarea data-note="'+esc(key)+'" rows="2" placeholder="'+esc(ph)+'">'+esc(val)+'</textarea></label>';
+ return '<section class="mx-detail" id="mxDetail" aria-live="polite" style="grid-row:1 / span '+(rows+1)+'">'+
+  '<header class="mx-dhead"><p class="mx-cat"><i style="background:'+catColor[t.category]+'"></i>'+esc(cat?.label||"")+' · '+esc(cat?.question||"")+'</p><h3>'+esc(t.label)+'</h3><p class="mx-stat"><b>'+t.ads.length+' of '+total+'</b> loaded ads ('+pctOf(t.ads.length,total)+'%) · '+w.length+' distinct wording'+(w.length===1?'':'s')+(med!=null?' · median '+med+' days since launch':'')+'</p></header>'+
+  '<h4 class="mx-sub">How they say it</h4><ol class="mx-ex">'+ex+'</ol>'+(w.length>3?'<button type="button" class="linkbutton mx-more" data-action="msgall" data-id="'+t.id+'">'+(showAll?'Show fewer':'Show all '+w.length+' wordings')+'</button>':'')+
+  '<h4 class="mx-sub">Launch timing</h4><p class="mx-timing">'+timing+'</p>'+
+  '<div class="mx-brief"><div class="mx-brief-head"><h4>Test brief</h4><span class="mx-brief-actions"><span id="briefStatus" class="mx-status" role="status"></span><button type="button" class="pill sm" data-action="copybrief" data-id="'+t.id+'">Copy brief</button></span></div>'+
+  '<div class="mx-observed"><p class="mx-label">What they’re doing · observed</p><p>'+esc(observedLine(t,total,w.length))+'</p>'+(w[0]?'<p class="mx-quote">“'+esc(w[0].sentence)+'” <a href="'+esc(metaUrl(w[0].ads[0].id))+'" target="_blank" rel="noopener">Source ↗</a></p>':'')+'</div>'+
+  '<div class="mx-ours"><p class="mx-label">Our test · proposed</p>'+field(t.id,"Challenger",f.challenger,f.placeholders.challenger)+field(t.id+":constant","Hold constant",f.constant,f.placeholders.constant)+field(t.id+":metric","Success metric",f.metric,f.placeholders.metric)+'<p class="mx-hint">Empty fields use the suggestion shown. Saved in this browser for '+esc(state.brand||"this advertiser")+'.</p></div></div>'+
+ '</section>';
 }
 function exportMessaging(){
  const themes=messagingThemes(state.rows),notes=readNotes();
@@ -1091,7 +1115,8 @@ document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
  b=e.target.closest("[data-page]");if(b){if(state.view==="compare"){state.view="discover";if(b.dataset.page===state.page&&state.rows.length){renderCards();return}}if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){state.choices.clear();for(const it of state.pick.items)state.choices.set(it.id,{id:it.id,name:it.name,count:it.mentions||0})}state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
- b=e.target.closest("[data-theme]");if(b){state.theme=b.dataset.theme;renderCards();document.querySelector(".msg-detail")?.scrollIntoView({behavior:"smooth",block:"nearest"});return}
+ b=e.target.closest("[data-theme]");if(b){const id=b.dataset.theme;state.theme=id;state.msgAllExamples="";renderCards();const nb=document.querySelector('.mx-item[data-theme="'+id+'"]');nb?.focus({preventScroll:true});if(matchMedia("(max-width:820px)").matches)$("mxDetail")?.scrollIntoView({behavior:"smooth",block:"nearest"});return}
+ b=e.target.closest("[data-msgfilter]");if(b){state.msgFilter=b.dataset.msgfilter;state.theme="";renderCards();document.querySelector('[data-msgfilter="'+b.dataset.msgfilter+'"]')?.focus();return}
  b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;state.limit=25;renderCards();return}
  b=e.target.closest("[data-action]");if(!b)return;
  const {action,id}=b.dataset;
@@ -1106,6 +1131,8 @@ document.addEventListener("click",e=>{
  if(action==="group"){const gm=state.groupMeta?.get(id);if(gm){state.expanded=state.expanded||new Set();if(state.expanded.has(gm.key))state.expanded.delete(gm.key);else{state.expanded.add(gm.key);state.revealAll=true}renderCards();for(const a of state.rows)if(groupKey(a)===gm.key)requestMedia(a.id,{priority:true})}}
  if(action==="revealall"){state.revealAll=true;updateReveal()}
  if(action==="exportmsg")exportMessaging();
+ if(action==="copybrief")copyBrief(id,b);
+ if(action==="msgall"){state.msgAllExamples=state.msgAllExamples===id?"":id;renderCards();document.querySelector('[data-action="msgall"]')?.focus({preventScroll:true})}
  if(action==="retrymedia")requestMedia(id,{refresh:true,priority:true});
  if(action==="loadmore"&&(state.cursor||state.needsPageStart)){state.limit+=25;runSearch(state.query||state.brand,state.page,state.cursor||"",false,state.needsPageStart)}
  if(action==="morebrands"&&!state.loading&&(state.discoveryCursor||state.canFindAlternates))runSearch(state.query,"",state.discoveryCursor||"",true);
@@ -1114,7 +1141,8 @@ document.addEventListener("input",e=>{const t=e.target.closest("[data-note]");if
 $("closeModal").onclick=()=>$("modalOverlay").classList.remove("open");
 $("modalOverlay").onclick=e=>{if(e.target===$("modalOverlay"))$("modalOverlay").classList.remove("open")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("modalOverlay").classList.remove("open")});
-document.addEventListener("keydown",e=>{if(e.key!=="Enter"&&e.key!==" ")return;const r=e.target.closest&&e.target.closest("tr[data-theme],g[data-theme]");if(!r)return;e.preventDefault();r.dispatchEvent(new MouseEvent("click",{bubbles:true}))});
+// Arrow keys move between themes in the message explorer.
+document.addEventListener("keydown",e=>{if(e.key!=="ArrowDown"&&e.key!=="ArrowUp")return;const cur=e.target.closest&&e.target.closest(".mx-item");if(!cur)return;const all=[...document.querySelectorAll(".mx-item")],i=all.indexOf(cur),n=all[i+(e.key==="ArrowDown"?1:-1)];if(n){e.preventDefault();n.focus()}});
 $("compareOpen").onclick=compareView;
 $("compareClear").onclick=()=>{state.compare.clear();renderCards()};
 renderCards();health();
