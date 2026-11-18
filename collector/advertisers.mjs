@@ -52,18 +52,33 @@ export async function findAdvertisers(browser, query) {
         } catch {}
       })());
     });
-    await page.goto('https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=GB&media_type=all', { waitUntil: 'domcontentloaded', timeout: 25000 });
-    // Logged-out visitors in the UK may be shown a cookie choice first.
-    await page.getByRole('button', { name: /decline optional cookies|only allow essential cookies|reject optional/i }).first().click({ timeout: 4000 }).catch(() => {});
-    // The search box unlocks once an ad category is chosen.
-    const box = page.getByRole('textbox', { name: /search by keyword or advertiser/i });
-    if (!(await box.isEnabled({ timeout: 3000 }).catch(() => false))) {
-      await page.getByRole('combobox', { name: /ad category/i }).first().click({ timeout: 8000 });
-      await page.getByRole('gridcell', { name: /^all ads$/i }).first().click({ timeout: 6000 }).catch(() => page.getByText('All ads', { exact: true }).first().click({ timeout: 4000 }));
+    let step = 'open';
+    try {
+      await page.goto('https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=GB&media_type=all', { waitUntil: 'domcontentloaded', timeout: 25000 });
+      step = 'cookies';
+      await page.getByRole('button', { name: /decline optional cookies|only allow essential cookies|reject optional|allow all cookies/i }).first().click({ timeout: 5000 }).catch(() => {});
+      step = 'find-box';
+      const box = page.locator('input[placeholder*="keyword or advertiser" i], input[aria-label*="keyword or advertiser" i]').first();
+      await box.waitFor({ state: 'visible', timeout: 15000 });
+      if (!(await box.isEnabled().catch(() => false))) {
+        step = 'category';
+        const combo = page.locator('[role="combobox"]').filter({ hasText: /ad category|all ads|issues|choose/i }).first();
+        await combo.click({ timeout: 8000 }).catch(() => page.getByText(/ad category/i).first().click({ timeout: 6000 }));
+        step = 'all-ads';
+        await page.getByRole('gridcell', { name: /^all ads$/i }).first().click({ timeout: 6000 }).catch(() => page.getByText('All ads', { exact: true }).last().click({ timeout: 6000 }));
+        await page.waitForTimeout(500);
+      }
+      step = 'type';
+      await box.click({ timeout: 8000, force: true });
+      listening = true;
+      await box.pressSequentially(q, { delay: 70 });
+    } catch (error) {
+      const title = await page.title().catch(() => '');
+      const url = page.url().replace(/[?#].*/, '');
+      const sample = (await page.locator('body').innerText({ timeout: 2000 }).catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
+      console.log(JSON.stringify({ event: 'advertiser_lookup_step_failed', step, title, url, sample }));
+      throw error;
     }
-    await box.click({ timeout: 8000 });
-    listening = true;
-    await box.pressSequentially(q, { delay: 70 });
     // Wait for Meta's advertiser suggestions to arrive.
     const until = Date.now() + 9000;
     while (Date.now() < until) {
