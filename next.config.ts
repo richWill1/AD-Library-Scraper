@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
         { source: "/api/ads", destination: `${backend}/api/ads` },
         { source: "/api/media", destination: `${backend}/api/media` },
         { source: "/api/formats", destination: `${backend}/api/formats` },
+        { source: "/api/popular", destination: `${backend}/api/popular` },
       ],
       afterFiles: [],
       fallback: [],
