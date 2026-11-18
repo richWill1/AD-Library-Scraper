@@ -9,12 +9,12 @@
   const BEST_KEY = "adsnoop-dash-best";
   let host, canvas, ctx, hud, hint, raf = 0, last = 0, running = false, w = 0, h = 0, dpr = 1;
   let pct = 0, shown = 0, target = 0, played = false, score = 0, best = 0, dizzy = 0, finished = false;
-  let hurdles = [], confetti = [], nextHurdle = 0, t = 0;
+  let hurdles = [], confetti = [], sparks = [], nextHurdle = 0, t = 0;
   const eyes = { y: 0, vy: 0, grounded: true, squash: 0 };
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   try { best = Number(localStorage.getItem(BEST_KEY) || 0) || 0; } catch {}
 
-  const ground = () => h - 18;
+  const ground = () => h - 24;
   const runnerX = () => 26 + shown * (w - 80);
 
   function size() {
@@ -27,7 +27,7 @@
 
   function jump() {
     if (!running || finished) return;
-    if (eyes.grounded) { eyes.vy = -6.6; eyes.grounded = false; }
+    if (eyes.grounded) { eyes.vy = -7.4; eyes.grounded = false; }
   }
   function userJump(e) {
     if (!played) { played = true; score = 0; paintHud(); }
@@ -38,8 +38,8 @@
   function spawn() {
     const kinds = ["popup", "cookie", "shield"];
     const kind = kinds[(Math.random() * kinds.length) | 0];
-    const hh = kind === "cookie" ? 18 : 20 + Math.random() * 6;
-    hurdles.push({ x: w + 20, w: kind === "cookie" ? 18 : 22, h: hh, kind, c: COLORS[(Math.random() * COLORS.length) | 0], scored: false, hit: false });
+    const hh = kind === "cookie" ? 22 : 25 + Math.random() * 7;
+    hurdles.push({ x: w + 20, w: kind === "cookie" ? 22 : 27, h: hh, kind, c: COLORS[(Math.random() * COLORS.length) | 0], scored: false, hit: false });
   }
 
   function roundRect(x, y, ww, hh, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + ww, y, x + ww, y + hh, r); ctx.arcTo(x + ww, y + hh, x, y + hh, r); ctx.arcTo(x, y + hh, x, y, r); ctx.arcTo(x, y, x + ww, y, r); ctx.closePath(); }
@@ -47,16 +47,16 @@
   function drawTrack() {
     const g = ground();
     // Track ahead
-    ctx.fillStyle = "#ececf3"; roundRect(10, g, w - 20, 10, 5); ctx.fill();
+    ctx.fillStyle = "#ececf3"; roundRect(10, g, w - 20, 16, 8); ctx.fill();
     // Progress: animated rainbow
     const filled = Math.max(14, (w - 20) * shown);
     const grad = ctx.createLinearGradient(10 - (t * 0.06) % (w / 2), 0, 10 + w - (t * 0.06) % (w / 2), 0);
     COLORS.concat(COLORS[0]).forEach((c, i, a) => grad.addColorStop(i / (a.length - 1), c));
-    ctx.fillStyle = grad; roundRect(10, g, filled, 10, 5); ctx.fill();
-    ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = "#fff"; roundRect(10, g + 1, filled, 3, 2); ctx.fill(); ctx.restore();
+    ctx.fillStyle = grad; roundRect(10, g, filled, 16, 8); ctx.fill();
+    ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = "#fff"; roundRect(14, g + 2, Math.max(0, filled - 8), 4, 2); ctx.fill(); ctx.restore();
     // Finish flag
-    const fx = w - 22, fy = g - 30;
-    ctx.fillStyle = "#0b1734"; ctx.fillRect(fx, fy, 2, 34);
+    const fx = w - 24, fy = g - 34;
+    ctx.fillStyle = "#0b1734"; ctx.fillRect(fx, fy, 2.5, 34);
     for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) { ctx.fillStyle = (r + c) % 2 ? "#0b1734" : "#fff"; ctx.fillRect(fx + 2 + c * 4, fy + r * 4, 4, 4); }
     ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 1; ctx.strokeRect(fx + 2, fy, 16, 12);
   }
@@ -81,10 +81,14 @@
 
   function drawEyes() {
     const g = ground(), x = runnerX(), y = g - 13 + eyes.y;
+    // Sparkle trail while running
+    if (running && !finished && Math.random() < 0.55) sparks.push({ x: x - 20, y: y + (Math.random() * 10 - 2), vx: -1.2 - Math.random() * 1.4, vy: (Math.random() - 0.5) * 0.8, life: 1, c: COLORS[(Math.random() * COLORS.length) | 0], r: 1.5 + Math.random() * 2.5 });
+    for (const p of sparks) { p.x += p.vx; p.y += p.vy; p.life -= 0.035; ctx.save(); ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    sparks = sparks.filter(p => p.life > 0);
     const sq = eyes.squash, sx = 1 + sq * 0.18, sy = 1 - sq * 0.18;
     // shadow
     ctx.save(); ctx.globalAlpha = 0.18 * (1 + eyes.y / 70); ctx.fillStyle = "#0b1734"; ctx.beginPath(); ctx.ellipse(x, g - 1, 18 * (1 + eyes.y / 120), 3, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-    ctx.save(); ctx.translate(x, y); ctx.scale(sx, sy);
+    ctx.save(); ctx.translate(x, y - 4); ctx.scale(sx * 1.25, sy * 1.25);
     for (const dx of [-10, 10]) {
       ctx.fillStyle = "#fff"; ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2.6;
       ctx.beginPath(); ctx.arc(dx, 0, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -123,10 +127,10 @@
     for (const o of hurdles) {
       o.x -= speed;
       // Demo mode: the eyes hop on their own until someone plays.
-      if (!played && !o.hit && o.x - rx < 46 && o.x - rx > 20) jump();
-      const overlapX = o.x < rx + 16 && o.x + o.w > rx - 16, top = ground() - o.h;
-      if (!o.hit && overlapX && ground() - 4 + eyes.y > top) { o.hit = true; dizzy = 650; }
-      if (!o.scored && !o.hit && o.x + o.w < rx - 16) { o.scored = true; if (played) { score++; if (score > best) { best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch {} } paintHud(); } }
+      if (!played && !o.hit && o.x - rx < 58 && o.x - rx > 26) jump();
+      const overlapX = o.x < rx + 20 && o.x + o.w > rx - 20, top = ground() - o.h;
+      if (!o.hit && overlapX && ground() - 2 + eyes.y > top) { o.hit = true; dizzy = 650; }
+      if (!o.scored && !o.hit && o.x + o.w < rx - 20) { o.scored = true; if (played) { score++; if (score > best) { best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch {} } paintHud(); } }
     }
     hurdles = hurdles.filter(o => o.x > -40);
     // Draw
