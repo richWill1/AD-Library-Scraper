@@ -263,8 +263,8 @@ function displayMedia(node,id,items){
  if(items.length>1){
   const counter=document.createElement("button");
   counter.className="square";counter.style.cssText="position:absolute;bottom:12px;right:12px;background:white;width:auto;padding:0 12px;border-radius:50px;";
-  let index=0;counter.textContent="1 / "+items.length+" ›";
-  counter.onclick=e=>{e.preventDefault();index=(index+1)%items.length;const next=items[index];const changed=document.createElement(next.kind==="video"?"video":"img");if(next.kind==="video"){changed.controls=true;changed.muted=true;changed.playsInline=true;changed.preload="metadata";if(next.poster)changed.poster=next.poster}else changed.alt="Meta ad creative";changed.onerror=()=>mediaFallback(node,id,"FAILED");changed.src=next.url;node.replaceChild(changed,node.firstChild);counter.textContent=(index+1)+" / "+items.length+" ›";};
+  let index=0;const unit=formatOf(id)==="carousel"?"Card ":"Size ";counter.title=unit==="Card "?"Carousel cards":"Same creative in different placement sizes";counter.textContent=unit+"1 / "+items.length+" ›";
+  counter.onclick=e=>{e.preventDefault();index=(index+1)%items.length;const next=items[index];const changed=document.createElement(next.kind==="video"?"video":"img");if(next.kind==="video"){changed.controls=true;changed.muted=true;changed.playsInline=true;changed.preload="metadata";if(next.poster)changed.poster=next.poster}else changed.alt="Meta ad creative";changed.onerror=()=>mediaFallback(node,id,"FAILED");changed.src=next.url;node.replaceChild(changed,node.firstChild);counter.textContent=unit+(index+1)+" / "+items.length+" ›";};
   node.appendChild(counter);
  }
 }
@@ -321,7 +321,7 @@ function pumpMedia(){
     data=await resp.json().catch(()=>({code:resp.status===429?"RATE_LIMITED":"COLLECTOR_UNAVAILABLE",items:[]}));
    }catch{data={code:"COLLECTOR_UNAVAILABLE",items:[]}}
    const items=(Array.isArray(data.items)?data.items:[]).filter(i=>i&&["video","image"].includes(i.kind)&&safeMedia(i.url)).map(i=>({...i,url:safeMedia(i.url),poster:safeMedia(i.poster)}));
-   if(items.length){mediaCache.set(id,{items,collectedAt:data.collectedAt});mediaState.set(id,{status:"done",attempts:st.attempts})}
+   if(items.length){mediaCache.set(id,{items,collectedAt:data.collectedAt,displayFormat:typeof data.displayFormat==="string"?data.displayFormat:"",cards:Number(data.cards)||0});mediaState.set(id,{status:"done",attempts:st.attempts})}
    else if(MEDIA_RETRY_CODES.includes(data.code)&&st.attempts+1<MEDIA_MAX_ATTEMPTS){
     st.attempts++;st.status="queued";st.refresh=false;
     // Back off, then rejoin the queue behind ads that have not been tried yet.
@@ -472,10 +472,15 @@ function exportMessaging(){
 const DAY=86400000;
 function daysRunning(a){if(!a.start)return null;const t=Date.parse(a.start+"T00:00:00Z");return Number.isFinite(t)?Math.max(0,Math.floor((Date.now()-t)/DAY)):null}
 function lifeStage(d){if(d==null)return null;if(d<=7)return {key:"new",label:"New",hint:"Launched in the last 7 days"};if(d<30)return {key:"testing",label:"Testing",hint:"Live under 30 days"};if(d<90)return {key:"proven",label:"Proven",hint:"Live 30–89 days"};return {key:"long",label:"Long-runner",hint:"Live 90+ days, likely a winner"}}
+// Meta's display_format is the source of truth. Several images on their own
+// usually mean one creative supplied in feed, story and square sizes, not a carousel.
 function formatOf(id){
- const items=mediaCache.get(id)?.items;if(!items||!items.length)return null;
- if(items.some(i=>i.kind==="video"))return "video";
- return items.length>1?"carousel":"static";
+ const m=mediaCache.get(id),items=m?.items;if(!items||!items.length)return null;
+ const f=String(m.displayFormat||"").toUpperCase();
+ if(f==="VIDEO")return "video";
+ if(f==="CAROUSEL"||f==="MULTI_IMAGES"||f==="MULTI_VIDEOS"||(!f&&m.cards>1))return "carousel";
+ if(f==="IMAGE")return "static";
+ return items.some(i=>i.kind==="video")?"video":"static";
 }
 const formatLabel={video:"Video",static:"Static",carousel:"Carousel"};
 function variationKey(a){return copyPattern(a)+"|"+String(a.title||"").toLowerCase().trim()}

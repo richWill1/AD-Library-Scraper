@@ -9,12 +9,14 @@ function acquire(){if(active<maximum){active++;return Promise.resolve();}if(wait
 function release(){const next=waiting.shift();if(next)next.resolve();else active--;}
 async function browser(){if(!browserPromise)browserPromise=chromium.launch({headless:true}).then(b=>{b.on('disconnected',()=>browserPromise=null);return b;}).catch(()=>{browserPromise=null;throw Error('COLLECTOR_UNAVAILABLE');});return browserPromise;}
 async function collect(id,token){
- let context,page;let phase='browser';const started=Date.now();const streamed=new Map();const jsonItems=[];
+ let context,page;let phase='browser';const started=Date.now();const streamed=new Map();const jsonItems=[];const shape={format:'',cards:0,own:false};
  try{
   const b=await browser();context=await b.newContext({viewport:{width:680,height:900},locale:'en-GB'});page=await context.newPage();const reads=[];
   page.on('request',request=>{const candidate=videoCandidate(request.url());if(candidate)streamed.set(candidate.url,candidate.score);});
   page.on('response',response=>{if(!response.url().startsWith('https://www.facebook.com/api/graphql')||reads.length>=20)return;reads.push((async()=>{try{const text=await response.text();if(text.length>2000000||!text.includes(id))return;let visited=0;
    const walk=(value,depth=0)=>{if(!value||typeof value!=='object'||depth>30||++visited>10000)return;if(Array.isArray(value)){for(const child of value)walk(child,depth+1);return;}
+    // Meta states the real format; several images alone usually means one creative in several placement sizes.
+    if(typeof value.display_format==='string'&&/^[A-Z_]{2,30}$/.test(value.display_format)){const own=String(value.ad_archive_id||value.adArchiveID||'')===id;if(!shape.format||(own&&!shape.own)){shape.format=value.display_format;shape.own=own;if(Array.isArray(value.cards))shape.cards=value.cards.filter(c=>c&&typeof c==='object').length;}}
     const video=safe(value.video_hd_url||value.video_sd_url||value.browser_native_hd_url||value.browser_native_sd_url);if(video)jsonItems.push({kind:'video',url:video,poster:safe(value.video_preview_image_url)||undefined});
     const image=safe(value.original_image_url||value.resized_image_url);if(image)jsonItems.push({kind:'image',url:image});
     for(const child of Object.values(value))walk(child,depth+1);
@@ -50,7 +52,7 @@ async function collect(id,token){
   if(fallback&&!records.some(r=>r.kind==='video'&&safe(r.url)))records.push({kind:'video',url:fallback,poster:records.find(r=>r.kind==='video')?.poster});
   const items=[];for(const r of [...records,...jsonItems]){const url=safe(r.url);if(url&&!items.some(v=>v.url===url))items.push({kind:r.kind,url,poster:safe(r.poster)||undefined});}
   const posters=new Set(items.filter(i=>i.kind==='video').map(i=>i.poster));const filtered=items.filter(i=>i.kind!=='image'||!posters.has(i.url)).slice(0,20);
-  return {items:filtered,collectedAt:new Date().toISOString(),code:filtered.length?'COLLECTED':'NO_MEDIA',source:'meta-official-snapshot'};
+  return {items:filtered,displayFormat:shape.format||undefined,cards:shape.cards||undefined,collectedAt:new Date().toISOString(),code:filtered.length?'COLLECTED':'NO_MEDIA',source:'meta-official-snapshot'};
  }catch(error){error.collectionPhase=phase;error.collectionMs=Date.now()-started;
   // Only structural counters and known public error phrases, never HTML, URLs or tokens.
   if(page)error.previewSignals=await page.evaluate(()=>({videos:document.querySelectorAll('video').length,images:document.querySelectorAll('img').length,buttons:document.querySelectorAll('button,[role="button"]').length,unavailable:/content isn't available|ad isn't available|ad is unavailable/i.test(document.body?.innerText||''),login:/log in to continue|you must log in/i.test(document.body?.innerText||'')})).catch(()=>null);
