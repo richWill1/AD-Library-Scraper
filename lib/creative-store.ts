@@ -69,7 +69,7 @@ async function copy(url:string,key:string,kind:'image'|'video'){
 // Saves a freshly collected creative. Only complete sets are recorded, so a
 // stored ad never mixes permanent files with Meta links that will expire.
 let active=0;const waiting:(()=>void)[]=[];
-export function storeCreative(id:string,result:{items:CreativeMedia[];displayFormat?:string;cards?:number;cta?:unknown;collectedAt?:string}){
+export function storeCreative(id:string,result:{items:CreativeMedia[];displayFormat?:string;cards?:number;cta?:unknown;collectedAt?:string},onStored?:(stored:StoredResult)=>void){
  if(!storeReady||!result?.items?.length)return;
  const job=async()=>{
   const started=Date.now();let bytes=0;
@@ -83,6 +83,7 @@ export function storeCreative(id:string,result:{items:CreativeMedia[];displayFor
    const meta={items,displayFormat:result.displayFormat,cards:result.cards,cta:result.cta,collectedAt:result.collectedAt,storedAt:new Date().toISOString()};
    const put=await r2('PUT',`${PREFIX}/${id}/meta.json`,Buffer.from(JSON.stringify(meta)),'application/json');
    if(!put.ok)throw Error('UPLOAD_'+put.status);
+   onStored?.({items,displayFormat:meta.displayFormat,cards:meta.cards,cta:meta.cta,collectedAt:meta.collectedAt,storedAt:meta.storedAt,code:'COLLECTED',source:'adsnoop-storage'});
    console.log(JSON.stringify({event:'creative_stored',ad:id,files:items.length,bytes,ms:Date.now()-started}));
   }catch(error:any){console.log(JSON.stringify({event:'creative_store_failed',ad:id,reason:String(error.message||'ERROR').slice(0,40)}));}
  };
