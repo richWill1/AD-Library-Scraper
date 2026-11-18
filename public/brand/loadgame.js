@@ -9,7 +9,7 @@
   const BEST_KEY = "adsnoop-dash-best";
   let host, canvas, ctx, hud, hint, raf = 0, last = 0, running = false, w = 0, h = 0, dpr = 1;
   let pct = 0, shown = 0, target = 0, played = false, score = 0, best = 0, dizzy = 0, finished = false;
-  let hurdles = [], confetti = [], sparks = [], nextHurdle = 0, t = 0;
+  let hurdles = [], confetti = [], sparks = [], floaters = [], nextHurdle = 0, t = 0;
   const eyes = { y: 0, vy: 0, grounded: true, squash: 0 };
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   try { best = Number(localStorage.getItem(BEST_KEY) || 0) || 0; } catch {}
@@ -36,13 +36,29 @@
   }
 
   function spawn() {
-    const kinds = ["popup", "cookie", "shield"];
-    const kind = kinds[(Math.random() * kinds.length) | 0];
-    const hh = kind === "cookie" ? 22 : 25 + Math.random() * 7;
-    hurdles.push({ x: w + 20, w: kind === "cookie" ? 22 : 27, h: hh, kind, c: COLORS[(Math.random() * COLORS.length) | 0], scored: false, hit: false });
+    const sizes = { popup: [27, 26], cookie: [22, 22], shield: [26, 30], mail: [30, 21], lock: [22, 27], skip: [40, 18], captcha: [26, 26], bell: [24, 26], banner: [44, 16] };
+    const kinds = Object.keys(sizes), kind = kinds[(Math.random() * kinds.length) | 0];
+    const [ww, hh] = sizes[kind];
+    hurdles.push({ x: w + 20, w: ww, h: hh + (Math.random() * 4 - 2), kind, c: COLORS[(Math.random() * COLORS.length) | 0], scored: false, hit: false });
   }
 
   function roundRect(x, y, ww, hh, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + ww, y, x + ww, y + hh, r); ctx.arcTo(x + ww, y + hh, x, y + hh, r); ctx.arcTo(x, y + hh, x, y, r); ctx.arcTo(x, y, x + ww, y, r); ctx.closePath(); }
+
+  // Soft colourful shapes drifting behind the track (parallax).
+  function seedFloaters() {
+    floaters = Array.from({ length: Math.round(w / 70) }, () => ({ x: Math.random() * w, y: 10 + Math.random() * (h - 50), s: 5 + Math.random() * 9, k: (Math.random() * 4) | 0, c: COLORS[(Math.random() * COLORS.length) | 0], v: 0.25 + Math.random() * 0.5, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.02 }));
+  }
+  function drawFloaters(dt) {
+    for (const f of floaters) {
+      f.x -= f.v * dt; f.r += f.vr * dt; if (f.x < -20) { f.x = w + 20; f.y = 10 + Math.random() * (h - 50); }
+      ctx.save(); ctx.globalAlpha = 0.22; ctx.translate(f.x, f.y); ctx.rotate(f.r); ctx.fillStyle = f.c; ctx.strokeStyle = f.c; ctx.lineWidth = 2.5;
+      if (f.k === 0) { ctx.beginPath(); ctx.arc(0, 0, f.s / 2, 0, Math.PI * 2); ctx.fill(); }
+      else if (f.k === 1) { ctx.beginPath(); ctx.moveTo(0, -f.s / 2); ctx.lineTo(f.s / 2, f.s / 2); ctx.lineTo(-f.s / 2, f.s / 2); ctx.closePath(); ctx.fill(); }
+      else if (f.k === 2) { ctx.beginPath(); ctx.moveTo(-f.s / 2, 0); ctx.lineTo(f.s / 2, 0); ctx.moveTo(0, -f.s / 2); ctx.lineTo(0, f.s / 2); ctx.stroke(); }
+      else { ctx.beginPath(); ctx.arc(0, 0, f.s / 2, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
 
   function drawTrack() {
     const g = ground();
@@ -72,6 +88,30 @@
       ctx.fillStyle = "#fff"; ctx.strokeStyle = o.c; ctx.lineWidth = 2; roundRect(o.x, y, o.w, o.h, 4); ctx.fill(); ctx.stroke();
       ctx.fillStyle = o.c; roundRect(o.x, y, o.w, 6, 3); ctx.fill();
       ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(o.x + o.w - 7, y + 1.5); ctx.lineTo(o.x + o.w - 3, y + 4.5); ctx.moveTo(o.x + o.w - 3, y + 1.5); ctx.lineTo(o.x + o.w - 7, y + 4.5); ctx.stroke();
+    } else if (o.kind === "mail") {
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = o.c; ctx.lineWidth = 2; roundRect(o.x, y, o.w, o.h, 3); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(o.x + 2, y + 2); ctx.lineTo(o.x + o.w / 2, y + o.h * 0.58); ctx.lineTo(o.x + o.w - 2, y + 2); ctx.stroke();
+      ctx.fillStyle = "#ff4f81"; ctx.beginPath(); ctx.arc(o.x + o.w - 1, y + 1, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.font = "700 6px -apple-system,Inter,sans-serif"; ctx.textAlign = "center"; ctx.fillText("9", o.x + o.w - 1, y + 3);
+    } else if (o.kind === "lock") {
+      ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.arc(o.x + o.w / 2, y + 9, 6, Math.PI, 0); ctx.stroke();
+      ctx.fillStyle = o.c; roundRect(o.x, y + 9, o.w, o.h - 9, 4); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(o.x + o.w / 2, y + 9 + (o.h - 9) / 2, 2.4, 0, Math.PI * 2); ctx.fill();
+    } else if (o.kind === "skip") {
+      ctx.fillStyle = "rgba(11,23,52,.88)"; roundRect(o.x, y, o.w, o.h, o.h / 2); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.font = "700 8px -apple-system,Inter,sans-serif"; ctx.textAlign = "center"; ctx.fillText("SKIP ▸", o.x + o.w / 2, y + o.h / 2 + 3);
+    } else if (o.kind === "captcha") {
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = "#c7c7d1"; ctx.lineWidth = 1.5; roundRect(o.x, y, o.w, o.h, 4); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = o.c; ctx.lineWidth = 2; roundRect(o.x + 6, y + 6, o.w - 12, o.h - 12, 2); ctx.stroke();
+      ctx.strokeStyle = "#3ccf91"; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(o.x + 9, y + o.h / 2); ctx.lineTo(o.x + o.w / 2 - 1, y + o.h - 9); ctx.lineTo(o.x + o.w - 7, y + 7); ctx.stroke();
+    } else if (o.kind === "bell") {
+      ctx.fillStyle = o.c; ctx.beginPath(); ctx.moveTo(o.x + 3, y + o.h - 6); ctx.quadraticCurveTo(o.x + 3, y + 3, o.x + o.w / 2, y + 3); ctx.quadraticCurveTo(o.x + o.w - 3, y + 3, o.x + o.w - 3, y + o.h - 6); ctx.lineTo(o.x + o.w, y + o.h - 3); ctx.lineTo(o.x, y + o.h - 3); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(o.x + o.w / 2, y + o.h - 1, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ff4f81"; ctx.beginPath(); ctx.arc(o.x + o.w - 3, y + 3, 4, 0, Math.PI * 2); ctx.fill();
+    } else if (o.kind === "banner") {
+      const bg = ctx.createLinearGradient(o.x, 0, o.x + o.w, 0); bg.addColorStop(0, o.c); bg.addColorStop(1, COLORS[(COLORS.indexOf(o.c) + 2) % COLORS.length]);
+      ctx.fillStyle = bg; roundRect(o.x, y, o.w, o.h, 3); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.font = "800 7.5px -apple-system,Inter,sans-serif"; ctx.textAlign = "center"; ctx.fillText("50% OFF!", o.x + o.w / 2, y + o.h / 2 + 3);
     } else {
       ctx.fillStyle = o.c; ctx.beginPath(); ctx.moveTo(o.x + o.w / 2, y); ctx.lineTo(o.x + o.w, y + 5); ctx.lineTo(o.x + o.w - 2, y + o.h - 6); ctx.lineTo(o.x + o.w / 2, y + o.h); ctx.lineTo(o.x + 2, y + o.h - 6); ctx.lineTo(o.x, y + 5); ctx.closePath(); ctx.fill();
       ctx.fillStyle = "#fff"; ctx.font = "700 7px -apple-system,Inter,sans-serif"; ctx.textAlign = "center"; ctx.fillText("AD", o.x + o.w / 2, y + o.h / 2 + 3);
@@ -135,7 +175,7 @@
     hurdles = hurdles.filter(o => o.x > -40);
     // Draw
     // A drawing error must never stop the game loop (or the loading bar).
-    try { ctx.clearRect(0, 0, w, h); drawTrack(); hurdles.forEach(drawHurdle); drawEyes(); drawConfetti(dt); } catch (e) { try { ctx.restore(); } catch {} }
+    try { ctx.clearRect(0, 0, w, h); drawFloaters(dt); drawTrack(); hurdles.forEach(drawHurdle); drawEyes(); drawConfetti(dt); } catch (e) { try { ctx.restore(); } catch {} }
     raf = requestAnimationFrame(frame);
   }
 
@@ -169,7 +209,7 @@
     start() {
       if (!api.supported || !host) return;
       if (running) return;
-      host.hidden = false; size();
+      host.hidden = false; size(); seedFloaters();
       running = true; finished = false; last = 0; t = 0; nextHurdle = 600; hurdles = []; confetti = [];
       shown = target; score = 0; played = false; dizzy = 0; eyes.y = 0; eyes.vy = 0; eyes.grounded = true;
       paintHud(); raf = requestAnimationFrame(frame);
