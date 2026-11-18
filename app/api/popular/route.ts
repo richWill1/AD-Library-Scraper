@@ -6,7 +6,7 @@ export const runtime='nodejs';
 
 // Popular UK advertisers shown before anyone searches. Results are shared by
 // every visitor and cached, so this costs a few dozen Meta calls every 6 hours.
-const BRANDS=['Dunelm','Next','IKEA','boohoo','Gymshark','Marks & Spencer','Wren Kitchens','Sharps Fitted Furniture'];
+const BRANDS=['Dunelm','Next','IKEA','boohoo','Gymshark','Currys','Wren Kitchens','Sharps Fitted Furniture','John Lewis'];
 const TTL=6*3600*1000;
 type Brand={name:string;pageId:string;pageName:string;count:number;more:boolean};
 let cached:{at:number;brands:Brand[]}|null=null;let inflight:Promise<{at:number;brands:Brand[]}>|null=null;
@@ -31,7 +31,7 @@ async function load(){
  const {token}=await getMetaCredential();if(!token)throw Error('NOT_CONFIGURED');
  const brands:Brand[]=[];
  // One brand at a time to stay well inside Meta's rate limits.
- for(const name of BRANDS){try{const b=await lookup(token,name);if(b)brands.push(b);}catch{}}
+ for(const name of BRANDS){if(brands.length>=8)break;try{const b=await lookup(token,name);if(b)brands.push(b);}catch{}}
  return {at:Date.now(),brands};
 }
 export async function GET(){
