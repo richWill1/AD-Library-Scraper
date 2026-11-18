@@ -13,11 +13,13 @@
 
   function init() {
     const hero = document.querySelector(".hero.space");
-    if (!hero) return;
+    if (!hero) { document.querySelectorAll("[data-space]").forEach(el => stars(el, window.matchMedia("(prefers-reduced-motion: reduce)"), false)); return; }
     const reduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
     const fine = window.matchMedia ? window.matchMedia("(hover: hover) and (pointer: fine)").matches : false;
     stars(hero, reduce, fine);
     headline(hero, reduce, fine);
+    // The footer reuses the same starfield.
+    document.querySelectorAll("[data-space]").forEach(el => stars(el, reduce, fine));
   }
 
   // ---------- Starfield ----------
