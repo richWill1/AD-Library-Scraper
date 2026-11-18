@@ -39,5 +39,5 @@ async function loadMedia(ids){
 }
 document.addEventListener("pointerover",e=>{const v=e.target.closest(".ad-media")?.querySelector("video");if(v&&v.paused)v.play().catch(()=>{})});
 document.addEventListener("pointerout",e=>{const b=e.target.closest(".ad-media");if(b&&!b.contains(e.relatedTarget))b.querySelector("video")?.pause()});
-fetch("/api/seasonal?event="+encodeURIComponent(event),{signal:AbortSignal.timeout(120000)}).then(r=>r.ok?r.json():Promise.reject()).then(render).catch(()=>{$("content").innerHTML='<div class="pg-card"><h3>Couldn’t load the latest ads</h3><p>Please refresh in a minute.</p></div>'});
+fetch("/api/seasonal?event="+encodeURIComponent(event),{signal:AbortSignal.timeout(240000)}).then(r=>r.ok?r.json():Promise.reject()).then(render).catch(()=>{$("content").innerHTML='<div class="pg-card"><h3>Couldn’t load the latest ads</h3><p>Please refresh in a minute.</p></div>'});
 })();

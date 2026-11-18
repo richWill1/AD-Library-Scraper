@@ -1,4 +1,5 @@
 import {NextRequest, NextResponse} from 'next/server';
+import {directorySearch} from '@/lib/advertiser-directory';
 export const runtime = 'nodejs';
 
 // Seasonal ad trackers (Christmas, Black Friday). Built from the same live UK
@@ -23,14 +24,29 @@ const TACTICS: {id: string; label: string; re: RegExp}[] = [
   {id: 'returns', label: 'Extended returns', re: /(extended|free) returns|returns until|christmas returns/i},
   {id: 'finance', label: 'Pay later', re: /klarna|clearpay|pay (later|in 3|monthly)|interest.free/i}
 ];
+// Keyword search only returns the newest few hundred matching ads, so big
+// retailers get crowded out. Their own pages are checked directly as well.
+const MAJOR_PAGES: Record<string, string> = {Currys: '282722695080974', Argos: '108712049190071', 'Boots UK': '137917343831'};
+const MAJOR_NAMES = ['John Lewis & Partners', 'John Lewis', 'AO.com', 'Very', 'Amazon', 'Lidl GB', 'Aldi UK', 'Tesco', "Sainsbury's", 'Marks and Spencer', 'M&S', 'JD Sports', 'Superdrug', 'Dunelm', 'IKEA UK', 'Next', 'ASOS', 'boohoo', 'Gymshark', 'Smyths Toys', 'The Perfume Shop', 'Ninja Kitchen UK', 'Dyson', 'Samsung UK', 'Selfridges', 'Debenhams', 'Wayfair UK', 'B&Q', 'Halfords', 'Matalan', 'Primark'];
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+let lastCall = 0;
+async function paced() { const wait = lastCall + 3200 - Date.now(); if (wait > 0) await sleep(wait); lastCall = Date.now(); }
+async function majorPages() {
+  const pages = new Map<string, string>(Object.entries(MAJOR_PAGES).map(([n, id]) => [id, n]));
+  for (const name of MAJOR_NAMES) {
+    try { for (const p of await directorySearch(name)) if (p.score >= 5 && !pages.has(p.id)) pages.set(p.id, p.name); } catch {}
+  }
+  return [...pages.keys()].slice(0, 20);
+}
 const cache = new Map<string, {at: number; data: unknown}>();
 const inflight = new Map<string, Promise<unknown>>();
 const days = (start: string) => { const t = Date.parse(start + 'T00:00:00Z'); return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : null; };
 
-async function search(term: string) {
+async function search(term: string, page = '', maxPages = 3) {
   const out: Ad[] = []; let after = '';
-  for (let i = 0; i < 3; i++) {
-    const p = new URLSearchParams({q: term, coverage: 'GB'}); if (after) p.set('after', after);
+  for (let i = 0; i < maxPages; i++) {
+    await paced();
+    const p = new URLSearchParams({q: term, coverage: 'GB'}); if (page) p.set('page', page); if (after) p.set('after', after);
     const res = await fetch(`${ORIGIN}/api/ads?${p}`, {signal: AbortSignal.timeout(30000), cache: 'no-store', headers: {'x-adsnoop-internal': 'seasonal'}});
     if (!res.ok) break;
     const body = await res.json(); if (!Array.isArray(body.ads)) break;
@@ -42,7 +58,9 @@ async function search(term: string) {
 async function build(key: string) {
   const ev = EVENTS[key];
   const seen = new Map<string, Ad>();
-  for (const term of ev.terms) { try { for (const a of await search(term)) if (a && /^\d{1,30}$/.test(String(a.id)) && !seen.has(a.id)) seen.set(a.id, a); } catch {} }
+  const add = (list: Ad[]) => { for (const a of list) if (a && /^\d{1,30}$/.test(String(a.id)) && !seen.has(a.id)) seen.set(a.id, a); };
+  for (const id of await majorPages()) { try { add(await search(id, id, 2)); } catch {} }
+  for (const term of ev.terms) { try { add(await search(term)); } catch {} }
   const ads = [...seen.values()].filter(a => ev.match.test(`${a.title || ''}\n${a.copy || ''}`) && /^\d{1,30}$/.test(String(a.pageId)));
   // Advertisers
   const byPage = new Map<string, {id: string; name: string; ads: number; reach: number; first: string}>();
