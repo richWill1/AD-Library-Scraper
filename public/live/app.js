@@ -464,7 +464,7 @@ function pumpMedia(){
   const id=mediaQueue.shift(),st=mediaState.get(id);
   if(!st||st.status!=="queued")continue;
   // The advertiser changed and this ad is no longer on the page.
-  if(!mediaNodes(id).length){mediaState.delete(id);continue}
+  if(!mediaNodes(id).length&&!document.querySelector('[data-thumb="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]')){mediaState.delete(id);continue}
   st.status="loading";st.started=Date.now();mediaActive++;paintMedia(id);
   (async()=>{
    let data;
@@ -765,6 +765,8 @@ function themeWordings(t){
  for(const g of groups)g.ads.sort((x,y)=>(y.start||"").localeCompare(x.start||""));
  return groups.sort((x,y)=>y.ads.length-x.ads.length||(y.last||"").localeCompare(x.last||""));
 }
+// The ad shown for a wording: prefer one whose creative is already cached.
+const repAd=g=>g.ads.find(a=>mediaCache.has(a.id))||g.ads[0];
 // Kept for the CSV/text export: one representative ad per distinct wording.
 function themeExamples(t){return themeWordings(t).map(g=>g.ads[0])}
 // Compare launch periods only when the evidence supports it.
@@ -862,7 +864,7 @@ function messagingView(){
  const glance='<div class="mx-glance" role="group" aria-label="Leading message by category">'+[...messageCategories].map(c=>{
   const top=themes.find(x=>x.category===c.id);
   if(!top)return '<div class="gl gl-none"><p class="gl-cat"><i style="background:'+catColor[c.id]+'"></i>'+esc(c.label)+'</p><p class="gl-name">None detected</p><p class="gl-sub">An angle no loaded ad uses</p></div>';
-  const rep=themeWordings(top)[0]?.ads[0];
+  const w0=themeWordings(top)[0],rep=w0&&repAd(w0);
   return '<button type="button" class="gl'+(top.id===state.theme?' on':'')+'" data-theme="'+top.id+'" style="--c:'+catColor[c.id]+'">'+(rep?thumbHTML(rep.id,"gl-th"):'')+'<span class="gl-body"><span class="gl-cat"><i></i>'+esc(c.label)+'</span><span class="gl-name">'+esc(top.label)+'</span><span class="gl-pct"><b>'+pctOf(top.ads.length,total)+'%</b> of ads</span></span></button>';
  }).join("")+'</div>';
  if(!list.length)return '<div class="msg-wrap">'+head+glance+'<div class="mx-empty"><h3>Nothing in this view</h3><p>Switch the filter above to see the other themes.</p></div></div>';
@@ -870,7 +872,7 @@ function messagingView(){
  let items="";
  list.forEach((x,i)=>{
   const pct=pctOf(x.ads.length,total),on=x.id===t.id,cat=messageCategories.find(c=>c.id===x.category);
-  const reps=themeWordings(x).slice(0,3).map(g=>g.ads[0].id);
+  const reps=themeWordings(x).slice(0,3).map(g=>repAd(g).id);
   items+='<button type="button" class="mx-item'+(on?' on':'')+'" data-theme="'+x.id+'" aria-pressed="'+on+'" aria-controls="mxDetail" style="grid-row:'+(i+1)+';--c:'+catColor[x.category]+'"><span class="mx-rank">'+(i+1)+'</span><span class="mx-name">'+esc(x.label)+'<small><i></i>'+esc(cat?.label||"")+'</small></span><span class="mx-stack">'+reps.map(id=>thumbHTML(id,"st")).join("")+'</span><span class="mx-num"><b>'+pct+'%</b><small>'+x.ads.length+' of '+total+'</small></span><span class="mx-track" aria-hidden="true"><i style="width:'+Math.max(2,pct)+'%"></i></span></button>';
   if(on)items+=detailPanel(x,ads,list.length);
  });
@@ -880,7 +882,7 @@ function detailPanel(t,ads,rows){
  const total=ads.length,w=themeWordings(t),cat=messageCategories.find(c=>c.id===t.category),f=briefFields(t),pc=periodComparison(t,ads);
  const ds=t.ads.map(daysRunning).filter(d=>d!=null),med=median(ds);
  const showAll=state.msgAllExamples===t.id,shown=showAll?w:w.slice(0,3);
- const ex=shown.map(g=>{const a=g.ads[0],when=g.first?(g.first===g.last||!g.last?formatDate(g.first):formatDate(g.first)+" – "+formatDate(g.last)):"Launch date not available";
+ const ex=shown.map(g=>{const a=repAd(g),when=g.first?(g.first===g.last||!g.last?formatDate(g.first):formatDate(g.first)+" – "+formatDate(g.last)):"Launch date not available";
   return '<li class="ev"><button type="button" class="ev-media" data-action="detail" data-id="'+esc(a.id)+'" aria-label="View ad">'+thumbHTML(a.id,"big",true)+(g.ads.length>1?'<span class="ev-count">×'+g.ads.length+'</span>':'')+'</button><div class="ev-body"><blockquote>“'+highlight(g.sentence,t.match)+'”</blockquote><p class="ev-meta">'+esc(when)+(g.ads.length>1?' · used in '+g.ads.length+' ads':'')+'</p><p class="ev-links"><button type="button" class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button><a href="'+esc(metaUrl(a.id))+'" target="_blank" rel="noopener">Ad Library ↗</a></p></div></li>'}).join("");
  let timing;
  if(!pc.enough)timing='Not enough dated ads to compare periods: '+pc.recent+' launched in the last '+RECENT_DAYS+' days and '+pc.earlier+' earlier (at least '+MIN_PERIOD+' in each and '+MIN_MATCHES+' matching ads are needed).';
