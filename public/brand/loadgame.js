@@ -9,6 +9,9 @@
   const BEST_KEY = "adsnoop-dash-best";
   let host, canvas, ctx, hud, hint, raf = 0, last = 0, running = false, w = 0, h = 0, dpr = 1;
   let pct = 0, shown = 0, target = 0, played = false, score = 0, best = 0, dizzy = 0, finished = false;
+  // Mood: each hit makes the eyes more unimpressed; clean clears cheer them up.
+  let mood = 0, streak = 0, bubble = null;
+  const MOODS = ["😀", "😐", "😒", "🙄"], QUIPS = ["ugh", "seriously?", "not another pop-up", "oh great", "really?", "meh", "I’ll pass", "spare me"];
   let hurdles = [], confetti = [], sparks = [], floaters = [], nextHurdle = 0, t = 0;
   const eyes = { y: 0, vy: 0, grounded: true, squash: 0 };
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -131,16 +134,47 @@
     ctx.save(); ctx.translate(x, y - 4); ctx.scale(sx * 1.25, sy * 1.25);
     for (const dx of [-10, 10]) {
       ctx.fillStyle = "#fff"; ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2.6;
-      ctx.beginPath(); ctx.arc(dx, 0, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(dx, 0, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.beginPath(); ctx.arc(dx, 0, 8, 0, Math.PI * 2); ctx.clip();
+      if (mood >= 3) { ctx.strokeStyle = "rgba(232,64,90,.75)"; ctx.lineWidth = 0.8; for (const a of [0.4, 2.6, 3.6, 5.6]) { ctx.beginPath(); ctx.moveTo(dx + Math.cos(a) * 8, Math.sin(a) * 8); ctx.lineTo(dx + Math.cos(a) * 4.5, Math.sin(a) * 4.5 + 1); ctx.stroke(); } }
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(dx, 0, 9, 0, Math.PI * 2); ctx.stroke();
       if (dizzy > 0) {
         ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(dx - 4, -4); ctx.lineTo(dx + 4, 4); ctx.moveTo(dx + 4, -4); ctx.lineTo(dx - 4, 4); ctx.stroke();
       } else {
-        const look = finished ? 0 : 3, up = eyes.grounded ? 0 : -2.5;
+        // Eye-roll at peak annoyance, otherwise look ahead.
+        const roll = mood >= 3 && (t / 1400) % 1 < 0.45;
+        const look = finished ? 0 : roll ? -1 : 3, up = roll ? -4.5 : eyes.grounded ? (mood >= 2 ? 1.5 : 0) : -2.5;
         ctx.fillStyle = "#0b1734"; ctx.beginPath(); ctx.arc(dx + look, up, 4.2, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(dx + look + 1.4, up - 1.4, 1.2, 0, Math.PI * 2); ctx.fill();
       }
+      // Heavy upper lids, lower the more unimpressed they are.
+      const lid = finished ? 0 : [0, 0.32, 0.5, 0.58][mood];
+      if (lid > 0) {
+        ctx.save(); ctx.beginPath(); ctx.arc(dx, 0, 8.4, 0, Math.PI * 2); ctx.clip();
+        ctx.fillStyle = "#cfd3e6"; ctx.fillRect(dx - 10, -10, 20, 18 * lid);
+        ctx.restore();
+        ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2.2; ctx.beginPath();
+        const ly = -9 + 18 * lid, half = Math.sqrt(Math.max(0, 81 - ly * ly));
+        ctx.moveTo(dx - half, ly); ctx.lineTo(dx + half, ly); ctx.stroke();
+      }
+      // Flat, then cross eyebrows.
+      if (mood >= 2 && !finished) {
+        ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2.4; ctx.lineCap = "round";
+        const tilt = mood >= 3 ? 3 : 0.8, inner = dx < 0 ? 1 : -1;
+        ctx.beginPath(); ctx.moveTo(dx - 7, -13 - (inner < 0 ? tilt : 0)); ctx.lineTo(dx + 7, -13 - (inner > 0 ? tilt : 0)); ctx.stroke();
+      }
     }
     ctx.restore();
+    if (bubble && bubble.life > 0) {
+      bubble.life -= 0.02;
+      ctx.save(); ctx.globalAlpha = Math.min(1, bubble.life * 2.5);
+      ctx.font = "600 11px -apple-system,Inter,sans-serif"; const tw = ctx.measureText(bubble.text).width + 14, bx = Math.min(w - tw - 6, x + 14), by = y - 46 - (1 - bubble.life) * 6;
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgba(11,23,52,.15)"; ctx.lineWidth = 1; roundRect(bx, by, tw, 20, 10); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx + 8, by + 20); ctx.lineTo(bx + 4, by + 26); ctx.lineTo(bx + 14, by + 20); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#0b1734"; ctx.textAlign = "left"; ctx.fillText(bubble.text, bx + 7, by + 14);
+      ctx.restore();
+    }
   }
 
   function drawConfetti(dt) {
@@ -169,8 +203,8 @@
       // Demo mode: the eyes hop on their own until someone plays.
       if (!played && !o.hit && o.x - rx < 58 && o.x - rx > 26) jump();
       const overlapX = o.x < rx + 20 && o.x + o.w > rx - 20, top = ground() - o.h;
-      if (!o.hit && overlapX && ground() - 2 + eyes.y > top) { o.hit = true; dizzy = 650; }
-      if (!o.scored && !o.hit && o.x + o.w < rx - 20) { o.scored = true; if (played) { score++; if (score > best) { best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch {} } paintHud(); } }
+      if (!o.hit && overlapX && ground() - 2 + eyes.y > top) { o.hit = true; dizzy = 450; streak = 0; mood = Math.min(3, mood + 1); bubble = { text: QUIPS[(Math.random() * QUIPS.length) | 0], life: 1 }; paintHud(); }
+      if (!o.scored && !o.hit && o.x + o.w < rx - 20) { o.scored = true; if (++streak >= 3 && mood > 0) { mood--; streak = 0; paintHud(); } if (played) { score++; if (score > best) { best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch {} } paintHud(); } }
     }
     hurdles = hurdles.filter(o => o.x > -40);
     // Draw
@@ -181,7 +215,7 @@
 
   function paintHud() {
     if (!hud) return;
-    hud.textContent = played ? "Hurdles cleared " + score + (best ? " · Best " + best : "") : "";
+    hud.textContent = played ? MOODS[mood] + "  Hurdles cleared " + score + (best ? " · Best " + best : "") : "";
     if (hint) hint.textContent = played ? "" : "Tap the track or press space to play while you wait";
   }
 
@@ -211,7 +245,7 @@
       if (running) return;
       host.hidden = false; size(); seedFloaters();
       running = true; finished = false; last = 0; t = 0; nextHurdle = 600; hurdles = []; confetti = [];
-      shown = target; score = 0; played = false; dizzy = 0; eyes.y = 0; eyes.vy = 0; eyes.grounded = true;
+      shown = target; score = 0; played = false; dizzy = 0; mood = 0; streak = 0; bubble = null; eyes.y = 0; eyes.vy = 0; eyes.grounded = true;
       paintHud(); raf = requestAnimationFrame(frame);
     },
     progress(p) { target = Math.max(0, Math.min(1, p)); },
