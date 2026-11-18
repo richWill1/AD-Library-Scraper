@@ -817,12 +817,13 @@ function fillThumb(node,id){
  const c=mediaCache.get(id),st=mediaState.get(id);
  if(c&&c.items&&c.items.length){
   if(node.dataset.done==="1")return;
-  const img=c.items.find(i=>i.kind==="image"),vid=c.items.find(i=>i.kind==="video");
-  const src=img?.url||vid?.poster||"";
-  if(!src){node.classList.add("none");node.dataset.done="1";return}
-  node.innerHTML='<img alt="" loading="lazy" referrerpolicy="no-referrer" src="'+esc(src)+'">'+(!img&&vid?'<b class="th-play">▶</b>':'');
+  const img=c.items.find(i=>i.kind==="image"),vid=c.items.find(i=>i.kind==="video"),poster=c.items.find(i=>i.poster)?.poster;
+  const src=img?.url||poster||"";
+  if(!src&&!vid){node.classList.add("none");node.dataset.done="1";return}
+  // No still image at all: show the video's first frame.
+  node.innerHTML=(src?'<img alt="" loading="lazy" referrerpolicy="no-referrer" src="'+esc(src)+'">':'<video muted playsinline preload="metadata" src="'+esc(vid.url)+'#t=0.5"></video>')+(!img&&vid?'<b class="th-play">▶</b>':'');
   node.dataset.done="1";node.classList.add("ok");
-  const im=node.querySelector("img");im.onerror=()=>{node.classList.remove("ok");node.classList.add("none");im.remove()};
+  const im=node.querySelector("img");if(im)im.onerror=()=>{node.classList.remove("ok");node.classList.add("none");im.remove()};
  }else if(st&&st.status==="failed")node.classList.add("none");
 }
 function paintThumbs(id){for(const n of document.querySelectorAll('[data-thumb="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]'))fillThumb(n,id)}
