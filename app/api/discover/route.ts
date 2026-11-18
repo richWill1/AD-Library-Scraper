@@ -11,13 +11,13 @@ export const runtime = 'nodejs';
 // for those brands improve too. Results are shared and cached.
 const ORIGIN = process.env.ADS_ORIGIN || 'https://ad-library-scraper-94t0.onrender.com';
 const MAIN_SERVICE = 'srv-db3ufoad0e5s73f5dudg';
-const TTL = 6 * 3600 * 1000, PAGES = 25, LIMIT = 100;
+const TTL = 6 * 3600 * 1000, PAGES = 15, LIMIT = 100;
 type Advertiser = {id: string; name: string; ads: number; reach: number; latest: string};
 type Row = {id: string; page_id: string; page_name: string; reach: number; start: string; text: string};
 // Every word of the search must appear as a whole word (so "blinds" doesn't match "blind").
 const wordsOf = (q: string) => q.toLowerCase().split(/\s+/).filter(Boolean).map(w => new RegExp('(^|[^a-z0-9])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])', 'i'));
 const mentions = (text: string, res: RegExp[]) => res.every(re => re.test(text));
-type Result = {q: string; advertisers: Advertiser[]; scanned: number; more: boolean; updatedAt: string};
+type Result = {q: string; advertisers: Advertiser[]; scanned: number; more: boolean; updatedAt: string; related?: string[]};
 const cache = new Map<string, {at: number; data: Result}>();
 const inflight = new Map<string, Promise<Result>>();
 const rates = new Map<string, {at: number; count: number}>();
@@ -28,6 +28,29 @@ const ukReach = (a: {total_reach_by_location?: {key?: string; location?: string;
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 };
 
+// Phrases advertisers actually use with a broad word ("mobility" -> "mobility scooter"),
+// offered as ways to narrow the search.
+const STOP = new Set('the and for with your our you are all new now get from this that its it’s their more best up out off any of to in on at by a an is be as or our’s'.split(' '));
+function relatedPhrases(rows: Row[], q: string) {
+  const term = q.toLowerCase().trim();
+  if (term.includes(' ') || term.length < 3) return [];
+  const counts = new Map<string, Set<string>>(), forms = new Map<string, Map<string, number>>();
+  const re = new RegExp('(?:([a-z][a-z-]{2,})\\s+)?' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\s+([a-z][a-z-]{2,}))?', 'gi');
+  for (const r of rows) {
+    for (const m of `${r.text}`.toLowerCase().matchAll(re)) {
+      for (const phrase of [m[1] && !STOP.has(m[1]) ? `${m[1]} ${term}` : '', m[2] && !STOP.has(m[2]) ? `${term} ${m[2]}` : '']) {
+        if (!phrase) continue;
+        // Group "scooter" and "scooters", then show the form advertisers use most.
+        const key = phrase.replace(/s$/, '');
+        const set = counts.get(key) || new Set<string>(); set.add(r.page_id); counts.set(key, set);
+        const f = forms.get(key) || new Map<string, number>(); f.set(phrase, (f.get(phrase) || 0) + 1); forms.set(key, f);
+      }
+    }
+  }
+  // Used by several different advertisers, most widely used first.
+  return [...counts.entries()].filter(([, v]) => v.size >= 3).sort((a, b) => b[1].size - a[1].size).slice(0, 6)
+    .map(([k]) => [...(forms.get(k) || new Map<string, number>([[k, 1]])).entries()].sort((a, b) => b[1] - a[1])[0][0]);
+}
 function rank(rows: Row[], q: string, more: boolean): Result {
   const byPage = new Map<string, Advertiser>(), res = wordsOf(q), named = new Set<string>();
   for (const r of rows) {
@@ -42,7 +65,7 @@ function rank(rows: Row[], q: string, more: boolean): Result {
   }
   // A single passing mention isn't an advertiser in the category, unless it's in their name.
   const advertisers = [...byPage.values()].filter(a => named.has(a.id) || a.ads >= 2).sort((a, b) => b.reach - a.reach || b.ads - a.ads).slice(0, 36);
-  return {q, advertisers, scanned: rows.length, more, updatedAt: new Date().toISOString()};
+  return {q, advertisers, scanned: rows.length, more, updatedAt: new Date().toISOString(), related: relatedPhrases(rows.filter(r => mentions(r.text, res)), q)};
 }
 
 async function buildWithToken(q: string, token: string, pages = PAGES): Promise<Result> {

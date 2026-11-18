@@ -92,7 +92,7 @@ async function discoverAdvertisers(q,rid,fallback,open,extra=[]){
  const pickOne=exact.length===1?exact[0]:!exact.length&&named.length===1?named[0]:null;
  if(pickOne){open({id:pickOne.id,name:pickOne.name,adCount:pickOne.ads});return}
  if(!list.length){state.pick=fallback;renderCards();return}
- state.pick={q,kind:"category",items:list.slice(0,24).concat(extra.slice(0,2)),scanned:d.scanned||0,more:!!d.more};
+ state.pick={q,kind:"category",items:list.slice(0,24).concat(extra.slice(0,2)),scanned:d.scanned||0,more:!!d.more,related:Array.isArray(d.related)?d.related.filter(x=>typeof x==="string").slice(0,6):[]};
  renderCards();
 }
 const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T12:00:00Z":s);return Number.isFinite(d.getTime())?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"Unknown"};
@@ -232,7 +232,8 @@ function pickHTML(){
   if(!/^\d{3,30}$/.test(a.id||"")){const href=a.handle?"https://www.facebook.com/"+encodeURIComponent(a.handle):(a.website||"");return href?'<a class="bcard" style="--i:'+i+'" href="'+esc(href)+'" target="_blank" rel="noopener noreferrer">'+body+'</a>':"";}
   return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(a.id)+'" data-name="'+esc(a.name)+'">'+body+'</button>';
  }).join("");
- return '<div class="start pick"><h3>'+esc(head)+'</h3><p class="pick-sub">'+esc(sub)+'</p>'+(cards?'<div class="start-grid">'+cards+'</div>':'')+'</div>';
+ const related=p.kind==="category"&&p.related&&p.related.length?'<div class="pick-related"><span>Narrow it down:</span>'+p.related.map(r=>'<button type="button" class="chip-q" data-query="'+esc(r)+'">'+esc(r)+'</button>').join("")+'</div>':"";
+ return '<div class="start pick"><h3>'+esc(head)+'</h3><p class="pick-sub">'+esc(sub)+'</p>'+related+(cards?'<div class="start-grid">'+cards+'</div>':'')+'</div>';
 }
 function brandCard(b,i,extra){return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'">'+logoHTML(b.id,b.name,"lg")+'<span><strong>'+esc(b.name)+'</strong><br><small'+(extra?' class="live"':'')+'>'+esc(extra||"Followed brand")+'</small></span><span class="go">Explore ads →</span></button>'}
 function startHTML(){
@@ -1105,7 +1106,7 @@ function renderSuggest(state_){
  box.hidden=false;input.setAttribute("aria-expanded","true");
  const head=state_==="loading"?'<li class="sg-status"><span class="sg-dots"><i></i><i></i><i></i></span>Finding advertisers…</li>':state_==="empty"?'<li class="sg-status">No advertisers found yet. Press Enter to search ads mentioning “'+esc(suggest.term)+'”.</li>':state_==="limited"?'<li class="sg-status">Keep typing, or press Enter to search.</li>':"";
  const firstCat=suggest.items.findIndex(x=>x.source==="category");
- box.innerHTML=head+suggest.items.map((s,i)=>(i===firstCat?'<li class="sg-group" role="presentation">Advertisers running ads about “'+esc(suggest.term)+'”</li>':'')+(s.all?'<li role="option" id="sg-'+i+'" class="sg-item sg-all'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'"><span class="sg-text"><strong>See all advertisers running ads about “'+esc(s.name)+'” →</strong></span></li>':'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'">'+logoHTML(s.id,s.name,"md sg-logo")+'<span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.source==="category"?s.count+" ad"+(s.count===1?"":"s")+" about it"+(s.reach?" · UK reach "+compactNumber(s.reach):""):s.source==="history"?'Searched before':s.source==="known"?'Verified advertiser':s.source==="popular"?'Popular UK advertiser':s.count?s.count+(s.count>=100?"+":"")+" ads seen":"Advertiser directory")+'</small></span><span class="sg-go">↗</span></li>')).join("");
+ box.innerHTML=head+suggest.items.map((s,i)=>(i===firstCat?'<li class="sg-group" role="presentation">Advertisers running ads about “'+esc(suggest.term)+'”</li>':'')+(s.phrase?'<li role="option" id="sg-'+i+'" class="sg-item sg-phrase'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'"><span class="sg-text"><strong>🔍 '+esc(s.name)+'</strong><small>Narrower search</small></span></li>':s.all?'<li role="option" id="sg-'+i+'" class="sg-item sg-all'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'"><span class="sg-text"><strong>See all advertisers running ads about “'+esc(s.name)+'” →</strong></span></li>':'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'">'+logoHTML(s.id,s.name,"md sg-logo")+'<span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.source==="category"?s.count+" ad"+(s.count===1?"":"s")+" about it"+(s.reach?" · UK reach "+compactNumber(s.reach):""):s.source==="history"?'Searched before':s.source==="known"?'Verified advertiser':s.source==="popular"?'Popular UK advertiser':s.count?s.count+(s.count>=100?"+":"")+" ads seen":"Advertiser directory")+'</small></span><span class="sg-go">↗</span></li>')).join("");
  input.setAttribute("aria-activedescendant",suggest.active>=0?"sg-"+suggest.active:"");
 }
 async function fetchSuggestions(term){
@@ -1128,6 +1129,7 @@ async function fetchCategorySuggestions(term){
   if(!r.ok)return [];
   const d=await r.json();
   const list=(Array.isArray(d.advertisers)?d.advertisers:[]).filter(a=>a&&/^\d{3,30}$/.test(a.id)&&typeof a.name==="string").slice(0,8).map(a=>({id:a.id,name:a.name,count:a.ads,reach:a.reach,source:"category"}));
+  list.related=(Array.isArray(d.related)?d.related:[]).filter(x=>typeof x==="string").slice(0,3);
   for(const a of list)rememberPageId(a.name,a.id);
   if(suggest.cache.size>=100)suggest.cache.clear();suggest.cache.set(key,list);
   return list;
@@ -1154,6 +1156,7 @@ function onSearchInput(){
     if($("searchInput").value.trim()!==term)return;
     const have=new Set(suggest.items.map(x=>x.id).filter(Boolean));
     suggest.items=suggest.items.concat(cat.filter(x=>!have.has(x.id)).slice(0,7-suggest.items.length));
+    for(const r of (cat.related||[]))suggest.items.push({phrase:true,name:r,id:""});
     if(cat.length)suggest.items.push({all:true,name:term,id:""});
    }
    renderSuggest(suggest.items.length?"":"empty");
