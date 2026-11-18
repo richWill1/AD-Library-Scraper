@@ -1,7 +1,6 @@
 import {directorySearch, observePage} from '@/lib/advertiser-directory';
-import {discoverTradingName, exactIdentity, safeAlias, type DiscoveryResult} from '@/lib/advertiser-discovery';
+import {discoverTradingName, exactIdentity, resolvePageReference, safeAlias, type DiscoveryResult} from '@/lib/advertiser-discovery';
 import {getMetaCredential} from '@/lib/meta-token-store';
-import {metaFetch} from '@/lib/meta-api';
 import {facebookIdentity, brandQuery, knownAdvertisers} from '@/lib/brand-search';
 import {NextRequest, NextResponse} from 'next/server';
 export const runtime = 'nodejs';
@@ -31,17 +30,14 @@ export async function GET(req: NextRequest) {
     if (saved.length === 1) return reply({advertisers: saved.map(a => ({...a, confidence: 'verified', evidence: 'This handle is already in the advertiser directory.', activeAds: null})), resolved: true, status: 'resolved'});
     try {
       const {token} = await getMetaCredential();
-      if (!token) return reply({advertisers: [], status: 'lookup_failed', code: 'NO_PAGE_TOKEN', message: 'This service has no Meta token for new Facebook handles. Paste the numeric Page ID or a Page-specific Ad Library link.'});
-      const response = await metaFetch('https://graph.facebook.com/v26.0/' + encodeURIComponent(handle) + '?fields=id,name,category', {
-        headers: {Authorization: 'Bearer ' + token}, redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(8000)});
-      const body = await response.json();
-      if (response.ok && /^\d{1,30}$/.test(body.id) && clean(body.name, 120)) {
-        observePage(body.id, body.name, [], handle, body.category);
-        return reply({advertisers: [{id: body.id, name: body.name, handle, category: clean(body.category, 60), evidence: 'Meta resolved this Facebook handle.', confidence: 'verified', activeAds: null}], resolved: true, status: 'resolved'});
+      if (!token) return reply({advertisers: [{name: handle, handle, evidence: 'Facebook Page found. It needs Page Public Metadata Access before its numeric Page ID can be resolved.'}], status: 'choose', resolved: false, code: 'NO_PAGE_TOKEN', message: 'Facebook Page found. It needs Page Public Metadata Access before its numeric Page ID can be resolved.'});
+      const hit = await resolvePageReference({handle}, token);
+      if (hit.status === 'resolved' && clean(hit.name, 120)) {
+        observePage(hit.id, hit.name, [], handle, hit.category);
+        return reply({advertisers: [{id: hit.id, name: hit.name, handle, category: clean(hit.category, 60), picture: `https://graph.facebook.com/${hit.id}/picture?type=square&width=128&height=128`, evidence: 'Meta resolved this Facebook handle.', confidence: 'verified', activeAds: null}], resolved: true, status: 'resolved', source: 'graph-page-metadata'});
       }
-      const permission = [10, 200].includes(body.error?.code) || /Page Public (Metadata|Content) Access/i.test(body.error?.message || '');
-      const message = permission ? 'Meta denied access to public Page metadata. AdSnoop needs Page Public Metadata Access or Page Public Content Access. Paste the numeric Page ID or a Page-specific Ad Library link.' : body.error?.code === 100 ? 'Meta could not find or access that Page. Check the handle or paste a Page-specific Ad Library link containing view_all_page_id.' : 'Meta could not resolve this Page right now. Try again or paste its numeric Page ID.';
-      return reply({advertisers: [], status: 'lookup_failed', code: permission ? 'PAGE_METADATA_PERMISSION' : 'HANDLE_UNRESOLVED', message});
+      if (hit.status === 'denied' || hit.status === 'unavailable') return reply({advertisers: [{name: handle, handle, evidence: 'Facebook Page found. It needs Page Public Metadata Access before its numeric Page ID can be resolved.'}], status: 'choose', resolved: false, code: 'PAGE_METADATA_PERMISSION', message: 'Facebook Page found. It needs Page Public Metadata Access before its numeric Page ID can be resolved.'});
+      return reply({advertisers: [], status: 'not_found', code: 'HANDLE_UNRESOLVED', message: 'Meta could not find that Facebook handle. Check the spelling or paste a Page-specific Ad Library link.'});
     } catch { return reply({advertisers: [], status: 'lookup_failed', message: 'Page lookup is unavailable. Try again or paste the numeric Facebook Page ID.'}); }
   }
   let term: string;

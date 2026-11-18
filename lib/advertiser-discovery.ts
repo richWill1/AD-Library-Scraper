@@ -14,6 +14,10 @@ export type FoundAdvertiser = {
   confidence: 'verified' | 'probable';
   activeAds: boolean | null;
   adCount?: number;
+  /** Same public profile picture known brands use. */
+  picture?: string;
+  /** Brand-site mark used when the profile picture cannot be shown. */
+  logo?: string;
 };
 export type DiscoveryResult = {
   status: 'resolved' | 'choose' | 'not_found' | 'lookup_failed';
@@ -26,7 +30,7 @@ export type DiscoveryResult = {
 };
 type PageRef = {id?: string; handle?: string};
 type AdPage = {id: string; name: string; adCount: number; ownDomain: boolean};
-type SiteHit = {host: string; names: string[]; category?: string; pages: PageRef[]; domainConfirmed: boolean};
+type SiteHit = {host: string; names: string[]; category?: string; pages: PageRef[]; domainConfirmed: boolean; image?: string};
 type DirectoryPage = {id: string; name: string; alias?: string; category?: string};
 
 const DROP = new Set(['uk', 'ltd', 'limited', 'plc', 'inc', 'llp', 'co', 'official', 'online', 'gb']);
@@ -34,7 +38,43 @@ const REJECT_PATH = new Set(['sharer', 'share', 'share.php', 'dialog', 'plugins'
 const MULTI = ['co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'co.nz', 'co.za', 'com.br', 'co.jp', 'co.in', 'com.sg'];
 const ADS_BACKEND = 'https://ad-library-scraper-94t0.onrender.com';
 const MAX_HTML = 1_600_000;
-let pageSearchBlockedUntil = 0;
+const metadataDeniedUntil = new Map<string, number>();
+function tokenKey(token: string) {
+  let hash = 0;
+  for (let i = 0; i < token.length; i++) hash = Math.imul(hash, 31) + token.charCodeAt(i) | 0;
+  return String(hash);
+}
+function metadataDenied(body: {error?: {code?: number; message?: string}}) {
+  return [10, 200].includes(body?.error?.code || 0) || /Page Public (Metadata|Content) Access/i.test(body?.error?.message || '');
+}
+export type PageReference = {status: 'resolved'; id: string; name: string; handle?: string; category?: string} | {status: 'denied' | 'not_found' | 'unavailable'};
+
+/** Official Graph lookup. It works only when the token has Page Public Metadata Access. */
+export async function resolvePageReference(target: {handle?: string; url?: string}, token: string, request: typeof fetch = fetch): Promise<PageReference> {
+  const handle = (target.handle || '').replace(/^@/, '');
+  const pageUrl = target.url || (handle ? `https://www.facebook.com/${handle}` : '');
+  if (!pageUrl) return {status: 'not_found'};
+  if (!token) return {status: 'unavailable'};
+  const key = tokenKey(token);
+  if ((metadataDeniedUntil.get(key) || 0) > Date.now()) return {status: 'denied'};
+  const params = new URLSearchParams({id: pageUrl, fields: 'id,name,username,category,link'});
+  try {
+    const res = await metaFetch(`https://graph.facebook.com/v26.0/?${params}`, {headers: {Authorization: 'Bearer ' + token}, signal: AbortSignal.timeout(8000), cache: 'no-store'}, request);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.error) {
+      if (metadataDenied(body)) { metadataDeniedUntil.set(key, Date.now() + 6 * 3600 * 1000); return {status: 'denied'}; }
+      return body.error?.code === 100 || res.status === 404 ? {status: 'not_found'} : {status: 'unavailable'};
+    }
+    const id = String(body.id || '');
+    const username = String(body.username || '');
+    let linkHandle = '';
+    try { linkHandle = new URL(String(body.link || '')).pathname.split('/').filter(Boolean)[0]?.toLowerCase() || ''; } catch { linkHandle = ''; }
+    const asked = handle.toLowerCase();
+    const matches = !asked || username.toLowerCase() === asked || linkHandle === asked;
+    if (!/^\d{3,30}$/.test(id) || typeof body.name !== 'string' || !body.name.trim() || !matches) return {status: 'not_found'};
+    return {status: 'resolved', id, name: body.name.trim(), handle: username || handle, category: typeof body.category === 'string' ? body.category : undefined};
+  } catch { return {status: 'unavailable'}; }
+}
 
 export const compactName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -189,16 +229,52 @@ function siteNames(html: string) {
   return names;
 }
 
+function absoluteBrandUrl(href: string, host: string) {
+  try {
+    const url = new URL(href, `https://${host}/`);
+    if (url.protocol !== 'https:' || url.username || url.password || url.href.length > 500) return '';
+    if (/facebook\.com|fbcdn\.net|instagram\.com|doubleclick|google-analytics|googletagmanager/i.test(url.hostname)) return '';
+    return url.href;
+  } catch { return ''; }
+}
+
+/** A square mark from the brand's own site: icon first, then a social image. */
+export function brandMark(html: string, host: string) {
+  const icons: {url: string; score: number}[] = [];
+  for (const tag of html.matchAll(/<link\b[^>]*>/gi)) {
+    const el = tag[0];
+    if (!/rel=["'][^"']*(?:apple-touch-icon|icon)[^"']*["']/i.test(el) || /mask-icon|preload/i.test(el)) continue;
+    const href = el.match(/href=["']([^"']+)["']/i);
+    const url = href && absoluteBrandUrl(href[1], host);
+    if (!url) continue;
+    const sizes = el.match(/sizes=["'](\d+)/i);
+    const score = /apple-touch-icon/i.test(el) ? 300 : sizes ? Number(sizes[1]) : 16;
+    icons.push({url, score});
+  }
+  icons.sort((a, b) => b.score - a.score);
+  if (icons[0]) return icons[0].url;
+  for (const tag of html.matchAll(/<meta\b[^>]*>/gi)) {
+    if (!/property=["']og:image(?::url)?["']/i.test(tag[0])) continue;
+    const content = tag[0].match(/content=["']([^"']+)["']/i);
+    const url = content && absoluteBrandUrl(content[1], host);
+    if (url) return url;
+  }
+  return undefined;
+}
+
 export function readOfficialSite(html: string, finalHost: string, requestedHost: string, query: string): SiteHit | null {
-  const slugs = slugForms(query).map(s => s.replace(/-/g, ''));
+  const slugs = slugForms(query).map(s => s.replace(/-/g, '')).filter(s => s.length >= 4);
   const label = hostLabel(finalHost);
   const requested = hostLabel(requestedHost);
-  const domainConfirmed = slugs.some(s => s === label) || label === requested;
+  const domainConfirmed = slugs.some(s => s === label) || (!!label && label === requested);
   // A redirect onto a different registrable name is a different organisation.
   if (!domainConfirmed || !publicHost(finalHost)) return null;
   const names = siteNames(html);
-  const matched = names.filter(n => nameMatch(query, n) !== 'none');
-  if (!matched.length) return null;
+  const blob = names.map(compactName).join(' ');
+  // The host was derived from the trading name. A title that contains that name is enough;
+  // the page does not also have to publish a Facebook link.
+  const named = names.some(n => nameMatch(query, n) !== 'none') || slugs.some(s => blob.includes(s));
+  if (!named) return null;
   const parsed: PageRef[] = [];
   const seen = new Set<string>();
   for (const u of facebookUrls(html)) {
@@ -211,13 +287,11 @@ export function readOfficialSite(html: string, finalHost: string, requestedHost:
   }
   const brand = names.slice().sort((a, b) => a.length - b.length)[0] || '';
   const fits = (page: PageRef) => !!page.id || (!!page.handle && (nameMatch(query, page.handle) !== 'none' || attachHandle(page.handle, query) || attachHandle(page.handle, brand)));
-  // Keep the site's own Page links. An unrelated handle is kept only when it is the only link,
-  // and the caller will not treat that lone mismatch as verified.
   const fitting = parsed.filter(fits);
   const pages = (fitting.length ? fitting : parsed.slice(0, 1)).slice(0, 4);
-  if (!pages.length) return null;
-  const category = names.find(n => nameMatch(query, n) === 'none');
-  return {host: finalHost.replace(/^www\./, ''), names: matched, category: category?.slice(0, 80), pages, domainConfirmed: true};
+  const category = names.find(n => nameMatch(query, n) === 'none' && !slugs.some(s => compactName(n).includes(s)));
+  const matched = names.filter(n => nameMatch(query, n) !== 'none' || slugs.some(s => compactName(n).includes(s)));
+  return {host: finalHost.replace(/^www\./, ''), names: matched.length ? matched : names.slice(0, 1), category: category?.slice(0, 80), pages, domainConfirmed: true, image: brandMark(html, finalHost)};
 }
 
 function humanize(handle?: string) {
@@ -252,6 +326,7 @@ type Draft = {
   ownDomain: boolean;
   domainConfirmed: boolean;
   linkFits: boolean;
+  image?: string;
   bits: string[];
 };
 
@@ -268,7 +343,7 @@ export function decide(query: string, input: {
   const upsert = (id: string, patch: Partial<Draft> & {name: string}) => {
     const cur = drafts.get(id);
     if (!cur) {
-      drafts.set(id, {id, name: patch.name, level: patch.level || 'site', adCount: patch.adCount ?? null, ownDomain: !!patch.ownDomain, domainConfirmed: !!patch.domainConfirmed, linkFits: patch.linkFits !== false, bits: patch.bits || [], handle: patch.handle, website: patch.website, category: patch.category});
+      drafts.set(id, {id, name: patch.name, level: patch.level || 'site', adCount: patch.adCount ?? null, ownDomain: !!patch.ownDomain, domainConfirmed: !!patch.domainConfirmed, linkFits: patch.linkFits !== false, bits: patch.bits || [], handle: patch.handle, website: patch.website, category: patch.category, image: patch.image});
       return;
     }
     if (patch.level === 'exact' || (patch.level === 'variant' && cur.level === 'site')) { cur.level = patch.level; if (patch.name) cur.name = patch.name; }
@@ -279,6 +354,7 @@ export function decide(query: string, input: {
     if (patch.handle && !cur.handle) cur.handle = patch.handle;
     if (patch.website && !cur.website) cur.website = patch.website;
     if (patch.category && !cur.category) cur.category = patch.category;
+    if (patch.image && !cur.image) cur.image = patch.image;
     for (const b of patch.bits || []) if (!cur.bits.includes(b)) cur.bits.push(b);
   };
   for (const ad of input.ads) {
@@ -307,8 +383,24 @@ export function decide(query: string, input: {
         const handle = page.handle;
         const target = [...drafts.values()].find(d => d.handle === handle || attachHandle(handle, d.name));
         if (target) { target.handle = target.handle || handle; target.website = target.website || website; target.domainConfirmed = true; target.linkFits = target.linkFits && fits; target.category = target.category || site.category; if (!target.bits.includes(label)) target.bits.push(label); }
-        else drafts.set('h:' + page.handle, {id: '', name: brand, handle: page.handle, website, category: site.category, level: 'site', adCount: null, ownDomain: false, domainConfirmed: true, linkFits: fits, bits: [label, 'numeric Page ID was not published on the link']});
+        else drafts.set('h:' + page.handle, {id: '', name: brand, handle: page.handle, website, category: site.category, image: site.image, level: 'site', adCount: null, ownDomain: false, domainConfirmed: true, linkFits: fits, bits: [label, 'numeric Page ID was not published on the link']});
       }
+    }
+  }
+  // A confirmed brand domain still describes the Page when the site does not link Facebook.
+  // Attach it only to the Page whose name owns that domain, never to a different namesake.
+  const identifiable = [...drafts.values()].filter(d => d.id || d.handle);
+  for (const site of input.sites) {
+    const website = `https://${site.host}/`;
+    const linked = new Set(site.pages.map(p => p.id).filter((id): id is string => !!id));
+    for (const draft of identifiable) {
+      const nameSlug = slugForms(draft.name).find(s => !s.includes('-')) || '';
+      const ownsDomain = !linked.size && hostLabel(site.host) === nameSlug && identifiable.filter(d => (slugForms(d.name).find(s => !s.includes('-')) || '') === nameSlug).length === 1;
+      if (!(draft.id && linked.has(draft.id)) && !ownsDomain) continue;
+      if (!draft.website) draft.website = website;
+      if (!draft.category && site.category) draft.category = site.category;
+      if (!draft.image && site.image) draft.image = site.image;
+      if (site.category && !draft.bits.includes(site.category)) draft.bits.push(site.category);
     }
   }
   const advertisers: FoundAdvertiser[] = [...drafts.values()].filter(d => d.id || d.handle).map(d => {
@@ -317,7 +409,8 @@ export function decide(query: string, input: {
     const confidence: FoundAdvertiser['confidence'] = d.linkFits && (d.level === 'exact' || d.domainConfirmed || (d.level === 'variant' && d.ownDomain)) ? 'verified' : 'probable';
     const adsBit = d.adCount == null ? '' : d.adCount > 0 ? `${d.adCount} active UK ads in the first results` : '';
     const evidence = [...d.bits, d.handle ? `@${d.handle}` : '', d.category && !d.bits.includes(d.category) ? d.category : '', adsBit].filter(Boolean).join(' · ').slice(0, 280);
-    return {id: d.id, name: d.name, handle: d.handle, website: d.website, category: d.category?.slice(0, 60), evidence, confidence, activeAds: d.adCount == null ? null : d.adCount > 0, adCount: d.adCount ?? undefined};
+    const picture = /^\d{3,30}$/.test(d.id) ? `https://graph.facebook.com/${d.id}/picture?type=square&width=128&height=128` : undefined;
+    return {id: d.id, name: d.name, handle: d.handle, website: d.website, category: d.category?.slice(0, 60), picture, logo: d.image, evidence, confidence, activeAds: d.adCount == null ? null : d.adCount > 0, adCount: d.adCount ?? undefined};
   }).sort((a, b) => Number(b.confidence === 'verified') - Number(a.confidence === 'verified') || Number(b.activeAds === true) - Number(a.activeAds === true) || a.name.localeCompare(b.name));
   const pool = advertisers.filter(a => a.id || a.handle);
   const sources = [input.sites.length ? 'official-website' : '', input.ads.length ? 'ad-library' : '', (input.directory || []).length ? 'directory' : ''].filter(Boolean);
@@ -331,7 +424,7 @@ export function decide(query: string, input: {
   if (verified.length === 1 && pool.length === 1) return {status: 'resolved', resolved: true, advertisers: verified, message: '', source};
   const only = pool.length === 1;
   const noId = only && !pool[0].id;
-  return {status: 'choose', resolved: false, advertisers: pool.slice(0, 8), message: noId ? 'The brand’s website links to a Facebook Page, but its numeric Page ID was not published and Meta will not resolve the handle without Page Public Metadata Access. Open the Page link, or paste a Page ID.' : only ? 'One possible Page matches, but the name is not exact enough to open on its own. Confirm it is the right business.' : 'More than one Facebook Page matches this name. Choose the business you mean.', source};
+  return {status: 'choose', resolved: false, advertisers: pool.slice(0, 8), code: noId ? 'PAGE_METADATA_PERMISSION' : undefined, message: noId ? 'Facebook Page found. It needs Page Public Metadata Access before its numeric Page ID can be resolved.' : only ? 'One possible Page matches, but the name is not exact enough to open on its own. Confirm it is the right business.' : 'More than one Facebook Page matches this name. Choose the business you mean.', source};
 }
 
 export function exactIdentity(query: string, directory: DirectoryPage[] = []): FoundAdvertiser | null {
@@ -344,11 +437,11 @@ export function exactIdentity(query: string, directory: DirectoryPage[] = []): F
   for (const known of knownAdvertisers) {
     if ([known.pageName, known.handle || '', ...known.aliases].some(a => a && keys.has(compactName(a)))) {
       const site = known.aliases.find(a => /\.[a-z]{2,}$/i.test(a));
-      hits.set(known.pageId, {id: known.pageId, name: known.pageName, handle: known.handle, website: site ? `https://${site.replace(/^https?:\/\//, '')}/` : undefined, evidence: 'Matched a verified Page name already on file.', confidence: 'verified', activeAds: null});
+      hits.set(known.pageId, {id: known.pageId, name: known.pageName, handle: known.handle, website: site ? `https://${site.replace(/^https?:\/\//, '')}/` : undefined, picture: `https://graph.facebook.com/${known.pageId}/picture?type=square&width=128&height=128`, evidence: 'Matched a verified Page name already on file.', confidence: 'verified', activeAds: null});
     }
   }
   for (const page of directory) {
-    if (keys.has(compactName(page.name)) && !hits.has(page.id)) hits.set(page.id, {id: page.id, name: page.name, category: page.category, evidence: 'This Page name matches the trading name exactly.', confidence: 'verified', activeAds: null});
+    if (keys.has(compactName(page.name)) && !hits.has(page.id)) hits.set(page.id, {id: page.id, name: page.name, category: page.category, picture: `https://graph.facebook.com/${page.id}/picture?type=square&width=128&height=128`, evidence: 'This Page name matches the trading name exactly.', confidence: 'verified', activeAds: null});
   }
   return hits.size === 1 ? [...hits.values()][0] : null;
 }
@@ -456,16 +549,17 @@ function groupAds(rows: AdRow[], slugs: string[]): AdPage[] {
 }
 
 async function searchPages(query: string, token: string, request: typeof fetch): Promise<AdPage[]> {
-  if (!token || Date.now() < pageSearchBlockedUntil) return [];
+  if (!token || (metadataDeniedUntil.get(tokenKey(token)) || 0) > Date.now()) return [];
   const params = new URLSearchParams({q: query.slice(0, 100), fields: 'id,name,link,category,location'});
   try {
     const res = await metaFetch(`https://graph.facebook.com/v26.0/pages/search?${params}`, {headers: {Authorization: `Bearer ${token}`}, signal: AbortSignal.timeout(8000), cache: 'no-store'}, request);
     const body = await res.json().catch(() => ({}));
     if (!res.ok || body.error) {
-      if ([10, 200].includes(body.error?.code) || /Page Public (Metadata|Content) Access/i.test(body.error?.message || '')) pageSearchBlockedUntil = Date.now() + 6 * 3600 * 1000;
+      if (metadataDenied(body)) metadataDeniedUntil.set(tokenKey(token), Date.now() + 6 * 3600 * 1000);
       return [];
     }
-    return (Array.isArray(body.data) ? body.data : []).slice(0, 15).map((p: {id?: string; name?: string}) => ({id: String(p.id || ''), name: String(p.name || ''), adCount: 0, ownDomain: false})).filter((p: AdPage) => /^\d{3,30}$/.test(p.id) && p.name && nameMatch(query, p.name) !== 'none');
+    // An exact Page name from the official search can be used. A partial name stays a choice.
+    return (Array.isArray(body.data) ? body.data : []).slice(0, 15).map((p: {id?: string; name?: string}) => ({id: String(p.id || ''), name: String(p.name || ''), adCount: 0, ownDomain: false})).filter((p: AdPage) => /^\d{3,30}$/.test(p.id) && p.name && nameMatch(query, p.name) === 'exact');
   } catch { return []; }
 }
 
@@ -491,6 +585,15 @@ export async function discoverTradingName(query: string, opts: {token?: string; 
     searchPages(query, token, request),
   ]);
   const sites = siteSettled.filter(s => s.reached && s.html).map(s => readOfficialSite(s.html, s.finalHost, s.host, query)).filter((s): s is SiteHit => !!s);
+  if (token) {
+    const handles = [...new Set(sites.flatMap(s => s.pages.filter(p => p.handle && !p.id).map(p => p.handle!)))].slice(0, 4);
+    const resolved = await Promise.all(handles.map(handle => resolvePageReference({handle}, token, request)));
+    handles.forEach((handle, i) => {
+      const hit = resolved[i];
+      if (hit.status !== 'resolved') return;
+      for (const site of sites) for (const page of site.pages) if (page.handle?.toLowerCase() === handle.toLowerCase() && !page.id) page.id = hit.id;
+    });
+  }
   let adsOk = adSettled.some(r => r.ok) || pageSearch.length > 0;
   let rows = adSettled.flatMap(r => r.rows);
   if (!groupAds(rows, slugs).some(p => nameMatch(query, p.name) !== 'none') && sites.length) {

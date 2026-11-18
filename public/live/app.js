@@ -121,9 +121,13 @@ function groupRows(rows){
 }
 // Advertiser logo = the Facebook Page profile picture, with initials underneath
 // so a missing or slow image never leaves an empty circle.
-function logoHTML(id,name,cls){
+function logoHTML(id,name,cls,picture,fallback){
  const ini=String(name||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
- return '<span class="brandlogo '+(cls||"")+'" aria-hidden="true"><b>'+esc(ini)+'</b>'+(id&&/^\d{1,30}$/.test(id)?'<img alt="" loading="lazy" referrerpolicy="no-referrer" src="https://graph.facebook.com/'+encodeURIComponent(id)+'/picture?type=square&width=128&height=128" onerror="this.remove()">':'')+'</span>';
+ const graph=id&&/^\d{1,30}$/.test(id)?"https://graph.facebook.com/"+encodeURIComponent(id)+"/picture?type=square&width=128&height=128":"";
+ const src=picture||graph;
+ const fb=fallback&&/^https:/.test(fallback)&&fallback!==src?fallback:"";
+ const img=src?'<img alt="" loading="lazy" referrerpolicy="no-referrer" src="'+esc(src)+'"'+(fb?' data-fallback="'+esc(fb)+'" onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;delete this.dataset.fallback}else this.remove()"':' onerror="this.remove()"')+'>':"";
+ return '<span class="brandlogo '+(cls||"")+'" aria-hidden="true"><b>'+esc(ini)+'</b>'+img+'</span>';
 }
 function identityLinks(){
  const id=state.page;if(!/^\d{1,30}$/.test(id||""))return "";
@@ -131,11 +135,12 @@ function identityLinks(){
  const pageUrl="https://www.facebook.com/"+encodeURIComponent(handle||id);
  const lib="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=GB&view_all_page_id="+encodeURIComponent(id);
  let site="";if(state.identity&&state.identity.website){try{const h=new URL(state.identity.website).hostname.replace(/^www\./,"");site=' · <a href="'+esc(state.identity.website)+'" target="_blank" rel="noopener noreferrer">'+esc(h)+'</a>'}catch{}}
- return '<span style="display:block;margin-top:6px;font-size:13px;font-weight:500"><a href="'+esc(pageUrl)+'" target="_blank" rel="noopener noreferrer">Facebook Page</a> · Page ID '+esc(id)+' · <a href="'+esc(lib)+'" target="_blank" rel="noopener noreferrer">Page Ad Library</a>'+site+'</span>';
+ const cat=state.identity&&state.identity.category?' · '+esc(state.identity.category):"";
+ return '<span style="display:block;margin-top:6px;font-size:13px;font-weight:500"><a href="'+esc(pageUrl)+'" target="_blank" rel="noopener noreferrer">Facebook Page</a> · Page ID '+esc(id)+' · <a href="'+esc(lib)+'" target="_blank" rel="noopener noreferrer">Page Ad Library</a>'+site+cat+'</span>';
 }
 function showHeader(){
  {const title=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="compare"?"You vs your competitors.":(state.brand?(state.rows.length||state.loading?state.brand+" — Active ads":state.brand+" — No active UK ads"):"The creative library.");
- $("heading").innerHTML=(state.view!=="saved"&&state.view!=="compare"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg"):"")+'<span>'+esc(title)+'</span>';}
+ $("heading").innerHTML=(state.view!=="saved"&&state.view!=="compare"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg",state.identity&&state.identity.picture,state.identity&&state.identity.logo):"")+'<span>'+esc(title)+'</span>';}
  {let base=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.view==="compare"?"Your brand side by side with up to 5 pinned competitors, from their live UK ads.":state.adsFailed&&state.page?"The Page was identified, but Meta’s ad lookup failed. This does not mean there are zero ads.":state.loading&&state.brand?"Loading active UK ads…":state.brand&&state.page&&!state.rows.length?"Page found. Meta returned no active ads for this Page in the selected countries.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
   if(state.view==="discover"&&state.identity&&state.identity.evidence&&!state.loading&&!state.adsFailed)base=state.identity.evidence+(state.page&&!state.rows.length?" Page found, no active UK ads.":"");
   const links=state.view==="discover"?identityLinks():"";
@@ -204,7 +209,7 @@ function pickHTML(){
   const ads=a.activeAds===false?"No active UK ads":a.activeAds===true?"Active UK ads":"";
   const meta=p.kind==="missing"?(a.count||a.mentions||0)+" ads mention the words — not a Page match":[a.category,host,a.handle?"@"+a.handle:"",ads].filter(Boolean).join(" · ");
   const go=a.activeAds===false?"Open Page":"See their ads →";
-  const body=logoHTML(a.id,a.name,"lg")+'<span><strong>'+esc(a.name)+'</strong><br><small>'+esc(meta||"Facebook Page")+'</small>'+(p.kind!=="missing"&&a.evidence?'<br><small>'+esc(a.evidence)+'</small>':'')+'</span><span class="go">'+go+'</span>';
+  const body=logoHTML(a.id,a.name,"lg",a.picture,a.logo)+'<span><strong>'+esc(a.name)+'</strong><br><small>'+esc(meta||"Facebook Page")+'</small>'+(p.kind!=="missing"&&a.evidence?'<br><small>'+esc(a.evidence)+'</small>':'')+'</span><span class="go">'+go+'</span>';
   if(!/^\d{3,30}$/.test(a.id||"")){const href=a.handle?"https://www.facebook.com/"+encodeURIComponent(a.handle):(a.website||"");return href?'<a class="bcard" style="--i:'+i+'" href="'+esc(href)+'" target="_blank" rel="noopener noreferrer">'+body+'</a>':"";}
   return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(a.id)+'" data-name="'+esc(a.name)+'">'+body+'</button>';
  }).join("");
