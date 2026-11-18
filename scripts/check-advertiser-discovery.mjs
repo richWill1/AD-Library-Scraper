@@ -29,6 +29,7 @@ assert.ok(searchTerms('Complete Care Shop').includes('completecareshop'));
 assert.ok(searchTerms('victorianplumbing.co.uk').includes('victorianplumbing.co.uk'));
 
 const care = exactIdentity('CareCo');
+assert.match(care.picture, /107666748486424\/picture/);
 assert.equal(care.id, '107666748486424');
 assert.equal(care.name, 'CareCo');
 assert.equal(exactIdentity('Silentnight').name, 'Silentnight');
@@ -61,6 +62,8 @@ const choice = decide('Goodmove', {
   ads: [{id: '408', name: 'GoodMove UK', adCount: 30, ownDomain: false}],
   sites: [{host: 'goodmove.org.uk', names: ['GoodMove'], category: 'Colchester Removals Company', domainConfirmed: true, pages: [{id: '967', handle: 'GoodMove-Moving-Storage-Ltd-967'}]}],
 });
+assert.equal(choice.advertisers.find(a => a.id === '408').website, undefined);
+assert.equal(choice.advertisers.find(a => a.id === '967').website, 'https://goodmove.org.uk/');
 assert.equal(choice.status, 'choose');
 assert.equal(choice.resolved, false);
 assert.deepEqual(choice.advertisers.map(a => a.id).sort(), ['408', '967']);
@@ -70,6 +73,16 @@ assert.equal(samePage.status, 'resolved');
 assert.equal(samePage.advertisers.length, 1);
 assert.equal(samePage.advertisers[0].id, '199');
 assert.equal(samePage.advertisers[0].handle, 'DunelmUK');
+const cardHtml = '<title>Welcome To cardfactory | Cards, Gifts &amp; Party Supplies</title><link rel="apple-touch-icon" href="/images/apple-touch-icon.png">';
+const cardSite = readOfficialSite(cardHtml, 'cardfactory.co.uk', 'cardfactory.co.uk', 'Card Factory');
+assert.equal(cardSite.image, 'https://cardfactory.co.uk/images/apple-touch-icon.png');
+assert.match(cardSite.category, /Cards, Gifts/);
+const card = decide('Card Factory', {adsOk: true, sitesAttempted: 1, sitesReached: 1, ads: [{id: '846468658732156', name: 'Card Factory', adCount: 45, ownDomain: false}], sites: [cardSite]});
+assert.equal(card.status, 'resolved');
+assert.equal(card.advertisers[0].website, 'https://cardfactory.co.uk/');
+assert.equal(card.advertisers[0].logo, cardSite.image);
+assert.equal(card.advertisers[0].picture, 'https://graph.facebook.com/846468658732156/picture?type=square&width=128&height=128');
+assert.match(card.advertisers[0].category, /Cards/);
 const probable = decide('Goodmove', {adsOk: true, sitesAttempted: 1, sitesReached: 1, ads: [{id: '408', name: 'GoodMove UK', adCount: 4, ownDomain: false}], sites: []});
 assert.equal(probable.status, 'choose');
 assert.equal(probable.resolved, false);
@@ -103,5 +116,46 @@ assert.notEqual(live.advertisers[0].id, '111');
 
 const down = await discoverTradingName('Example Brand', {fetch: async () => { throw new Error('down'); }});
 assert.equal(down.status, 'lookup_failed');
+
+const handleHtml = '<title>Victorian Plumbing | Bathrooms</title><a href="https://www.facebook.com/VictorianPlumbing/">Facebook</a><link rel="apple-touch-icon" href="/icon.png">';
+function graphMock(mode) {
+  return async url => {
+    const u = String(url);
+    if (u.includes('graph.facebook.com') && u.includes('pages/search')) {
+      if (mode === 'search-granted') return json({data: [{id: '555', name: 'Example Brand'}]});
+      if (mode === 'denied') return json({error: {code: 10, message: '(#10) Page Public Metadata Access is required'}}, 400);
+      return json({data: []});
+    }
+    if (u.includes('graph.facebook.com') && u.includes('id=')) {
+      if (mode === 'granted') return json({id: '424242', name: 'Victorian Plumbing', username: 'VictorianPlumbing', category: 'Bathroom Supply Store'});
+      if (mode === 'mismatch') return json({id: '999', name: 'Someone Else', username: 'SomeoneElse'});
+      return json({error: {code: 10, message: '(#10) Page Public Metadata Access is required'}}, 400);
+    }
+    if (u.includes('/api/ads')) return json({ads: []});
+    if (u.includes('victorianplumbing.co.uk')) return new Response(handleHtml, {status: 200, headers: {'content-type': 'text/html'}});
+    if (u.includes('examplebrand.co.uk')) return new Response('<title>Example Brand</title>', {status: 200, headers: {'content-type': 'text/html'}});
+    return new Response('', {status: 404, headers: {'content-type': 'text/html'}});
+  };
+}
+const granted = await discoverTradingName('Victorian Plumbing', {token: 'granted-token', fetch: graphMock('granted')});
+assert.equal(granted.status, 'resolved');
+assert.equal(granted.advertisers[0].id, '424242');
+assert.equal(granted.advertisers[0].handle, 'VictorianPlumbing');
+assert.match(granted.advertisers[0].picture, /424242\/picture/);
+assert.equal(granted.code, undefined);
+
+const denied = await discoverTradingName('Victorian Plumbing', {token: 'denied-token', fetch: graphMock('denied')});
+assert.notEqual(denied.advertisers[0]?.id, '424242');
+assert.equal(denied.advertisers.find(a => a.id === '424242'), undefined);
+assert.equal(denied.code, 'PAGE_METADATA_PERMISSION');
+assert.match(denied.message, /Facebook Page found/);
+assert.match(denied.message, /Page Public Metadata Access/);
+
+const mismatch = await discoverTradingName('Victorian Plumbing', {token: 'mismatch-token', fetch: graphMock('mismatch')});
+assert.equal(mismatch.advertisers.find(a => a.id === '999'), undefined);
+
+const named = await discoverTradingName('Example Brand', {token: 'search-token', fetch: graphMock('search-granted')});
+assert.equal(named.advertisers.find(a => a.id === '555')?.name, 'Example Brand');
+assert.match(named.advertisers.find(a => a.id === '555').picture, /555\/picture/);
 
 console.log('Advertiser discovery checks passed: general names and domains, no cross-brand auto-open, picker when ambiguous, lookup failure kept separate.');
