@@ -4,6 +4,9 @@ export const knownAdvertisers:AdvertiserIdentity[]=[
  // CareCo's own site links to this handle. The public Facebook Page card
  // links to this numeric ID, which ads_archive independently names CareCo.
  {pageId:'107666748486424',pageName:'CareCo',handle:'CareCoMobilityExperts',aliases:['careco','CareCoMobilityExperts','careco.co.uk']},
+ {pageId:'179100528779193',pageName:'Silentnight',handle:'Silentnightbeds',aliases:['silentnight','silentnightbeds','silentnight.co.uk']},
+ {pageId:'94971738769',pageName:'Next',handle:'nextofficial',aliases:['next','nextofficial','next.co.uk']},
+ {pageId:'112850788732826',pageName:'boohoo.com',aliases:['boohoo','boohoo.com']},
  {pageId:'280531915302272',pageName:'Sharps Fitted Furniture',aliases:['sharps','sharps.co.uk']},
  {pageId:'384841908531592',pageName:'Neville Johnson',aliases:['neville johnson','nevillejohnson','nevillejohnson.co.uk']},
  {pageId:'180833751931315',pageName:'Hammonds',aliases:['hammonds','hammonds furniture','hammonds-uk.com']},
