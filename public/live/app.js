@@ -863,10 +863,13 @@ function messagingView(){
  const head='<div class="mx-head"><div><p class="mx-base"><b>'+total+'</b> loaded ad'+(total===1?'':'s')+(distinct<total?' ('+distinct+' after merging duplicate creatives)':'')+' from '+esc(state.brand||"this advertiser")+' · '+(total-mapped)+' with no detected theme</p><p class="mx-note">Shares are of all '+total+' loaded ads. An ad can match more than one theme, so shares can add up to more than 100%.</p></div><div class="mx-tools"><div class="seg" role="group" aria-label="Theme type"><button type="button" data-msgfilter="messages" aria-pressed="'+(state.msgFilter==="messages")+'">Messages <span>'+lists.messages.length+'</span></button><button type="button" data-msgfilter="actions" aria-pressed="'+(state.msgFilter==="actions")+'">Calls to action <span>'+lists.actions.length+'</span></button></div><button class="ghost" data-action="exportmsg">Export ↓</button></div></div>';
  if(!themes.length)return '<div class="msg-wrap">'+head+'<div class="mx-empty"><h3>No themes detected</h3><p>None of the '+total+' loaded ad'+(total===1?'':'s')+' matched a hook, benefit, offer, proof point or call to action. Their copy may be very short, image-only or not in English. Open the ads in Ads &amp; insights to read them directly.</p></div></div>';
  // At a glance: the leading message in each part of the pitch, with a real creative.
+ const usedGl=new Set();
+ // Each tile shows a different ad where the theme allows, cached creatives first.
+ const glanceAd=t=>{const all=themeWordings(t).flatMap(g=>g.ads),pick=all.find(a=>!usedGl.has(a.id)&&mediaCache.has(a.id))||all.find(a=>!usedGl.has(a.id))||all[0];if(pick)usedGl.add(pick.id);return pick};
  const glance='<div class="mx-glance" role="group" aria-label="Leading message by category">'+[...messageCategories].map(c=>{
   const top=themes.find(x=>x.category===c.id);
   if(!top)return '<div class="gl gl-none"><p class="gl-cat"><i style="background:'+catColor[c.id]+'"></i>'+esc(c.label)+'</p><p class="gl-name">None detected</p><p class="gl-sub">An angle no loaded ad uses</p></div>';
-  const w0=themeWordings(top)[0],rep=w0&&repAd(w0);
+  const rep=glanceAd(top);
   return '<button type="button" class="gl'+(top.id===state.theme?' on':'')+'" data-theme="'+top.id+'" style="--c:'+catColor[c.id]+'">'+(rep?thumbHTML(rep.id,"gl-th"):'')+'<span class="gl-body"><span class="gl-cat"><i></i>'+esc(c.label)+'</span><span class="gl-name">'+esc(top.label)+'</span><span class="gl-pct"><b>'+pctOf(top.ads.length,total)+'%</b> of ads</span></span></button>';
  }).join("")+'</div>';
  if(!list.length)return '<div class="msg-wrap">'+head+glance+'<div class="mx-empty"><h3>Nothing in this view</h3><p>Switch the filter above to see the other themes.</p></div></div>';
