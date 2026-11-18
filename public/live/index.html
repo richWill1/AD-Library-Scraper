@@ -164,7 +164,7 @@ html{scroll-behavior:smooth}
 /* 1. Glass header that slims on scroll, and a soft handover from the hero */
 .as-unified-nav{position:sticky;top:0;z-index:60;transition:background .35s ease,min-height .35s var(--ease),box-shadow .35s ease,border-color .35s ease}
 .as-unified-nav .nav-in{transition:min-height .35s var(--ease)}
-body.scrolled .as-unified-nav{background:rgba(9,14,32,.72);-webkit-backdrop-filter:saturate(180%) blur(18px);backdrop-filter:saturate(180%) blur(18px);min-height:60px;box-shadow:0 10px 30px rgba(5,7,26,.18);border-bottom-color:rgba(255,255,255,.06)}
+body.scrolled .as-unified-nav{background:rgba(9,14,32,.9);-webkit-backdrop-filter:saturate(180%) blur(18px);backdrop-filter:saturate(180%) blur(18px);min-height:60px;box-shadow:0 10px 30px rgba(5,7,26,.18);border-bottom-color:rgba(255,255,255,.06)}
 body.scrolled .as-unified-nav .nav-in{min-height:60px}
 body.scrolled .as-unified-nav .as-interactive-wordmark{transform:scale(.86);transform-origin:left center}
 .as-unified-nav .as-interactive-wordmark{transition:transform .35s var(--ease)}
@@ -175,7 +175,7 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 .hero.space{padding-bottom:210px}
 .main{position:relative;margin-top:-1px}
 /* 2. Start state: brands to explore */
-.start{grid-column:1/-1;animation:viewin .5s var(--ease) both}
+.start{grid-column:1/-1;margin-top:22px;animation:viewin .5s var(--ease) both}
 .start h3{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#6e6e73;font-weight:600;margin:6px 0 14px}
 .start-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:30px}
 .bcard{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;padding:18px;border-radius:18px;border:1px solid var(--hairline);background:#fff;cursor:pointer;font:inherit;color:inherit;transition:transform .35s var(--ease),box-shadow .35s var(--ease),border-color .35s;animation:rise .55s var(--ease) both;animation-delay:calc(var(--i,0) * 55ms)}
