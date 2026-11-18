@@ -1104,7 +1104,8 @@ function renderSuggest(state_){
  if(state_==="hide"||(!suggest.items.length&&state_!=="loading"&&state_!=="empty"&&state_!=="limited")){box.hidden=true;input.setAttribute("aria-expanded","false");return}
  box.hidden=false;input.setAttribute("aria-expanded","true");
  const head=state_==="loading"?'<li class="sg-status"><span class="sg-dots"><i></i><i></i><i></i></span>Finding advertisers…</li>':state_==="empty"?'<li class="sg-status">No advertisers found yet. Press Enter to search ads mentioning “'+esc(suggest.term)+'”.</li>':state_==="limited"?'<li class="sg-status">Keep typing, or press Enter to search.</li>':"";
- box.innerHTML=head+suggest.items.map((s,i)=>'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'">'+logoHTML(s.id,s.name,"md sg-logo")+'<span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.source==="history"?'Searched before':s.source==="known"?'Verified advertiser':s.source==="popular"?'Popular UK advertiser':s.count?s.count+(s.count>=100?"+":"")+" ads seen":"Advertiser directory")+'</small></span><span class="sg-go">↗</span></li>').join("");
+ const firstCat=suggest.items.findIndex(x=>x.source==="category");
+ box.innerHTML=head+suggest.items.map((s,i)=>(i===firstCat?'<li class="sg-group" role="presentation">Advertisers running ads about “'+esc(suggest.term)+'”</li>':'')+(s.all?'<li role="option" id="sg-'+i+'" class="sg-item sg-all'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'"><span class="sg-text"><strong>See all advertisers running ads about “'+esc(s.name)+'” →</strong></span></li>':'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'">'+logoHTML(s.id,s.name,"md sg-logo")+'<span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.source==="category"?s.count+" ad"+(s.count===1?"":"s")+" about it"+(s.reach?" · UK reach "+compactNumber(s.reach):""):s.source==="history"?'Searched before':s.source==="known"?'Verified advertiser':s.source==="popular"?'Popular UK advertiser':s.count?s.count+(s.count>=100?"+":"")+" ads seen":"Advertiser directory")+'</small></span><span class="sg-go">↗</span></li>')).join("");
  input.setAttribute("aria-activedescendant",suggest.active>=0?"sg-"+suggest.active:"");
 }
 async function fetchSuggestions(term){
@@ -1118,6 +1119,19 @@ async function fetchSuggestions(term){
  const list=(data.advertisers||[]).map(p=>({...p,count:p.adCount||0,source:"directory"}));
  if(list.length){if(suggest.cache.size>=100)suggest.cache.clear();suggest.cache.set(key,list);}
  return list;
+}
+async function fetchCategorySuggestions(term){
+ const key="cat:"+term.toLowerCase();
+ if(suggest.cache.has(key))return suggest.cache.get(key);
+ try{
+  const r=await fetch("/api/discover?"+new URLSearchParams({q:term,quick:"1"}),{cache:"no-store",signal:AbortSignal.timeout(25000)});
+  if(!r.ok)return [];
+  const d=await r.json();
+  const list=(Array.isArray(d.advertisers)?d.advertisers:[]).filter(a=>a&&/^\d{3,30}$/.test(a.id)&&typeof a.name==="string").slice(0,8).map(a=>({id:a.id,name:a.name,count:a.ads,reach:a.reach,source:"category"}));
+  for(const a of list)rememberPageId(a.name,a.id);
+  if(suggest.cache.size>=100)suggest.cache.clear();suggest.cache.set(key,list);
+  return list;
+ }catch{return []}
 }
 function onSearchInput(){
  const term=$("searchInput").value.trim();suggest.term=term;suggest.active=-1;
@@ -1133,6 +1147,15 @@ function onSearchInput(){
    const list=await fetchSuggestions(term);
    if($("searchInput").value.trim()!==term)return;
    suggest.items=suggestRank(term,mergeSuggestions(local,list));
+   // Few advertisers are named after the words: also list who runs ads about them.
+   if(suggest.items.length<4&&canonicalName(term).length>=4){
+    renderSuggest(suggest.items.length?"":"loading");
+    const cat=await fetchCategorySuggestions(term);
+    if($("searchInput").value.trim()!==term)return;
+    const have=new Set(suggest.items.map(x=>x.id).filter(Boolean));
+    suggest.items=suggest.items.concat(cat.filter(x=>!have.has(x.id)).slice(0,7-suggest.items.length));
+    if(cat.length)suggest.items.push({all:true,name:term,id:""});
+   }
    renderSuggest(suggest.items.length?"":"empty");
   }catch(err){
    if(err.name==="AbortError")return;
@@ -1146,7 +1169,7 @@ function chooseSuggestion(i){
  if(!s.id){searchClient(s.name);$("research").scrollIntoView({behavior:"smooth"});return}
  state.view="discover";state.filter="all";state.limit=25;state.theme="";state.revealAll=false;
  state.query=s.name;state.brand=s.name;state.page=s.id;state.discoveryCursor=null;state.canFindAlternates=true;
- state.choices.clear();for(const o of suggest.items)state.choices.set(o.id,{id:o.id,name:o.name,count:o.count});
+ state.choices.clear();for(const o of suggest.items)if(o.id)state.choices.set(o.id,{id:o.id,name:o.name,count:o.count});
  void runSearch(s.name,s.id);
  $("research").scrollIntoView({behavior:"smooth"});
 }

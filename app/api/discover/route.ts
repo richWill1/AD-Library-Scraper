@@ -45,10 +45,10 @@ function rank(rows: Row[], q: string, more: boolean): Result {
   return {q, advertisers, scanned: rows.length, more, updatedAt: new Date().toISOString()};
 }
 
-async function buildWithToken(q: string, token: string): Promise<Result> {
+async function buildWithToken(q: string, token: string, pages = PAGES): Promise<Result> {
   const rows: Row[] = [];
   let after = '';
-  for (let i = 0; i < PAGES; i++) {
+  for (let i = 0; i < pages; i++) {
     const p = new URLSearchParams({ad_reached_countries: JSON.stringify(['GB']), ad_type: 'ALL', ad_active_status: 'ACTIVE', search_terms: q, search_type: 'KEYWORD_EXACT_PHRASE', limit: String(LIMIT), fields: 'id,page_id,page_name,total_reach_by_location,ad_delivery_start_time,ad_creative_bodies,ad_creative_link_titles'});
     if (after) p.set('after', after);
     const res = await metaFetch(`https://graph.facebook.com/v26.0/ads_archive?${p}`, {headers: {Authorization: `Bearer ${token}`}, signal: AbortSignal.timeout(20000), cache: 'no-store'});
@@ -63,10 +63,10 @@ async function buildWithToken(q: string, token: string): Promise<Result> {
 }
 
 // Without its own Meta access (preview), read the main service's public ads search instead.
-async function buildViaAds(q: string): Promise<Result> {
+async function buildViaAds(q: string, pages = 4): Promise<Result> {
   const rows: Row[] = [];
   let after = '';
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < pages; i++) {
     const p = new URLSearchParams({q, coverage: 'GB'}); if (after) p.set('after', after);
     const res = await fetch(`${ORIGIN}/api/ads?${p}`, {signal: AbortSignal.timeout(25000), cache: 'no-store'});
     if (!res.ok) break;
@@ -81,19 +81,23 @@ async function buildViaAds(q: string): Promise<Result> {
 export async function GET(req: NextRequest) {
   const q = (req.nextUrl.searchParams.get('q') || '').trim().replace(/\s+/g, ' ');
   if (q.length < 2 || q.length > 60 || /[\x00-\x1f<>]/.test(q)) return NextResponse.json({advertisers: [], error: 'Enter a product, category or brand.'}, {status: 400});
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || 'shared', now = Date.now(), r = rates.get(ip);
-  if (r && now - r.at < 60000) { if (r.count >= 10) return NextResponse.json({advertisers: [], code: 'RATE_LIMITED'}, {status: 429}); r.count++; } else rates.set(ip, {at: now, count: 1});
+  // quick=1: a lighter scan for the search box's suggestions while someone types.
+  const quick = req.nextUrl.searchParams.get('quick') === '1';
+  const ip = (req.headers.get('x-forwarded-for')?.split(',')[0] || 'shared') + (quick ? ':quick' : ''), now = Date.now(), r = rates.get(ip);
+  if (r && now - r.at < 60000) { if (r.count >= (quick ? 40 : 10)) return NextResponse.json({advertisers: [], code: 'RATE_LIMITED'}, {status: 429}); r.count++; } else rates.set(ip, {at: now, count: 1});
   if (rates.size > 1000) for (const [k, v] of rates) if (now - v.at > 60000) rates.delete(k);
-  const key = q.toLowerCase(), hit = cache.get(key);
+  const full = cache.get(q.toLowerCase());
+  if (quick && full && now - full.at < TTL) return NextResponse.json(full.data, {headers: {'Cache-Control': 'public, max-age=900'}});
+  const key = (quick ? 'quick:' : '') + q.toLowerCase(), hit = cache.get(key);
   if (hit && now - hit.at < TTL) return NextResponse.json(hit.data, {headers: {'Cache-Control': 'public, max-age=900'}});
   let token = '';
   try { token = (await getMetaCredential()).token; } catch {}
   if (!token && process.env.RENDER_SERVICE_ID !== MAIN_SERVICE) {
-    try { const res = await fetch(`${ORIGIN}/api/discover?q=${encodeURIComponent(q)}`, {signal: AbortSignal.timeout(60000), cache: 'no-store'}); if (res.ok) return NextResponse.json(await res.json(), {headers: {'Cache-Control': 'public, max-age=900'}}); } catch {}
+    try { const res = await fetch(`${ORIGIN}/api/discover?q=${encodeURIComponent(q)}${quick ? '&quick=1' : ''}`, {signal: AbortSignal.timeout(60000), cache: 'no-store'}); if (res.ok) return NextResponse.json(await res.json(), {headers: {'Cache-Control': 'public, max-age=900'}}); } catch {}
   }
   let work = inflight.get(key);
   if (!work) {
-    work = (token ? buildWithToken(q, token) : buildViaAds(q)).then(d => { if (d.advertisers.length) { if (cache.size > 500) cache.delete(cache.keys().next().value!); cache.set(key, {at: Date.now(), data: d}); } return d; }).finally(() => inflight.delete(key));
+    work = (token ? buildWithToken(q, token, quick ? 3 : PAGES) : buildViaAds(q, quick ? 2 : 4)).then(d => { if (d.advertisers.length) { if (cache.size > 500) cache.delete(cache.keys().next().value!); cache.set(key, {at: Date.now(), data: d}); } return d; }).finally(() => inflight.delete(key));
     inflight.set(key, work);
   }
   try { return NextResponse.json(await work, {headers: {'Cache-Control': 'public, max-age=900'}}); }
