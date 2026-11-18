@@ -30,7 +30,7 @@ const TACTICS: {id: string; label: string; re: RegExp}[] = [
 const MAJOR_PAGES: Record<string, string> = {Currys: '282722695080974', Argos: '108712049190071', 'Boots UK': '137917343831', 'John Lewis & Partners': '145210795501787', 'Amazon.co.uk': '136154403098698'};
 const MAJOR_NAMES = ['John Lewis & Partners', 'John Lewis', 'AO.com', 'Very', 'Amazon', 'Lidl GB', 'Aldi UK', 'Tesco', "Sainsbury's", 'Marks and Spencer', 'M&S', 'JD Sports', 'Superdrug', 'Dunelm', 'IKEA UK', 'Next', 'ASOS', 'boohoo', 'Gymshark', 'Smyths Toys', 'The Perfume Shop', 'Ninja Kitchen UK', 'Dyson', 'Samsung UK', 'Selfridges', 'Debenhams', 'Wayfair UK', 'B&Q', 'Halfords', 'Matalan', 'Primark'];
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-let lastCall = 0;
+let lastCall = 0, failures = 0;
 async function paced() { const wait = lastCall + 3200 - Date.now(); if (wait > 0) await sleep(wait); lastCall = Date.now(); }
 async function majorPages() {
   const pages = new Map<string, string>(Object.entries(MAJOR_PAGES).map(([n, id]) => [id, n]));
@@ -48,8 +48,10 @@ async function search(term: string, page = '', maxPages = 3) {
   for (let i = 0; i < maxPages; i++) {
     await paced();
     const p = new URLSearchParams({q: term, coverage: 'GB'}); if (page) p.set('page', page); if (after) p.set('after', after);
-    const res = await fetch(`${ORIGIN}/api/ads?${p}`, {signal: AbortSignal.timeout(30000), cache: 'no-store', headers: {'x-adsnoop-internal': 'seasonal'}});
-    if (!res.ok) break;
+    let res = await fetch(`${ORIGIN}/api/ads?${p}`, {signal: AbortSignal.timeout(30000), cache: 'no-store', headers: {'x-adsnoop-internal': 'seasonal'}});
+    // The ads endpoint allows 20 requests a minute per caller: wait and retry once.
+    if (res.status === 429) { await sleep(20000); lastCall = Date.now(); res = await fetch(`${ORIGIN}/api/ads?${p}`, {signal: AbortSignal.timeout(30000), cache: 'no-store'}); }
+    if (!res.ok) { failures++; break; }
     const body = await res.json(); if (!Array.isArray(body.ads)) break;
     out.push(...body.ads); after = body.nextCursor || ''; if (!after) break;
   }
@@ -58,6 +60,7 @@ async function search(term: string, page = '', maxPages = 3) {
 
 async function build(key: string) {
   const ev = EVENTS[key];
+  failures = 0;
   const seen = new Map<string, Ad>();
   const add = (list: Ad[]) => { for (const a of list) if (a && /^\d{1,30}$/.test(String(a.id)) && !seen.has(a.id)) seen.set(a.id, a); };
   for (const id of await majorPages()) { try { add(await search(id, id, 2)); } catch {} }
@@ -84,7 +87,7 @@ async function build(key: string) {
   depths.sort((x, y) => x - y);
   const buckets = [[5, 19, 'Under 20%'], [20, 29, '20–29%'], [30, 39, '30–39%'], [40, 49, '40–49%'], [50, 90, '50% or more']].map(([lo, hi, label]) => ({label, ads: depths.filter(d => d >= (lo as number) && d <= (hi as number)).length}));
   return {
-    event: key, name: ev.name, updatedAt: new Date().toISOString(),
+    event: key, name: ev.name, updatedAt: new Date().toISOString(), partial: failures > 0,
     stats: {ads: ads.length, advertisers: byPage.size, newThisWeek: ads.filter(a => { const d = days(a.start); return d != null && d <= 7; }).length, withDiscount: depths.length, typicalDiscount: depths.length ? depths[Math.floor(depths.length / 2)] : null, deepest: depths.length ? depths[depths.length - 1] : null},
     timeline, advertisers, top, tactics, discounts: buckets
   };
@@ -94,7 +97,15 @@ export async function GET(req: NextRequest) {
   const key = req.nextUrl.searchParams.get('event') || '';
   if (!EVENTS[key]) return NextResponse.json({error: 'Unknown event.'}, {status: 400});
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL) return NextResponse.json(hit.data, {headers: {'Cache-Control': 'public, max-age=600'}});
+  // A preview without its own Meta access reuses the live site's shared result.
+  if (!process.env.META_ACCESS_TOKEN?.trim() && process.env.RENDER_SERVICE_ID !== 'srv-db3ufoad0e5s73f5dudg') {
+    try {
+      const res = await fetch(`${ORIGIN}/api/seasonal?event=${encodeURIComponent(key)}`, {signal: AbortSignal.timeout(150000), cache: 'no-store'});
+      if (res.ok) return NextResponse.json(await res.json(), {headers: {'Cache-Control': 'public, max-age=600'}});
+    } catch {}
+  }
+  const ttl = (hit?.data as {partial?: boolean} | undefined)?.partial ? 10 * 60000 : TTL;
+  if (hit && Date.now() - hit.at < ttl) return NextResponse.json(hit.data, {headers: {'Cache-Control': 'public, max-age=600'}});
   let work = inflight.get(key);
   if (!work) { work = build(key).then(d => { if ((d as {stats: {ads: number}}).stats.ads) cache.set(key, {at: Date.now(), data: d}); return d; }).finally(() => inflight.delete(key)); inflight.set(key, work); }
   try {
