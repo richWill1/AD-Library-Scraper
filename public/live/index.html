@@ -171,7 +171,7 @@ body.scrolled .as-unified-nav .as-interactive-wordmark{transform:scale(.86);tran
 .viewtabs{top:calc(var(--navh) + 8px)}
 .loadbar{top:var(--navh)!important}
 body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
-.space-fade{position:absolute;left:0;right:0;bottom:0;height:120px;z-index:2;background:linear-gradient(to bottom,rgba(255,255,255,0),#fff);pointer-events:none}
+.space-fade{position:absolute;left:0;right:0;bottom:0;height:90px;z-index:2;background:linear-gradient(to bottom,rgba(255,255,255,0) 0%,rgba(255,255,255,.55) 55%,#fff 100%);pointer-events:none}
 .hero.space{padding-bottom:210px}
 .main{position:relative;margin-top:-1px}
 /* 2. Start state: brands to explore */
@@ -214,8 +214,8 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 @keyframes shimmer{to{background-position:-200% 0}}
 /* 5. Tiles: lift, cursor glow on the border, soft image fade */
 .adcard{position:relative;transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
-.adcard:hover{transform:translateY(-4px);box-shadow:0 18px 44px rgba(9,14,32,.10)}
-.adcard::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),rgba(255,111,145,.75),rgba(255,149,72,.5) 30%,rgba(102,153,255,.45) 55%,transparent 75%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .3s;pointer-events:none;z-index:4}
+.adcard:hover{transform:translateY(-4px);box-shadow:0 18px 44px rgba(9,14,32,.10),0 0 40px -12px rgba(255,111,145,.35)}
+.adcard::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:2px;background:radial-gradient(320px circle at var(--mx,50%) var(--my,50%),rgba(255,111,145,1),rgba(255,149,72,.85) 28%,rgba(102,153,255,.7) 52%,transparent 78%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .3s;pointer-events:none;z-index:4}
 .adcard:hover::after{opacity:1}
 .mfade{opacity:0;transition:opacity .6s ease}
 .mfade.on{opacity:1}
@@ -239,6 +239,8 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 .toast{position:fixed;left:50%;bottom:28px;z-index:90;transform:translate(-50%,20px);opacity:0;pointer-events:none;padding:11px 18px;border-radius:99px;background:rgba(11,23,52,.92);color:#fff;font-size:13.5px;font-weight:500;box-shadow:0 14px 40px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:opacity .3s ease,transform .35s var(--ease)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.01ms!important}html{scroll-behavior:auto}}
+.main:has(.start) #feedback{display:none}
+.feature{background:linear-gradient(180deg,#0e1433 0%,#090e20 100%)!important}.feature .featurepanel{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07)}
 </style></head>
 <body><a href="#research" class="skip">Skip to research</a>
 <header class="topnav as-unified-nav"><div class="nav-in"><div class="as-nav-identity"><a href="/" class="brand as-logo" aria-label="AdSnoop home"><svg class="as-interactive-wordmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 252 66" width="200" height="52" aria-hidden="true" focusable="false"><g fill="#FFFFFF"><g transform="translate(0 51) scale(.028 -.028)"><path d="M13 0H297L419 356H997L1116 0H1407L877 1490H545ZM493 573 565 783C610 920 655 1063 711 1251C767 1063 811 920 855 783L925 573Z"/></g><g transform="translate(38 51) scale(.028 -.028)"><path d="M520 -21C658 -21 774 39 840 161H842V0H1090V1490H838V906H836C768 1022 655 1077 518 1077C247 1077 63 854 63 529C63 200 244 -21 520 -21ZM579 190C423 190 318 310 318 529C318 747 423 868 579 868C744 868 852 734 852 529C852 323 744 190 579 190Z"/></g><g transform="translate(70 51) scale(.028 -.028)"><path d="M663 -24C1016 -24 1237 152 1237 430C1237 649 1098 778 789 847L638 882C444 927 367 983 367 1083C367 1205 484 1290 649 1290C823 1290 937 1195 948 1038H1199C1190 1334 983 1514 650 1514C321 1514 102 1336 102 1070C102 861 239 730 537 662L697 626C896 580 974 519 974 414C974 283 851 199 665 199C458 199 334 306 332 486H73C73 167 294 -24 663 -24Z"/></g><g transform="translate(105 51) scale(.028 -.028)"><path d="M364 597C364 777 463 856 595 856C730 856 808 775 808 620V0H1061V660C1061 931 905 1077 684 1077C539 1077 432 1013 360 894V1056H112V0H364Z"/></g><g transform="translate(215.5 51) scale(.028 -.028)"><path d="M112 -418H364V159H367C433 39 544 -21 682 -21C958 -21 1139 200 1139 529C1139 854 955 1077 683 1077C546 1077 429 1021 363 909H360V1056H112ZM623 190C458 190 350 323 350 529C350 734 458 868 623 868C779 868 884 747 884 529C884 310 779 190 623 190Z"/></g></g><g fill="none" stroke="#FFFFFF" stroke-width="4.8"><circle cx="163" cy="34" r="13"/><circle cx="195" cy="34" r="13"/></g><g class="as-pupils" fill="#FFFFFF" transform="translate(3.5 0)"><circle cx="163" cy="34" r="5.4"/><circle cx="195" cy="34" r="5.4"/></g></svg></a><span class="as-nav-divider" aria-hidden="true"></span><span class="as-nav-descriptor">Creative intelligence<span class="as-nav-period">.</span></span></div><div class="as-nav-actions"><nav class="toplinks" aria-label="Main navigation"><button class="nav-btn active" data-view="discover">Discover</button><button class="nav-btn" data-view="saved">Saved <span id="savedCount"></span></button><button class="nav-btn" data-view="insights">Messaging</button></nav><span class="as-live-status"><span class="as-live-dot" aria-hidden="true"></span>UK Meta ads · Live</span></div></div></header>
