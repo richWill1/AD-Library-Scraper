@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {safeMediaUrl,type CreativeMedia} from '@/lib/media';
 import {getMetaCredential} from '@/lib/meta-token-store';
-type Result={items:CreativeMedia[];code:string;collectedAt?:string;source?:string;retryAfter?:number};
+type Result={items:CreativeMedia[];code:string;displayFormat?:string;cards?:number;collectedAt?:string;source?:string;retryAfter?:number};
 const cache=new Map<string,{until:number;result:Result}>();const inflight=new Map<string,Promise<Result>>();
 export function collectorConfiguration(){const url=process.env.META_MEDIA_COLLECTOR_URL||'';const secret=process.env.META_MEDIA_COLLECTOR_SECRET||'';return {ready:url==='https://ad-library-owned-collector.onrender.com'&&secret.length>=32,url,secret};}
 export function creativeCacheStatus(){return {configured:collectorConfiguration().ready,cachedAds:[...cache.values()].filter(v=>v.until>Date.now()).length};}
@@ -16,7 +16,7 @@ export async function fetchCreative(id:string,refresh=false,request=fetch):Promi
  const work=(async()=>{try{
   const response=await request(`${config.url}/creative?id=${encodeURIComponent(id)}${refresh?'&refresh=1':''}`,{headers:{'X-Collector-Key':config.secret,'X-Meta-Token':token},redirect:'error',signal:AbortSignal.timeout(120000),cache:'no-store'});const body=await response.json();
   if(!response.ok)return {items:[],code:['BUSY','META_BLOCKED','META_PREVIEW_UNAVAILABLE'].includes(body.code)?body.code:'COLLECTOR_UNAVAILABLE',retryAfter:4};
-  const items=validatedCreativeItems(body.items).filter(i=>!JSON.stringify(i).includes(token));const at=typeof body.collectedAt==='string'&&Number.isFinite(Date.parse(body.collectedAt))?body.collectedAt:new Date().toISOString();const result:Result={items,collectedAt:at,source:'meta-official-snapshot',code:items.length?'COLLECTED':'NO_MEDIA'};
+  const items=validatedCreativeItems(body.items).filter(i=>!JSON.stringify(i).includes(token));const at=typeof body.collectedAt==='string'&&Number.isFinite(Date.parse(body.collectedAt))?body.collectedAt:new Date().toISOString();const shape=typeof body.displayFormat==='string'&&/^[A-Z_]{2,30}$/.test(body.displayFormat)?{displayFormat:body.displayFormat,cards:Number.isInteger(body.cards)&&body.cards>0&&body.cards<=50?body.cards:undefined}:{};const result:Result={items,...shape,collectedAt:at,source:'meta-official-snapshot',code:items.length?'COLLECTED':'NO_MEDIA'};
   if(items.length){if(cache.size>=300)cache.delete(cache.keys().next().value!);cache.set(key,{until:mediaExpiresAt(items),result});}return result;
  }catch{return {items:[],code:'COLLECTOR_UNAVAILABLE',retryAfter:4};}finally{inflight.delete(key);}})();inflight.set(key,work);return work;
 }
