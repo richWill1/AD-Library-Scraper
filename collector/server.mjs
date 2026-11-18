@@ -3,6 +3,7 @@ import {timingSafeEqual,createHash} from 'node:crypto';
 import {chromium} from 'playwright';
 import {safe,videoCandidate} from './media.mjs';
 import {readStored,storeCreative,storeStatus} from './store.mjs';
+import {findAdvertisers} from './advertisers.mjs';
 const cache=new Map();let browserPromise=null;let active=0;const waiting=[];const maximum=2;
 
 // The landing page is shown to marketers, so unwrap Meta's redirect and drop click-tracking parameters.
@@ -68,6 +69,14 @@ const server=http.createServer(async(req,res)=>{
  const reply=(status,body)=>{if(res.destroyed)return;res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
  const url=new URL(req.url,'http://localhost');if(url.pathname==='/health')return reply(200,{status:'ok',collector:'owned-meta-snapshot',active,queued:waiting.length,storage:storeStatus().configured});
  const expected=process.env.COLLECTOR_SECRET||'';const supplied=req.headers['x-collector-key']||'';if(typeof supplied!=='string'||!expected||Buffer.byteLength(supplied)!==Buffer.byteLength(expected)||!timingSafeEqual(Buffer.from(supplied),Buffer.from(expected)))return reply(401,{code:'UNAUTHORIZED',items:[]});
+ // Advertiser lookup by name (Meta Ad Library advertiser search).
+ if(req.method==='GET'&&url.pathname==='/advertisers'){
+  const q=(url.searchParams.get('q')||'').trim();if(q.length<2||q.length>80||/[\x00-\x1f<>]/.test(q))return reply(400,{code:'INVALID_REQUEST',advertisers:[]});
+  try{await acquire();}catch{return reply(429,{code:'BUSY',advertisers:[]});}
+  try{const advertisers=await findAdvertisers(await browser(),q);return reply(200,{advertisers,source:'meta-ad-library-search'});}
+  catch(error){console.log(JSON.stringify({event:'advertiser_lookup_failed',reason:String(error?.message||'ERROR').slice(0,60)}));return reply(502,{code:'LOOKUP_FAILED',advertisers:[]});}
+  finally{release();}
+ }
  const id=url.searchParams.get('id')||'',token=req.headers['x-meta-token'];if(req.method!=='GET'||url.pathname!=='/creative'||!/^\d{1,30}$/.test(id)||typeof token!=='string'||token.length<20||token.length>4096||/[\s\x00-\x1f]/.test(token))return reply(400,{code:'INVALID_REQUEST',items:[]});
  const key=createHash('sha256').update(token).digest('hex')+':'+id,hit=cache.get(key);if(url.searchParams.get('refresh')!=='1'&&hit&&Date.now()<hit.until)return reply(200,hit.result);
  const refresh=url.searchParams.get('refresh')==='1';

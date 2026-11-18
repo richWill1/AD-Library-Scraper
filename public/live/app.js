@@ -43,8 +43,33 @@ function searchClient(query){
  state.canFindAlternates=Boolean(exact&&!/^\d{1,30}$/.test(q));
  state.brand=exact?.name||"";
  state.page=exact?.id||"";
- if(exact)state.choices.set(exact.id,{id:exact.id,name:exact.name,count:0});
- void runSearch(q,state.page);
+ state.pick=null;
+ if(exact){state.choices.set(exact.id,{id:exact.id,name:exact.name,count:0});void runSearch(q,state.page);return}
+ void resolveByName(q);
+}
+// Find the advertiser Page by name (Meta Ad Library advertiser search). A brand only
+// loads automatically on a clear name match; otherwise people choose from a list.
+async function resolveByName(q){
+ const rid=++requestNumber;
+ error("");busy(true);state.rows=[];renderCards();
+ feedback("Looking up advertisers called “"+q+"”…");
+ let list=[];
+ try{const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(50000)});const d=await r.json();list=Array.isArray(d.advertisers)?d.advertisers.filter(a=>a&&/^\d{3,30}$/.test(a.id)&&typeof a.name==="string"):[]}catch{}
+ if(rid!==requestNumber)return;
+ const ranked=list.map(a=>({...a,score:Math.max(nameScore(q,a.name),a.alias?nameScore(q,a.alias)-1:0)})).sort((a,b)=>b.score-a.score||Number(b.verified)-Number(a.verified)||(b.followers||0)-(a.followers||0));
+ for(const a of ranked)rememberPageId(a.name,a.id);
+ const exact=ranked.filter(a=>a.score>=5);
+ const clear=exact.length===1||(exact.length>1&&(exact[0].followers||0)>5*Math.max(1,exact[1].followers||0));
+ if(clear){
+  const a=exact[0];state.page=a.id;state.brand=a.name;state.choices.clear();
+  for(const c of ranked)state.choices.set(c.id,{id:c.id,name:c.name,count:0});
+  busy(false);void runSearch(q,a.id);return;
+ }
+ if(ranked.some(a=>a.score>=1)){
+  busy(false);state.pick={q,kind:"name",items:ranked.slice(0,8)};feedback("");renderCards();return;
+ }
+ // Nothing found by name: fall back to searching ad text (never auto-loading a mismatch).
+ busy(false);void runSearch(q,"");
 }
 const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T12:00:00Z":s);return Number.isFinite(d.getTime())?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"Unknown"};
 const reach=n=>typeof n==="number"&&Number.isFinite(n)?n.toLocaleString("en-GB"):"Not available";
@@ -150,7 +175,18 @@ function loadPopular(){
  if(popular||popularLoading)return;popularLoading=true;
  fetch("/api/popular",{cache:"no-store",signal:AbortSignal.timeout(90000)}).then(r=>r.ok?r.json():{brands:[]}).then(d=>{popular=Array.isArray(d.brands)?d.brands.filter(b=>b&&/^\d{1,30}$/.test(b.pageId)):[]}).catch(()=>{popular=[]}).finally(()=>{popularLoading=false;if(isStart())renderCards()});
 }
-function isStart(){return state.view==="discover"&&!state.brand&&!state.rows.length&&!state.loading}
+function isStart(){return state.view==="discover"&&!state.brand&&!state.rows.length&&!state.loading&&!state.pick}
+function compactNumber(n){return n>=1e6?(n/1e6).toFixed(n>=1e7?0:1).replace(/\.0$/,"")+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1).replace(/\.0$/,"")+"K":String(n)}
+function pickHTML(){
+ const p=state.pick,named=p.kind==="name";
+ const head=named?"Which advertiser do you mean?":"We couldn’t find an advertiser called “"+p.q+"”";
+ const sub=named?"Meta has several pages with a similar name. Pick the one you want to research.":p.items.length?"These advertisers have ads that mention “"+p.q+"”. If the brand you want isn’t here, paste its Facebook page link into the search box.":"Try a different spelling, or paste the brand’s Facebook page link into the search box.";
+ const cards=p.items.map((a,i)=>{
+  const meta=named?[a.followers!=null?compactNumber(a.followers)+" followers":"",a.category||""].filter(Boolean).join(" · "):a.mentions+" ad"+(a.mentions===1?"":"s")+" mention it";
+  return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(a.id)+'" data-name="'+esc(a.name)+'">'+logoHTML(a.id,a.name,"lg")+'<span><strong>'+esc(a.name)+(a.verified?' <span class="vtick" title="Verified by Meta">✓</span>':'')+'</strong><br><small>'+esc(meta||"Facebook page")+'</small>'+(a.alias?'<br><small class="alias">@'+esc(a.alias)+'</small>':'')+'</span><span class="go">See their ads →</span></button>';
+ }).join("");
+ return '<div class="start pick"><h3>'+esc(head)+'</h3><p class="pick-sub">'+esc(sub)+'</p>'+(cards?'<div class="start-grid">'+cards+'</div>':'')+'</div>';
+}
 function brandCard(b,i,extra){return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'">'+logoHTML(b.id,b.name,"lg")+'<span><strong>'+esc(b.name)+'</strong><br><small'+(extra?' class="live"':'')+'>'+esc(extra||"Followed brand")+'</small></span><span class="go">Explore ads →</span></button>'}
 function startHTML(){
  loadPopular();
@@ -191,7 +227,7 @@ function renderCards(){
  renderBrands();
  const all=state.view==="insights"?[]:shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
  if(state.view==="insights"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();return}
- $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(isStart()?startHTML():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin."));
+ $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin."));
  $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
  renderIntel();
@@ -265,6 +301,7 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
   renderCards();
  }
  feedback(moreBrands?"Looking for more advertiser pages…":"Loading active ads from Meta…");
+ if(page)state.pick=null;
  const params=new URLSearchParams({q:q||page,coverage:state.coverage});
  if(page)params.set("page",page);
  if(after)params.set("after",after);
@@ -282,7 +319,14 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
     feedback(state.choices.size>1?"":"No other advertiser pages were found.");
     return;
    }
-   const match=rankedBrands()[0];
+   const ranked=rankedBrands(),top=ranked[0];
+   if(!top||nameScore(q,top.name)<3){
+    // No advertiser by that name: show who mentions it instead of guessing.
+    state.page="";state.brand="";state.rows=[];
+    state.pick={q,kind:"mentions",items:ranked.slice(0,8).map(c=>({id:c.id,name:c.name,mentions:c.count}))};
+    busy(false);feedback("");renderCards();return;
+   }
+   const match=top;
    state.page=match?.id||"";
    state.brand=match?.name||"";
    if(match&&data.pageId!==state.page){
@@ -877,7 +921,7 @@ $("sort").addEventListener("change",e=>{state.sort=e.target.value;state.limit=25
 document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest(".viewtab");if(!t||!["ArrowLeft","ArrowRight"].includes(e.key))return;const tabs=[...document.querySelectorAll(".viewtab")];const next=tabs[(tabs.indexOf(t)+(e.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];if(next){e.preventDefault();setView(next.dataset.view);requestAnimationFrame(()=>document.querySelector('.viewtab[aria-selected="true"]')?.focus())}});
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
- b=e.target.closest("[data-page]");if(b){if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
+ b=e.target.closest("[data-page]");if(b){if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){state.choices.clear();for(const it of state.pick.items)state.choices.set(it.id,{id:it.id,name:it.name,count:it.mentions||0})}state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
  b=e.target.closest("[data-theme]");if(b){state.theme=b.dataset.theme;renderCards();document.querySelector(".msg-detail")?.scrollIntoView({behavior:"smooth",block:"nearest"});return}
  b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;state.limit=25;renderCards();return}
