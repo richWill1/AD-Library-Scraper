@@ -741,13 +741,6 @@ const catColor={hooks:"#a347d1",benefits:"#0071e3",offers:"#e07800",proof:"#1f9d
 // ---- Messaging explorer: what is this advertiser saying, which ads prove it,
 // and what should we test in response? Everything is computed from loaded ads.
 const SUBSTANTIVE=new Set(["hooks","benefits","offers","proof"]);
-const BRIEF_DEFAULTS={
- hooks:{constant:"Offer, product, landing page, audience and format.",metric:"3-second view rate (thumb-stop), then outbound CTR."},
- benefits:{constant:"Hook, offer, visual style and landing page.",metric:"Outbound CTR and landing-page conversion rate."},
- offers:{constant:"Creative, audience and landing page. Only test an offer you can genuinely run.",metric:"Conversion rate and cost per acquisition, checked against margin."},
- proof:{constant:"Main message, offer and visual.",metric:"Conversion rate, with outbound CTR as a secondary signal."},
- actions:{constant:"Everything except the call-to-action wording and button.",metric:"Outbound CTR and conversion rate."}
-};
 const normSentence=s=>String(s||"").toLowerCase().replace(/[^\p{L}\p{N}%£$€]+/gu," ").replace(/\s+/g," ").trim();
 const wordSet=s=>new Set(normSentence(s).split(" ").filter(w=>w.length>2));
 // Same wording give or take punctuation or a word: word overlap (Jaccard) of 75%+.
@@ -784,34 +777,6 @@ function periodComparison(t,ads){
  }
  return out;
 }
-function briefFields(t){
- const n=readNotes(),d=BRIEF_DEFAULTS[t.category]||BRIEF_DEFAULTS.hooks;
- return {challenger:n[t.id]||"",constant:n[t.id+":constant"]||"",metric:n[t.id+":metric"]||"",placeholders:{challenger:t.test,constant:d.constant,metric:d.metric}};
-}
-function observedLine(t,total,wordings){return (state.brand||"This advertiser")+" uses “"+t.label+"” in "+t.ads.length+" of "+total+" loaded ads ("+pctOf(t.ads.length,total)+"%), in "+wordings+" distinct wording"+(wordings===1?"":"s")+"."}
-function briefText(t){
- const ads=state.rows,w=themeWordings(t),f=briefFields(t),ex=w[0];
- const cat=messageCategories.find(c=>c.id===t.category)?.label||"";
- const lines=["TEST BRIEF — "+t.label+" ("+cat+")","Competitor: "+(state.brand||"Advertiser")+" · AdSnoop, "+new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}),"",
-  "WHAT THEY’RE DOING (observed)",observedLine(t,ads.length,w.length)];
- if(ex)lines.push("Example: “"+ex.sentence+"”"+(ex.ads.length>1?" (used in "+ex.ads.length+" ads)":""),"Source: "+metaUrl(ex.ads[0].id));
- lines.push("","OUR TEST (proposed)","Challenger: "+(f.challenger||f.placeholders.challenger),"Hold constant: "+(f.constant||f.placeholders.constant),"Success metric: "+(f.metric||f.placeholders.metric),"",
-  "Source ads:",...w.slice(0,3).map(g=>"• “"+g.sentence.slice(0,90)+(g.sentence.length>90?"…":"")+"” "+metaUrl(g.ads[0].id)),"",
-  "Observations come from public ad text in Meta’s Ad Library. They describe what was published, not how it performed.");
- return lines.join("\n");
-}
-async function copyBrief(id,btn){
- const t=messagingThemes(state.rows).find(x=>x.id===id);if(!t)return;
- const text=briefText(t);let ok=false;
- try{await navigator.clipboard.writeText(text);ok=true}catch{
-  const ta=document.createElement("textarea");ta.value=text;ta.setAttribute("readonly","");ta.style.cssText="position:fixed;left:-9999px";document.body.appendChild(ta);ta.select();try{ok=document.execCommand("copy")}catch{}ta.remove();
- }
- const s=$("briefStatus");
- if(s)s.textContent=ok?"Brief copied with "+Math.min(3,themeWordings(t).length)+" source link"+(themeWordings(t).length===1?"":"s")+".":"Couldn’t copy automatically. Select the brief text and copy it manually.";
- if(btn&&ok){btn.textContent="Copied ✓";clearTimeout(btn._t);btn._t=setTimeout(()=>{btn.textContent="Copy brief"},2200)}
- toast(ok?"Test brief copied":"Copy failed — try again");
-}
-// ---- Creative thumbnails for the message explorer (reuses the site's media cache) ----
 function thumbHTML(id,cls,pri){return '<span class="th'+(cls?' '+cls:'')+'" data-thumb="'+esc(id)+'"'+(pri?' data-pri="1"':'')+' aria-hidden="true"></span>'}
 function fillThumb(node,id){
  const c=mediaCache.get(id),st=mediaState.get(id);
@@ -884,7 +849,7 @@ function messagingView(){
  return '<div class="msg-wrap">'+head+glance+'<div class="mx2">'+items+'</div><p class="notice">Themes are detected from ad text with fixed rules and describe what was published, not how ads performed. English copy only.</p></div>';
 }
 function detailPanel(t,ads,rows){
- const total=ads.length,w=themeWordings(t),cat=messageCategories.find(c=>c.id===t.category),f=briefFields(t),pc=periodComparison(t,ads);
+ const total=ads.length,w=themeWordings(t),cat=messageCategories.find(c=>c.id===t.category),pc=periodComparison(t,ads);
  const ds=t.ads.map(daysRunning).filter(d=>d!=null),med=median(ds);
  const showAll=state.msgAllExamples===t.id,shown=showAll?w:w.slice(0,3);
  const ex=shown.map(g=>{const a=repAd(g),when=g.first?(g.first===g.last||!g.last?formatDate(g.first):formatDate(g.first)+" – "+formatDate(g.last)):"Launch date not available";
@@ -893,14 +858,10 @@ function detailPanel(t,ads,rows){
  if(!pc.enough)timing='Not enough dated ads to compare periods: '+pc.recent+' launched in the last '+RECENT_DAYS+' days and '+pc.earlier+' earlier (at least '+MIN_PERIOD+' in each and '+MIN_MATCHES+' matching ads are needed).';
  else timing='Last '+RECENT_DAYS+' days: <b>'+pc.r+' of '+pc.recent+'</b> ads ('+pctOf(pc.r,pc.recent)+'%) · Earlier: <b>'+pc.e+' of '+pc.earlier+'</b> ('+pctOf(pc.e,pc.earlier)+'%). '+(pc.claim?'<strong class="mx-claim mx-claim-'+pc.claim+'">'+(pc.claim==="more"?'↑ More':'↓ Less')+' common in newer ads</strong>':'No clear difference between the periods.');
  if(pc.undated)timing+=' '+pc.undated+' undated ad'+(pc.undated===1?'':'s')+' excluded.';
- const field=(key,label,val,ph)=>'<label class="mx-field"><span>'+label+'</span><textarea data-note="'+esc(key)+'" rows="2" placeholder="'+esc(ph)+'">'+esc(val)+'</textarea></label>';
- return '<section class="mx-detail" id="mxDetail" aria-live="polite" style="grid-row:1 / span '+(rows+1)+';--c:'+catColor[t.category]+'">'+
+  return '<section class="mx-detail" id="mxDetail" aria-live="polite" style="grid-row:1 / span '+(rows+1)+';--c:'+catColor[t.category]+'">'+
   '<header class="mx-dhead"><p class="mx-cat"><i></i>'+esc(cat?.label||"")+' · '+esc(cat?.question||"")+'</p><div class="mx-titlerow"><h3>'+esc(t.label)+'</h3><div class="mx-big"><b>'+pctOf(t.ads.length,total)+'%</b><span>'+t.ads.length+' of '+total+' ads</span></div></div><p class="mx-stat">'+w.length+' distinct wording'+(w.length===1?'':'s')+(med!=null?' · median '+med+' days since launch':'')+'</p></header>'+
   '<h4 class="mx-sub">How they say it</h4><ol class="mx-ev">'+ex+'</ol>'+(w.length>3?'<button type="button" class="linkbutton mx-more" data-action="msgall" data-id="'+t.id+'">'+(showAll?'Show fewer':'Show all '+w.length+' wordings')+'</button>':'')+
   '<h4 class="mx-sub">When these ads launched</h4>'+launchTimeline(t,ads)+'<p class="mx-timing">'+timing+'</p>'+
-  '<div class="mx-brief"><div class="mx-brief-head"><h4>Test brief</h4><span class="mx-brief-actions"><span id="briefStatus" class="mx-status" role="status"></span><button type="button" class="pill sm" data-action="copybrief" data-id="'+t.id+'">Copy brief</button></span></div>'+
-  '<div class="mx-brief-grid"><div class="mx-observed"><p class="mx-label">What they’re doing · observed</p><p>'+esc(observedLine(t,total,w.length))+'</p>'+(w[0]?'<p class="mx-quote">“'+esc(w[0].sentence)+'” <a href="'+esc(metaUrl(w[0].ads[0].id))+'" target="_blank" rel="noopener">Source ↗</a></p>':'')+'</div>'+
-  '<div class="mx-ours"><p class="mx-label">Our test · proposed</p>'+field(t.id,"Challenger",f.challenger,f.placeholders.challenger)+field(t.id+":constant","Hold constant",f.constant,f.placeholders.constant)+field(t.id+":metric","Success metric",f.metric,f.placeholders.metric)+'<p class="mx-hint">Empty fields use the suggestion shown. Saved in this browser.</p></div></div></div>'+
  '</section>';
 }
 function exportMessaging(){
@@ -1186,7 +1147,6 @@ document.addEventListener("click",e=>{
  if(action==="group"){const gm=state.groupMeta?.get(id);if(gm){state.expanded=state.expanded||new Set();if(state.expanded.has(gm.key))state.expanded.delete(gm.key);else{state.expanded.add(gm.key);state.revealAll=true}renderCards();for(const a of state.rows)if(groupKey(a)===gm.key)requestMedia(a.id,{priority:true})}}
  if(action==="revealall"){state.revealAll=true;updateReveal()}
  if(action==="exportmsg")exportMessaging();
- if(action==="copybrief")copyBrief(id,b);
  if(action==="msgall"){state.msgAllExamples=state.msgAllExamples===id?"":id;renderCards();document.querySelector('[data-action="msgall"]')?.focus({preventScroll:true})}
  if(action==="retrymedia")requestMedia(id,{refresh:true,priority:true});
  if(action==="loadmore"&&(state.cursor||state.needsPageStart)){state.limit+=25;runSearch(state.query||state.brand,state.page,state.cursor||"",false,state.needsPageStart)}
