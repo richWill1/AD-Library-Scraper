@@ -637,9 +637,10 @@ function compareInsights(cols){
   const avgOffer=Math.round(rivals.reduce((s,c)=>s+c.stats.offers,0)/rivals.length);
   if(Math.abs(me.stats.offers-avgOffer)>=15)out.push({kind:me.stats.offers>avgOffer?"note":"gap",title:me.stats.offers>avgOffer?"You discount more":"Competitors push offers harder",text:"Offers appear in "+me.stats.offers+"% of your ads vs "+avgOffer+"% on average for your pins."});
  }
- const fresh=[...cols].sort((a,b)=>b.stats.new30-a.stats.new30)[0];
+ const full=cols.filter(c=>!c.stats.partial);
+ const fresh=[...full].sort((a,b)=>b.stats.new30-a.stats.new30)[0];
  if(fresh&&fresh.stats.new30>=20)out.push({kind:"note",title:name(fresh)+" is testing hardest",text:fresh.stats.new30+"% of their live ads launched in the last 30 days."});
- const durable=[...cols].sort((a,b)=>b.stats.long-a.stats.long)[0];
+ const durable=[...full].sort((a,b)=>b.stats.long-a.stats.long)[0];
  if(durable&&durable.stats.long>=20)out.push({kind:"note",title:name(durable)+" has the most long-runners",text:durable.stats.long+"% of their ads have run 90+ days. Study these: brands keep paying for what works."});
  return out.slice(0,6);
 }
@@ -648,15 +649,15 @@ function compareHTML(){
  if(!mine&&!brands.length)return '<div class="cmp-empty"><h3>Compare your brand with your competitors</h3><ol><li>Search your own brand and press <b>This is my brand</b>.</li><li>Search up to 5 competitors and press <b>Pin competitor</b> on each.</li><li>Come back here to see the gaps.</li></ol></div>';
  const need=brands.some(b=>{const d=cmp.data.get(b.id);return !d||(!d.rows&&!d.loading&&!d.error)});
  if(need)setTimeout(()=>loadCompare(false),0);
- const cols=brands.map(b=>{const d=cmp.data.get(b.id);return {...b,d,stats:d&&d.rows?brandStats(d.rows):null}});
+ const cols=brands.map(b=>{const d=cmp.data.get(b.id);const st=d&&d.rows?brandStats(d.rows):null;if(st)st.partial=!!d.more;return {...b,d,stats:st}});
  const ready=cols.filter(c=>c.stats);
  const head='<tr><th></th>'+cols.map(c=>'<th class="'+(c.mine?'me':'')+'"><button class="cmp-brand" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'">'+logoHTML(c.id,c.name,"")+'<span>'+esc(c.name)+'</span></button>'+(c.mine?'<small>Your brand</small>':'<small>Competitor</small>')+'</th>').join("")+'</tr>';
  const cell=(c,f)=>c.stats?f(c.stats):c.d&&c.d.error?'<span class="cmp-err">Couldn’t load</span>':'<span class="cmp-wait"></span>';
  const row=(label,f,hint)=>'<tr><th scope="row">'+esc(label)+(hint?'<small>'+esc(hint)+'</small>':'')+'</th>'+cols.map(c=>'<td class="'+(c.mine?'me':'')+'">'+cell(c,f)+'</td>').join("")+'</tr>';
  const stats='<table class="cmp-table"><thead>'+head+'</thead><tbody>'+
-  row("Live ads",s=>'<b>'+s.distinct+'</b>'+(s.distinct<s.total?' <small>('+s.total+' incl. variants)</small>':''),"Most recent 100 per brand")+
-  row("Launched in 30 days",s=>'<b>'+s.new30+'%</b>',"How hard they’re testing")+
-  row("Long-runners 90d+",s=>'<b>'+s.long+'%</b>',"Ads they keep paying for")+
+  row("Live ads",s=>'<b>'+s.distinct+'</b>'+(s.distinct<s.total?' <small>('+s.total+' incl. variants)</small>':''),"Newest 100 per brand are analysed")+
+  row("Launched in 30 days",s=>'<b>'+s.new30+'%</b>'+(s.partial?' <small>of newest 100</small>':''),"How hard they’re testing")+
+  row("Long-runners 90d+",s=>'<b>'+s.long+'%</b>'+(s.partial?' <small>of newest 100</small>':''),"Ads they keep paying for")+
   row("Median days live",s=>'<b>'+(s.median??"—")+'</b>')+
   row("Ads with an offer",s=>'<b>'+s.offers+'%</b>')+
   row("Lead hook",s=>esc(s.hook))+row("Lead benefit",s=>esc(s.benefit))+row("Lead proof",s=>esc(s.proof))+row("Top call to action",s=>esc(s.cta))+
