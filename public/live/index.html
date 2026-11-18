@@ -327,7 +327,60 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 <div id="loadbar" class="loadbar" hidden role="status" aria-live="polite"><div class="lb-rail"><div class="loadbar-track"><div class="loadbar-fill"></div></div><img class="lb-rider" id="loadbarRider" src="/brand/adsnoop-loader.svg" width="38" height="22" alt="" aria-hidden="true"></div><div class="lb-game" id="loadbarGame" hidden><canvas aria-hidden="true"></canvas><div class="lb-game-top"><span class="lb-title"><span aria-hidden="true">🎮</span> Play while you wait <small class="lb-play"></small></span><span class="lb-score"></span></div><button type="button" class="lb-start">▶ Play while you wait</button></div><div class="loadbar-row"><div class="lb-text"><span id="loadbarText"></span><small id="loadbarHint"></small></div><button class="linkbutton" id="loadbarAll" data-action="revealall">Show all ads now</button></div><div class="lb-strip" id="loadbarStrip" aria-hidden="true"></div></div><div id="cards" class="cards"></div><div id="pager" class="live-pager"></div><p class="notice">The Meta Ad Library does not provide spend, conversions or verified creative performance for commercial ads here. Preview availability depends on the source media collector. Format and funnel labels may be inferred.</p>
 </div></main>
 <section class="feature" id="feature"><div class="wrap featurein"><div><p class="eyebrow">Messaging intelligence</p><h2>What themes keep coming up?</h2><p>Get a quick overview of repeated language across the ads currently loaded. These are text-based estimates, not measured performance.</p><div class="featuretags"><span>Creative hooks</span><span>Benefits</span><span>Offers</span><span>Proof points</span></div></div><div class="featurepanel"><p class="eyebrow">Messaging breakdown</p><div id="themePanel"><p>Choose an advertiser to analyse messaging themes.</p></div></div></div></section>
-<footer class="foot space-foot" data-space="footer"><div class="space-bg" aria-hidden="true"><canvas class="space-canvas"></canvas><div class="foot-glow"></div></div><div class="footin"><div class="foot-brand"><img src="/brand/adsnoop-wordmark-light.svg" alt="AdSnoop" width="132" height="34"><p>See what your competitors are putting out there.</p></div><nav class="foot-links" aria-label="Footer"><button data-view="discover">Discover</button><button data-view="saved">Saved ideas</button><a href="#top" data-scrolltop>Back to top ↑</a></nav><p class="foot-note">Data from Meta’s public Ad Library. Not affiliated with Meta. UK reach figures are Meta’s own estimates.</p></div></footer>
+<footer class="foot space-foot" data-space="footer"><div class="space-bg" aria-hidden="true"><canvas class="space-canvas"></canvas><div class="foot-glow"></div></div><div class="footin"><div class="foot-brand"><img src="/brand/adsnoop-wordmark-light.svg" alt="AdSnoop" width="132" height="34"><p>See what your competitors are putting out there.</p></div><nav class="foot-links" aria-label="Footer"><button data-view="discover">Discover</button><button data-view="saved">Saved ideas</button><button type="button" id="analytics-settings" hidden>Analytics settings</button><a href="#top" data-scrolltop>Back to top ↑</a></nav><p class="foot-note">Data from Meta’s public Ad Library. Not affiliated with Meta. UK reach figures are Meta’s own estimates.</p></div></footer>
 <div id="modalOverlay" class="overlay"><div role="dialog" aria-modal="true" aria-labelledby="modalTitle" class="modal"><div class="modalhead"><div><p class="eyebrow">Creative research</p><h2 id="modalTitle"></h2></div><button class="close" id="closeModal" aria-label="Close details">×</button></div><div id="modalContent"></div></div></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div><div id="comparisonBar" class="cmpbar"><span id="compareCount">0 of 3 selected</span><button class="pill sm" id="compareOpen">Compare ads</button><button class="square" id="compareClear" aria-label="Clear comparison" style="background:#333338;color:white;border-color:#555">×</button></div>
-<script src="/brand/eyes-interaction.js" defer></script><script src="/brand/hero-space.js" defer></script><script src="/brand/loadgame.js"></script><script src="/live/app.js" defer></script></body></html>
+<script src="/brand/eyes-interaction.js" defer></script><script src="/brand/hero-space.js" defer></script><script src="/brand/loadgame.js"></script><script src="/live/app.js" defer></script><aside id="analytics-choice" aria-labelledby="analytics-heading" hidden style="position:fixed;bottom:12px;left:12px;z-index:9999;width:min(390px,calc(100% - 24px));background:white;color:#222;border:1px solid #bbb;border-radius:12px;padding:16px;box-shadow:0 4px 20px #0002;font-size:14px">
+<strong id="analytics-heading">Analytics cookies</strong>
+<p>With your permission, AdSnoop uses Google Analytics cookies to measure page visits and interactions. You can change your choice in the footer. <a style="text-decoration:underline" href="https://policies.google.com/technologies/partner-sites">How Google uses this data</a></p>
+<button class="ghost" type="button" id="analytics-decline">Decline</button> <button class="ghost" type="button" id="analytics-allow">Allow analytics</button>
+</aside>
+<script>
+(() => {
+  if (location.hostname !== 'adsnoop.co.uk') return;
+  const measurementId = 'G-8BWL3SGLRE';
+  const choiceKey = 'adsnoop-analytics-choice';
+  const panel = document.getElementById('analytics-choice');
+  const settings = document.getElementById('analytics-settings');
+  let started = false;
+  let choice;
+  try { choice = localStorage.getItem(choiceKey); } catch {}
+  function startAnalytics() {
+    if (started) return;
+    started = true;
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { window.dataLayer.push(arguments); }
+    gtag('consent', 'default', { analytics_storage: 'granted', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
+    gtag('js', new Date());
+    gtag('config', measurementId, { allow_google_signals: false, allow_ad_personalization_signals: false });
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://www.googletagmanager.com/gtag/js?id=' + measurementId;
+    document.head.appendChild(script);
+  }
+  function choose(value) {
+    try { localStorage.setItem(choiceKey, value); } catch {}
+    panel.hidden = true;
+    if (value === 'allow') {
+      window['ga-disable-' + measurementId] = false;
+      startAnalytics();
+    } else {
+      window['ga-disable-' + measurementId] = true;
+      for (const cookie of document.cookie.split(';')) {
+        const name = cookie.trim().split('=')[0];
+        if (name === '_ga' || name.startsWith('_ga_')) {
+          document.cookie = name + '=; Max-Age=0; Path=/; Domain=adsnoop.co.uk';
+          document.cookie = name + '=; Max-Age=0; Path=/';
+        }
+      }
+      if (started) location.reload();
+    }
+  }
+  settings.hidden = false;
+  settings.onclick = () => { panel.hidden = false; document.getElementById('analytics-decline').focus(); };
+  panel.hidden = choice === 'allow' || choice === 'decline';
+  document.getElementById('analytics-decline').onclick = () => choose('decline');
+  document.getElementById('analytics-allow').onclick = () => choose('allow');
+  if (choice === 'allow') startAnalytics();
+})();
+</script></body></html>
