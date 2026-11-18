@@ -67,13 +67,28 @@ async function resolveByName(q){
  if(d&&list.length===1&&/^\d{3,30}$/.test(list[0].id)&&(d.status==="resolved"||(d.resolved===true&&!d.status))){open(list[0]);return}
  if(d&&list.length&&(d.status==="choose"||d.status==="resolved")){busy(false);feedback("");state.pick={q,kind:"choose",items:list.slice(0,8),message:d.message||""};renderCards();return}
  const failed=!d||!ok||(d.status!=="not_found"&&(d.status==="lookup_failed"||["LOOKUP_FAILED","PAGE_METADATA_PERMISSION","NO_PAGE_TOKEN","HANDLE_UNRESOLVED","RATE_LIMITED"].includes(d.code)||!!d.message));
- if(failed){
-  busy(false);feedback("");
-  state.pick={q,kind:"failed",items:[],message:(d&&(d.code==="RATE_LIMITED"?"Please wait a minute, then search again.":d.message))||"The lookup failed before a Page could be identified. This does not mean the advertiser has no ads."};
-  renderCards();return;
- }
+ const fallback=failed?{q,kind:"failed",items:[],message:(d&&(d.code==="RATE_LIMITED"?"Please wait a minute, then search again.":d.message))||"The lookup failed before a Page could be identified. This does not mean the advertiser has no ads."}
+  :{q,kind:"missing",items:mentions,message:(d&&d.message)||"No Facebook Page could be identified from an official website or from a Page name in the Ad Library."};
+ void discoverAdvertisers(q,rid,fallback,open);
+}
+// No exact Page match: read several hundred ads mentioning the words and rank
+// every advertiser using them by UK reach (for example "blinds" lists the big
+// blinds retailers). A multi-word search that clearly names one of them opens it.
+async function discoverAdvertisers(q,rid,fallback,open){
+ busy(true);feedback("Finding every advertiser running ads about “"+q+"”…");
+ let d=null;
+ try{const r=await fetch("/api/discover?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(70000)});if(r.ok)d=await r.json()}catch{}
+ if(rid!==requestNumber)return;
  busy(false);feedback("");
- state.pick={q,kind:"missing",items:mentions,message:(d&&d.message)||"No Facebook Page could be identified from an official website or from a Page name in the Ad Library."};
+ const list=Array.isArray(d&&d.advertisers)?d.advertisers.filter(a=>a&&/^\d{3,30}$/.test(a.id)&&typeof a.name==="string"):[];
+ for(const a of list)rememberPageId(a.name,a.id);
+ const term=q.trim(),wholeWord=n=>new RegExp('^'+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![a-z0-9])','i').test(String(n).trim());
+ const exact=list.filter(a=>nameScore(term,a.name)>=5);
+ const named=term.split(/\s+/).length>1||/\d/.test(term)?list.filter(a=>wholeWord(a.name)):[];
+ const pickOne=exact.length===1?exact[0]:!exact.length&&named.length===1?named[0]:null;
+ if(pickOne){open({id:pickOne.id,name:pickOne.name,adCount:pickOne.ads});return}
+ if(!list.length){state.pick=fallback;renderCards();return}
+ state.pick={q,kind:"category",items:list.slice(0,24),scanned:d.scanned||0,more:!!d.more};
  renderCards();
 }
 const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T12:00:00Z":s);return Number.isFinite(d.getTime())?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"Unknown"};
@@ -202,12 +217,12 @@ function isStart(){return state.view==="discover"&&!state.brand&&!state.rows.len
 function compactNumber(n){return n>=1e6?(n/1e6).toFixed(n>=1e7?0:1).replace(/\.0$/,"")+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1).replace(/\.0$/,"")+"K":String(n)}
 function pickHTML(){
  const p=state.pick;
- const head=p.kind==="failed"?"Meta lookup failed":p.kind==="missing"?"Couldn’t identify a Facebook Page for “"+p.q+"”":p.items.length===1&&!/^\d{3,30}$/.test(p.items[0].id||"")?"Facebook Page found":"Which advertiser do you mean?";
- const sub=p.message||(p.kind==="missing"?"Paste the brand’s website, Facebook Page link, @handle or Page ID.":"Choose the business you mean. A shared owner or a name inside someone else’s ad is not listed as a match.");
+ const head=p.kind==="category"?"Advertisers running ads about “"+p.q+"”":p.kind==="failed"?"Meta lookup failed":p.kind==="missing"?"Couldn’t identify a Facebook Page for “"+p.q+"”":p.items.length===1&&!/^\d{3,30}$/.test(p.items[0].id||"")?"Facebook Page found":"Which advertiser do you mean?";
+ const sub=p.kind==="category"?"Ranked by Meta’s estimated UK reach across the "+p.scanned+(p.more?" most recent":"")+" live UK ads that mention it. Choose one to see all of its ads.":p.message||(p.kind==="missing"?"Paste the brand’s website, Facebook Page link, @handle or Page ID.":"Choose the business you mean. A shared owner or a name inside someone else’s ad is not listed as a match.");
  const cards=p.items.map((a,i)=>{
   let host="";if(a.website){try{host=new URL(a.website).hostname.replace(/^www\./,"")}catch{}}
   const ads=a.activeAds===false?"No active UK ads":a.activeAds===true?"Active UK ads":"";
-  const meta=p.kind==="missing"?(a.count||a.mentions||0)+" ads mention the words — not a Page match":[a.category,host,a.handle?"@"+a.handle:"",ads].filter(Boolean).join(" · ");
+  const meta=p.kind==="category"?a.ads+" matching ad"+(a.ads===1?"":"s")+(a.reach?" · UK reach "+compactNumber(a.reach):""):p.kind==="missing"?(a.count||a.mentions||0)+" ads mention the words — not a Page match":[a.category,host,a.handle?"@"+a.handle:"",ads].filter(Boolean).join(" · ");
   const go=a.activeAds===false?"Open Page":"See their ads →";
   const body=logoHTML(a.id,a.name,"lg",a.picture,a.logo)+'<span><strong>'+esc(a.name)+'</strong><br><small>'+esc(meta||"Facebook Page")+'</small>'+(p.kind!=="missing"&&a.evidence?'<br><small>'+esc(a.evidence)+'</small>':'')+'</span><span class="go">'+go+'</span>';
   if(!/^\d{3,30}$/.test(a.id||"")){const href=a.handle?"https://www.facebook.com/"+encodeURIComponent(a.handle):(a.website||"");return href?'<a class="bcard" style="--i:'+i+'" href="'+esc(href)+'" target="_blank" rel="noopener noreferrer">'+body+'</a>':"";}
