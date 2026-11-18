@@ -491,7 +491,11 @@ function compareWithLastVisit(){
  let result={first:!prev};
  if(prev&&Array.isArray(prev.ids)){
   const before=new Set(prev.ids),current=new Set(ids);
-  result={first:false,since:prev.at,added:ids.filter(id=>!before.has(id)),removed:complete&&prev.complete?prev.ids.filter(id=>!current.has(id)):null};
+  // "New" = not seen before AND launched on or after the day of the last visit,
+  // so loading more ads than last time never counts old ads as new.
+  const sinceDay=new Date(prev.at).toISOString().slice(0,10);
+  const added=state.rows.filter(a=>!before.has(a.id)&&String(a.start||"")>=sinceDay).map(a=>a.id);
+  result={first:false,since:prev.at,added,removed:complete&&prev.complete?prev.ids.filter(id=>!current.has(id)):null};
  }
  // Keep the baseline from the earlier visit until a day has passed, so
  // repeated searches the same day still show what changed since that visit.
