@@ -866,7 +866,7 @@ renderCards();health();
  const onScroll=()=>document.body.classList.toggle("scrolled",scrollY>24);
  addEventListener("scroll",onScroll,{passive:true});onScroll();
  const fine=matchMedia("(hover: hover) and (pointer: fine)").matches;
- const grid=$("cards");
+ const grid=document.getElementById("cards");
  if(grid&&fine){
   grid.addEventListener("pointermove",e=>{const c=e.target.closest(".adcard");if(!c)return;const r=c.getBoundingClientRect();c.style.setProperty("--mx",(e.clientX-r.left)+"px");c.style.setProperty("--my",(e.clientY-r.top)+"px")},{passive:true});
   grid.addEventListener("pointerover",e=>{const v=e.target.closest(".live-visual")?.querySelector("video");if(v&&v.paused){v.muted=true;v.dataset.hoverplay="1";v.play().catch(()=>{})}});
