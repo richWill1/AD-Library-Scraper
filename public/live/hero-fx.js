@@ -124,7 +124,24 @@ function signals(){
   }
  };
 }
-const fx=kind==="lightning"?lightning():kind==="snow"?snow():signals();
+// ---------- Legal pages: calm aurora ribbons that lean toward the pointer ----------
+function aurora(){
+ let t=0,lean=0;
+ const bands=[{c:"100,140,255",y:.35,a:.16,f:.9},{c:"120,90,220",y:.55,a:.13,f:1.3},{c:"80,200,220",y:.7,a:.1,f:.7}];
+ return {
+  draw(dt){
+   t+=dt*(reduce?0:1);ctx.clearRect(0,0,W,H);
+   lean+=(((pointer.active?pointer.x/W:.5)-.5)-lean)*Math.min(1,dt*2);
+   for(const b of bands){
+    const g=ctx.createLinearGradient(0,0,W,0);g.addColorStop(0,"rgba("+b.c+",0)");g.addColorStop(.5+lean*.4,"rgba("+b.c+","+b.a+")");g.addColorStop(1,"rgba("+b.c+",0)");
+    ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(0,H);
+    for(let x=0;x<=W;x+=16){const y=H*b.y+Math.sin(x/W*6.28*b.f+t*.5*b.f)*H*.08+Math.sin(x/W*14+t*.8)*H*.02;ctx.lineTo(x,y)}
+    ctx.lineTo(W,H);ctx.closePath();ctx.fill();
+   }
+  }
+ };
+}
+const fx=kind==="lightning"?lightning():kind==="snow"?snow():kind==="aurora"?aurora():signals();
 function loop(now){
  const dt=Math.min(.05,(now-last)/1000);last=now;
  if(visible&&!document.hidden)fx.draw(dt);

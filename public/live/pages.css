@@ -14,6 +14,8 @@ button{font:inherit}
 /* Christmas: a deep winter night with a warm glow */
 .fx-snow{background:radial-gradient(900px 420px at 80% -10%,rgba(200,40,60,.28),transparent 60%),radial-gradient(700px 360px at 10% 110%,rgba(40,140,90,.2),transparent 60%),linear-gradient(180deg,#060a18,#0d1530 70%,#121a36)}
 .fx-snow .pg-eyebrow{color:#ff8a8a}
+/* Legal pages: calm aurora */
+.fx-aurora{background:linear-gradient(180deg,#05070f,#0b1020)}
 /* Meta updates: a live signal network */
 .fx-signals{background:radial-gradient(1000px 420px at 70% -10%,rgba(40,90,220,.3),transparent 60%),linear-gradient(180deg,#040818,#0a1430)}
 .fx-signals .pg-eyebrow{color:#64d2ff}
@@ -95,3 +97,18 @@ button{font:inherit}
 .pg-foot a,.pg-foot button{color:#d2d2d7;text-decoration:none;background:none;border:0;padding:0;cursor:pointer;font-size:13px}
 .pg-foot nav{display:flex;gap:16px;flex-wrap:wrap}
 .ghost{border:1px solid #d2d2d7;background:#fff;border-radius:999px;padding:7px 14px;cursor:pointer}
+.legal h2{font-size:22px;letter-spacing:-.03em;margin:34px 0 8px;scroll-margin-top:88px}
+.legal h2:first-child{margin-top:0}
+.legal h3{font-size:17px;margin:20px 0 6px;letter-spacing:-.01em}
+.legal p,.legal li{color:#424245}
+.legal p{margin:0 0 12px}
+.legal ul,.legal ol{margin:0 0 16px;padding-left:1.2em}
+.legal li{margin:0 0 6px}
+.legal code{font-size:.92em}
+.pg-hero .updated{color:#c9d1e8;font-size:14px;margin:14px 0 0}
+.pg-hero .updated a{text-decoration:underline}
+.legal a{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
+.legal .updated{color:var(--muted);margin-top:10px}
+.legal table{width:100%;border-collapse:collapse;font-size:14px;margin:0 0 18px}
+.legal th,.legal td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:10px 14px 10px 0}
+.legal th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700}
