@@ -690,7 +690,8 @@ function themeTrend(t,ads){
 }
 function messagingInsights(ads,themes){
  const out=[],total=ads.length,overall=median(ads.map(daysRunning));
- if(themes[0])out.push({kind:"note",title:"Lead message: "+themes[0].label,text:"In "+pctOf(themes[0].ads.length,total)+"% of ads. "+(themes[1]?"Next: "+themes[1].label+" ("+pctOf(themes[1].ads.length,total)+"%).":"")});
+ const msgs=themes.filter(t=>t.category!=="actions");
+ if(msgs[0])out.push({kind:"note",title:"Lead message: "+msgs[0].label,text:"In "+pctOf(msgs[0].ads.length,total)+"% of ads. "+(msgs[1]?"Then "+msgs[1].label+" ("+pctOf(msgs[1].ads.length,total)+"%).":"")+(themes.find(t=>t.category==="actions")?" Most ads ask people to "+themes.find(t=>t.category==="actions").label.toLowerCase()+".":"")});
  const trends=themes.map(t=>({t,d:themeTrend(t,ads)}));
  const up=trends.filter(x=>x.d>=10).sort((a,b)=>b.d-a.d)[0],down=trends.filter(x=>x.d<=-10).sort((a,b)=>a.d-b.d)[0];
  if(up)out.push({kind:"edge",title:"Rising: "+up.t.label,text:"+"+up.d+" points in ads launched in the last 30 days vs older ads. A message they’re actively testing."});
@@ -766,15 +767,18 @@ const catColor={hooks:"#a347d1",benefits:"#0071e3",offers:"#e07800",proof:"#1f9d
 function strategyMap(themes,total,overallMed,trend){
  const pts=themes.map(t=>({t,x:pctOf(t.ads.length,total),y:median(t.ads.map(daysRunning))})).filter(p=>p.y!=null);
  if(pts.length<3||overallMed==null)return "";
- const W=560,H=320,L=44,R=16,T=16,B=40,xMax=Math.max(20,Math.ceil(Math.max(...pts.map(p=>p.x))/10)*10),yMax=Math.max(overallMed*2,Math.ceil(Math.max(...pts.map(p=>p.y))/10)*10,10);
- const xs=x=>L+(x/xMax)*(W-L-R),ys=y=>H-B-(Math.min(y,yMax)/yMax)*(H-T-B);
- const xSplit=Math.max(10,median(pts.map(p=>p.x))),qx=xs(xSplit),qy=ys(overallMed);
+ const W=600,H=340,L=44,R=16,T=16,B=40,xMax=Math.max(20,Math.ceil(Math.max(...pts.map(p=>p.x))/10)*10),yMax=Math.max(overallMed*2,Math.ceil(Math.max(...pts.map(p=>p.y))/10)*10,10);
+ const xSplit=Math.min(xMax-1,Math.max(5,median(pts.map(p=>p.x)))),yTop=Math.max(overallMed+1,...pts.map(p=>p.y));
+ const midX=(L+W-R)/2,midY=(T+H-B)/2;
+ const xs=x=>x<=xSplit?L+(x/xSplit)*(midX-L):midX+((x-xSplit)/(xMax-xSplit))*(W-R-midX);
+ const ys=y=>y<=overallMed?H-B-(y/Math.max(1,overallMed))*(H-B-midY):midY-(Math.sqrt(y-overallMed)/Math.sqrt(yTop-overallMed))*(midY-T-6);
+ const qx=midX,qy=midY;
  const quad=(x,y,w,h,label,fill)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="'+fill+'"/><text x="'+(x+8)+'" y="'+(y+16)+'" class="sm-q">'+label+'</text>';
  let svg='<svg class="sm-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Strategy map: share of ads against median days live for each message theme">'+
   quad(qx,T,W-R-qx,qy-T,"CORE MESSAGES","rgba(31,157,76,.06)")+quad(L,T,qx-L,qy-T,"QUIET PERFORMERS","rgba(0,113,227,.05)")+quad(qx,qy,W-R-qx,H-B-qy,"CURRENT PUSH","rgba(224,120,0,.06)")+quad(L,qy,qx-L,H-B-qy,"EXPERIMENTS","rgba(0,0,0,.025)")+
   '<line x1="'+L+'" y1="'+(H-B)+'" x2="'+(W-R)+'" y2="'+(H-B)+'" class="sm-axis"/><line x1="'+L+'" y1="'+T+'" x2="'+L+'" y2="'+(H-B)+'" class="sm-axis"/>'+
   '<text x="'+((L+W-R)/2)+'" y="'+(H-8)+'" class="sm-lab" text-anchor="middle">Share of ads →</text><text x="12" y="'+((T+H-B)/2)+'" class="sm-lab" text-anchor="middle" transform="rotate(-90 12 '+((T+H-B)/2)+')">Days live (median) →</text>'+
-  '<text x="'+(L-6)+'" y="'+(qy+4)+'" class="sm-tick" text-anchor="end">'+overallMed+'d</text><text x="'+qx+'" y="'+(H-B+14)+'" class="sm-tick" text-anchor="middle">'+Math.round(xSplit)+'%</text><text x="'+(W-R)+'" y="'+(H-B+14)+'" class="sm-tick" text-anchor="end">'+xMax+'%</text>';
+  '<text x="'+(L-6)+'" y="'+(qy+4)+'" class="sm-tick" text-anchor="end">'+overallMed+'d</text><text x="'+qx+'" y="'+(H-B+14)+'" class="sm-tick" text-anchor="middle">'+Math.round(xSplit)+'%</text><text x="'+(W-R)+'" y="'+(H-B+14)+'" class="sm-tick" text-anchor="end">'+xMax+'%</text><text x="'+(L-6)+'" y="'+(T+10)+'" class="sm-tick" text-anchor="end">'+yTop+'d</text>';
  const placed=[];
  for(const p of [...pts].sort((a,b)=>b.t.ads.length-a.t.ads.length)){
   const cx=xs(p.x),cy=ys(p.y),r=5+Math.sqrt(p.t.ads.length/total)*12,on=p.t.id===state.theme;
@@ -784,8 +788,9 @@ function strategyMap(themes,total,overallMed,trend){
   svg+='<g class="sm-dot'+(on?' on':'')+'" data-theme="'+p.t.id+'" tabindex="0" role="button" aria-label="'+esc(p.t.label)+': '+p.x+'% of ads, median '+p.y+' days"><circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+catColor[p.t.category]+'"/><text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anchor+'">'+esc(p.t.label)+(trend[p.t.id]>=10?' ↑':trend[p.t.id]<=-10?' ↓':'')+'</text></g>';
  }
  svg+='</svg>';
+ svg='<div class="sm-plot">'+svg+'</div>';
  const legend=messageCategories.map(c=>'<span><i style="background:'+catColor[c.id]+'"></i>'+esc(c.label)+'</span>').join("");
- return '<section class="sm"><div class="sm-head"><h3>Strategy map</h3><p>Each dot is a message theme. Further right = used in more ads; higher = those ads stay live longer, a sign the brand keeps paying for them.</p></div>'+svg+'<p class="sm-legend">'+legend+'</p><div class="sm-key"><p><b>Core messages</b> Used a lot and kept running: what they bank on.</p><p><b>Current push</b> Used a lot in newer ads: what they’re betting on now.</p><p><b>Quiet performers</b> Rare but long-running: worth testing.</p><p><b>Experiments</b> Small and new: being tried out.</p></div></section>';
+ return '<section class="sm"><div class="sm-text"><div class="sm-head"><h3>Strategy map</h3><p>Each dot is a message theme. Further right = used in more ads; higher = those ads stay live longer, a sign the brand keeps paying for them.</p></div><p class="sm-legend">'+legend+'</p><div class="sm-key"><p><b>Core messages</b> Used a lot and kept running: what they bank on.</p><p><b>Current push</b> Used a lot in newer ads: what they’re betting on now.</p><p><b>Quiet performers</b> Rare but long-running: worth testing.</p><p><b>Experiments</b> Small and new: being tried out.</p></div></div>'+svg+'</section>';
 }
 function messagingView(){
  const ads=state.rows;
@@ -813,7 +818,7 @@ function messagingView(){
    '<div class="msg-dgrid"><div><h4>How '+esc(state.brand||"they")+' say it</h4><ul class="msg-evidence">'+ex.slice(0,8).map(a=>'<li><blockquote>“'+highlight(t.evidence[a.id],t.match)+'”</blockquote><div class="msg-meta"><span>'+(a.reach!=null?'UK reach '+reach(a.reach):'Reach not reported')+' · since '+esc(formatDate(a.start))+'</span><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button></div></li>').join("")+'</ul>'+(ex.length>8?'<p class="msg-more">+ '+(ex.length-8)+' more variations in the loaded ads.</p>':'')+'</div>'+
    '<div class="msg-test"><h4>Your test direction</h4><textarea data-note="'+t.id+'" rows="6" placeholder="'+esc(t.test)+'">'+esc(note)+'</textarea><p>Starts from a suggested direction; edit it for your brand. Saved in this browser.</p></div></div></section>';
  }
- return '<div class="msg-wrap"><div class="msg-top" style="align-items:center"><div><p>'+total+' ads analysed · '+distinct+' distinct copy variations · '+themes.length+' themes · '+(total-mapped)+' ads with no detected theme</p></div><button class="ghost" data-action="exportmsg">Export map ↓</button></div>'+story+'<div class="msg-split">'+strategyMap(themes,total,overallMed,trend)+matrix+'</div>'+detail+'<p class="notice">Themes are detected from ad text with fixed rules; ads can appear in several themes. Days live and momentum are clues, not proof of performance. English copy only.</p></div>';
+ return '<div class="msg-wrap"><div class="msg-top" style="align-items:center"><div><p>'+total+' ads analysed · '+distinct+' distinct copy variations · '+themes.length+' themes · '+(total-mapped)+' ads with no detected theme</p></div><button class="ghost" data-action="exportmsg">Export map ↓</button></div>'+story+strategyMap(themes,total,overallMed,trend)+matrix+detail+'<p class="notice">Themes are detected from ad text with fixed rules; ads can appear in several themes. Days live and momentum are clues, not proof of performance. English copy only.</p></div>';
 }
 function exportMessaging(){
  const themes=messagingThemes(state.rows),notes=readNotes();
