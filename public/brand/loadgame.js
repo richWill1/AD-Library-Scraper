@@ -8,16 +8,21 @@
   const COLORS = ["#ff4f81", "#ff8a3d", "#ffc23d", "#3ccf91", "#3d9bff", "#8a5cff"];
   const BEST_KEY = "adsnoop-dash-best";
   let host, canvas, ctx, hud, hint, raf = 0, last = 0, running = false, w = 0, h = 0, dpr = 1;
-  let pct = 0, shown = 0, target = 0, played = false, score = 0, best = 0, dizzy = 0, finished = false;
-  // Mood: each hit makes the eyes more unimpressed; clean clears cheer them up.
-  let mood = 0, streak = 0, bubble = null;
-  const MOODS = ["😀", "😐", "😒", "🙄"], QUIPS = ["ugh", "seriously?", "not another pop-up", "oh great", "really?", "meh", "I’ll pass", "spare me"];
+  let pct = 0, shown = 0, target = 0, played = false, score = 0, best = 0, finished = false;
+  // Expressions react to what is happening: content while running, focused as a
+  // hurdle nears, wide-eyed mid-air, happy or winking after a clear, shocked at a
+  // near miss, star-eyed on a streak, unimpressed only right after a crash,
+  // dizzy after two quick crashes, heart-eyed at the finish.
+  let streak = 0, bubble = null, face = { k: "", until: 0 }, lastHit = -1e9, nextBlink = 1800, blinkUntil = 0, nextGlance = 5000, emoji = "🙂";
+  const EMOJI = { happy: "😄", wink: "😉", shock: "😮", star: "🤩", crash: "😒", dizzy: "😵", love: "😍", determined: "😤", glance: "🙂" };
+  const QUIPS = ["ugh", "seriously?", "not another pop-up", "oh great", "really?", "meh", "rude", "spare me"];
+  const CHEERS = ["on fire!", "unstoppable", "too easy", "snoop snoop!"];
   let hurdles = [], confetti = [], sparks = [], floaters = [], nextHurdle = 0, t = 0;
   const eyes = { y: 0, vy: 0, grounded: true, squash: 0 };
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   try { best = Number(localStorage.getItem(BEST_KEY) || 0) || 0; } catch {}
 
-  const ground = () => h - 24;
+  const ground = () => h - 18;
   const runnerX = () => 26 + shown * (w - 80);
 
   function size() {
@@ -30,10 +35,10 @@
 
   function jump() {
     if (!running || finished) return;
-    if (eyes.grounded) { eyes.vy = -7.4; eyes.grounded = false; }
+    if (eyes.grounded) { eyes.vy = -6.1; eyes.grounded = false; }
   }
   function userJump(e) {
-    if (!played) { played = true; score = 0; paintHud(); }
+    if (!played) { played = true; score = 0; setFace("determined", 800); paintHud(); }
     jump();
     if (e) e.preventDefault();
   }
@@ -122,6 +127,17 @@
     ctx.restore();
   }
 
+  function setFace(k, ms) { face = { k, until: t + ms }; if (EMOJI[k]) emoji = EMOJI[k]; paintHud(); }
+  function currentFace() {
+    if (finished) return "love";
+    if (face.until > t) return face.k;
+    if (!eyes.grounded) return "jump";
+    if (t < blinkUntil) return "blink";
+    const rx = runnerX();
+    if (hurdles.some(o => !o.hit && o.x - rx > -10 && o.x - rx < 110)) return "focus";
+    return "normal";
+  }
+
   function drawEyes() {
     const g = ground(), x = runnerX(), y = g - 13 + eyes.y;
     // Sparkle trail while running
@@ -131,45 +147,39 @@
     const sq = eyes.squash, sx = 1 + sq * 0.18, sy = 1 - sq * 0.18;
     // shadow
     ctx.save(); ctx.globalAlpha = 0.18 * (1 + eyes.y / 70); ctx.fillStyle = "#0b1734"; ctx.beginPath(); ctx.ellipse(x, g - 1, 18 * (1 + eyes.y / 120), 3, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-    ctx.save(); ctx.translate(x, y - 4); ctx.scale(sx * 1.25, sy * 1.25);
+    const k = currentFace();
+    ctx.save(); ctx.translate(x, y - 3); ctx.scale(sx * 1.1, sy * 1.1);
+    const NAVY = "#0b1734";
+    const pupil = (px, py, r) => { ctx.fillStyle = NAVY; ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(px + r * 0.33, py - r * 0.33, Math.max(0.6, r * 0.28), 0, Math.PI * 2); ctx.fill(); };
+    const lid = (dx, frac) => { ctx.save(); ctx.beginPath(); ctx.arc(dx, 0, 8.4, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#cfd3e6"; ctx.fillRect(dx - 10, -10, 20, 18 * frac); ctx.restore(); const ly = -9 + 18 * frac, half = Math.sqrt(Math.max(0, 81 - ly * ly)); ctx.strokeStyle = NAVY; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(dx - half, ly); ctx.lineTo(dx + half, ly); ctx.stroke(); };
+    const brow = (dx, inner, lift) => { ctx.strokeStyle = NAVY; ctx.lineWidth = 2.3; ctx.lineCap = "round"; const left = dx < 0; ctx.beginPath(); ctx.moveTo(dx - 7, -13 - lift - (left ? 0 : inner)); ctx.lineTo(dx + 7, -13 - lift - (left ? inner : 0)); ctx.stroke(); };
+    const arcEye = (dx) => { ctx.strokeStyle = NAVY; ctx.lineWidth = 2.6; ctx.lineCap = "round"; ctx.beginPath(); ctx.arc(dx, 4, 5.2, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke(); };
+    const star = (cx, cy, r) => { ctx.fillStyle = "#ffc23d"; ctx.strokeStyle = NAVY; ctx.lineWidth = 1.2; ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.stroke(); };
+    const heart = (cx, cy, r) => { ctx.fillStyle = "#ff4f81"; ctx.beginPath(); ctx.moveTo(cx, cy + r * 0.9); ctx.bezierCurveTo(cx - r * 1.4, cy - r * 0.1, cx - r * 0.7, cy - r * 1.2, cx, cy - r * 0.4); ctx.bezierCurveTo(cx + r * 0.7, cy - r * 1.2, cx + r * 1.4, cy - r * 0.1, cx, cy + r * 0.9); ctx.fill(); };
+    const spiral = (cx, cy) => { ctx.strokeStyle = NAVY; ctx.lineWidth = 1.5; ctx.beginPath(); for (let a = 0; a < Math.PI * 5; a += 0.3) { const r = 0.5 + a * 0.38, rot = a + t / 120; ctx.lineTo(cx + Math.cos(rot) * r, cy + Math.sin(rot) * r); } ctx.stroke(); };
     for (const dx of [-10, 10]) {
-      ctx.fillStyle = "#fff"; ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2.6;
-      ctx.beginPath(); ctx.arc(dx, 0, 9, 0, Math.PI * 2); ctx.fill();
-      ctx.save(); ctx.beginPath(); ctx.arc(dx, 0, 8, 0, Math.PI * 2); ctx.clip();
-      if (mood >= 3) { ctx.strokeStyle = "rgba(232,64,90,.75)"; ctx.lineWidth = 0.8; for (const a of [0.4, 2.6, 3.6, 5.6]) { ctx.beginPath(); ctx.moveTo(dx + Math.cos(a) * 8, Math.sin(a) * 8); ctx.lineTo(dx + Math.cos(a) * 4.5, Math.sin(a) * 4.5 + 1); ctx.stroke(); } }
-      ctx.restore();
-      ctx.beginPath(); ctx.arc(dx, 0, 9, 0, Math.PI * 2); ctx.stroke();
-      if (dizzy > 0) {
-        ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(dx - 4, -4); ctx.lineTo(dx + 4, 4); ctx.moveTo(dx + 4, -4); ctx.lineTo(dx - 4, 4); ctx.stroke();
-      } else {
-        // Eye-roll at peak annoyance, otherwise look ahead.
-        const roll = mood >= 3 && (t / 1400) % 1 < 0.45;
-        const look = finished ? 0 : roll ? -1 : 3, up = roll ? -4.5 : eyes.grounded ? (mood >= 2 ? 1.5 : 0) : -2.5;
-        ctx.fillStyle = "#0b1734"; ctx.beginPath(); ctx.arc(dx + look, up, 4.2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(dx + look + 1.4, up - 1.4, 1.2, 0, Math.PI * 2); ctx.fill();
-      }
-      // Heavy upper lids, lower the more unimpressed they are.
-      const lid = finished ? 0 : [0, 0.32, 0.5, 0.58][mood];
-      if (lid > 0) {
-        ctx.save(); ctx.beginPath(); ctx.arc(dx, 0, 8.4, 0, Math.PI * 2); ctx.clip();
-        ctx.fillStyle = "#cfd3e6"; ctx.fillRect(dx - 10, -10, 20, 18 * lid);
-        ctx.restore();
-        ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2.2; ctx.beginPath();
-        const ly = -9 + 18 * lid, half = Math.sqrt(Math.max(0, 81 - ly * ly));
-        ctx.moveTo(dx - half, ly); ctx.lineTo(dx + half, ly); ctx.stroke();
-      }
-      // Flat, then cross eyebrows.
-      if (mood >= 2 && !finished) {
-        ctx.strokeStyle = "#0b1734"; ctx.lineWidth = 2.4; ctx.lineCap = "round";
-        const tilt = mood >= 3 ? 3 : 0.8, inner = dx < 0 ? 1 : -1;
-        ctx.beginPath(); ctx.moveTo(dx - 7, -13 - (inner < 0 ? tilt : 0)); ctx.lineTo(dx + 7, -13 - (inner > 0 ? tilt : 0)); ctx.stroke();
-      }
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = NAVY; ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.arc(dx, 0, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      if (k === "happy" || (k === "wink" && dx < 0)) arcEye(dx);
+      else if (k === "blink") { ctx.save(); ctx.beginPath(); ctx.arc(dx, 0, 8.4, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#cfd3e6"; ctx.fillRect(dx - 10, -10, 20, 20); ctx.restore(); ctx.strokeStyle = NAVY; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(dx - 8, 1); ctx.quadraticCurveTo(dx, 4, dx + 8, 1); ctx.stroke(); }
+      else if (k === "star") star(dx, 0, 6);
+      else if (k === "love") heart(dx, 0.5, 5.5);
+      else if (k === "dizzy") spiral(dx, 0);
+      else if (k === "shock") { pupil(dx + 1, 0, 2.3); brow(dx, -1, 3.5); }
+      else if (k === "crash") { pupil(dx + (dx < 0 ? 1.5 : -1.5), 2, 4); lid(dx, 0.52); brow(dx, 2.6, 0); }
+      else if (k === "jump") { pupil(dx + 2, -3, 3.5); brow(dx, -0.5, 2.2); }
+      else if (k === "focus") { pupil(dx + 3.5, 1, 3.9); lid(dx, 0.2); brow(dx, 1.8, 0); }
+      else if (k === "determined") { pupil(dx + 3, 0.5, 4); lid(dx, 0.16); brow(dx, 3.2, 0); }
+      else if (k === "glance") pupil(dx - 3.2, 0, 4.2);
+      else pupil(dx + 3, 0, 4.2); // normal, and the open eye of a wink
     }
+    // Rosy cheeks when pleased.
+    if (k === "happy" || k === "wink" || k === "love" || k === "star") { ctx.save(); ctx.globalAlpha = 0.45; ctx.fillStyle = "#ff8fb0"; for (const dx of [-15, 15]) { ctx.beginPath(); ctx.ellipse(dx, 9, 3.4, 2, 0, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
     ctx.restore();
     if (bubble && bubble.life > 0) {
       bubble.life -= 0.02;
       ctx.save(); ctx.globalAlpha = Math.min(1, bubble.life * 2.5);
-      ctx.font = "600 11px -apple-system,Inter,sans-serif"; const tw = ctx.measureText(bubble.text).width + 14, bx = Math.min(w - tw - 6, x + 14), by = y - 46 - (1 - bubble.life) * 6;
+      ctx.font = "600 11px -apple-system,Inter,sans-serif"; const tw = ctx.measureText(bubble.text).width + 14, bx = Math.min(w - tw - 6, x + 14), by = Math.max(2, y - 42 - (1 - bubble.life) * 6);
       ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgba(11,23,52,.15)"; ctx.lineWidth = 1; roundRect(bx, by, tw, 20, 10); ctx.fill(); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(bx + 8, by + 20); ctx.lineTo(bx + 4, by + 26); ctx.lineTo(bx + 14, by + 20); ctx.closePath(); ctx.fill();
       ctx.fillStyle = "#0b1734"; ctx.textAlign = "left"; ctx.fillText(bubble.text, bx + 7, by + 14);
@@ -194,17 +204,30 @@
     // Physics
     if (!eyes.grounded) { eyes.vy += 0.42 * dt; eyes.y += eyes.vy * dt; if (eyes.y >= 0) { eyes.y = 0; eyes.vy = 0; eyes.grounded = true; eyes.squash = 1; } }
     eyes.squash = Math.max(0, eyes.squash - 0.08 * dt);
-    if (dizzy > 0) dizzy -= dt * 16.67;
+    if (t > nextBlink) { blinkUntil = t + 130; nextBlink = t + 2200 + Math.random() * 2600; }
+    if (t > nextGlance) { if (face.until < t && eyes.grounded) setFace("glance", 650); nextGlance = t + 5000 + Math.random() * 5000; }
     // Hurdles
     if (!finished && t > nextHurdle) { spawn(); nextHurdle = t + 1100 + Math.random() * 1300; }
     const speed = 3.4 * dt, rx = runnerX();
     for (const o of hurdles) {
       o.x -= speed;
       // Demo mode: the eyes hop on their own until someone plays.
-      if (!played && !o.hit && o.x - rx < 58 && o.x - rx > 26) jump();
-      const overlapX = o.x < rx + 20 && o.x + o.w > rx - 20, top = ground() - o.h;
-      if (!o.hit && overlapX && ground() - 2 + eyes.y > top) { o.hit = true; dizzy = 450; streak = 0; mood = Math.min(3, mood + 1); bubble = { text: QUIPS[(Math.random() * QUIPS.length) | 0], life: 1 }; paintHud(); }
-      if (!o.scored && !o.hit && o.x + o.w < rx - 20) { o.scored = true; if (++streak >= 3 && mood > 0) { mood--; streak = 0; paintHud(); } if (played) { score++; if (score > best) { best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch {} } paintHud(); } }
+      if (!played && !o.hit && o.x - rx < 52 && o.x - rx > 22) jump();
+      const overlapX = o.x < rx + 18 && o.x + o.w > rx - 18, top = ground() - o.h, bottom = ground() - 5 + eyes.y;
+      if (overlapX && !o.hit) o.clear = Math.min(o.clear ?? 99, top - bottom);
+      if (!o.hit && overlapX && bottom > top) {
+        o.hit = true; streak = 0;
+        // Unimpressed only right after a crash; two quick crashes make them dizzy.
+        if (t - lastHit < 3000) { setFace("dizzy", 1000); bubble = { text: "whoa…", life: 1 }; }
+        else { setFace("crash", 900); bubble = { text: QUIPS[(Math.random() * QUIPS.length) | 0], life: 1 }; }
+        lastHit = t;
+      }
+      if (!o.scored && !o.hit && o.x + o.w < rx - 18) {
+        o.scored = true; streak++;
+        if ((o.clear ?? 99) < 6) setFace("shock", 550);
+        else if (streak % 5 === 0) { setFace("star", 1100); bubble = { text: CHEERS[(Math.random() * CHEERS.length) | 0], life: 1 }; }
+        else setFace(Math.random() < 0.25 ? "wink" : "happy", 520);
+        if (played) { score++; if (score > best) { best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch {} } paintHud(); } }
     }
     hurdles = hurdles.filter(o => o.x > -40);
     // Draw
@@ -215,7 +238,7 @@
 
   function paintHud() {
     if (!hud) return;
-    hud.textContent = played ? MOODS[mood] + "  Hurdles cleared " + score + (best ? " · Best " + best : "") : "";
+    hud.textContent = played ? emoji + "  " + score + " cleared" + (best ? " · Best " + best : "") : "";
     if (hint) hint.textContent = played ? "· Space or tap to jump" : "· Jump the pop-ups with space or a tap";
     if (host) host.classList.toggle("playing", played);
   }
@@ -246,7 +269,7 @@
       if (running) return;
       host.hidden = false; size(); seedFloaters();
       running = true; finished = false; last = 0; t = 0; nextHurdle = 600; hurdles = []; confetti = [];
-      shown = target; score = 0; played = false; dizzy = 0; mood = 0; streak = 0; bubble = null; eyes.y = 0; eyes.vy = 0; eyes.grounded = true;
+      shown = target; score = 0; played = false; streak = 0; bubble = null; face = { k: "", until: 0 }; lastHit = -1e9; emoji = "🙂"; nextBlink = 1800; nextGlance = 5000; eyes.y = 0; eyes.vy = 0; eyes.grounded = true;
       paintHud(); raf = requestAnimationFrame(frame);
     },
     progress(p) { target = Math.max(0, Math.min(1, p)); },
