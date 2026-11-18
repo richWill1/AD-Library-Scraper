@@ -159,15 +159,11 @@ body.has-tabs .loadbar{top:56px}
 @media(prefers-reduced-motion:reduce){.hero.space .rl,.hero.space .sl{transition:none}}
 
 /* ===== Slick pass ===== */
-:root{--navh:60px;--ease:cubic-bezier(.2,.8,.2,1)}
+:root{--navh:76px;--ease:cubic-bezier(.2,.8,.2,1)}
 html{scroll-behavior:smooth}
 /* 1. Glass header that slims on scroll, and a soft handover from the hero */
-.as-unified-nav{position:sticky;top:0;z-index:60;transition:background .35s ease,min-height .35s var(--ease),box-shadow .35s ease,border-color .35s ease}
-.as-unified-nav .nav-in{transition:min-height .35s var(--ease)}
-body.scrolled .as-unified-nav{background:rgba(9,14,32,.9);-webkit-backdrop-filter:saturate(180%) blur(18px);backdrop-filter:saturate(180%) blur(18px);min-height:60px;box-shadow:0 10px 30px rgba(5,7,26,.18);border-bottom-color:rgba(255,255,255,.06)}
-body.scrolled .as-unified-nav .nav-in{min-height:60px}
-body.scrolled .as-unified-nav .as-interactive-wordmark{transform:scale(.86);transform-origin:left center}
-.as-unified-nav .as-interactive-wordmark{transition:transform .35s var(--ease)}
+.as-unified-nav{position:sticky;top:0;z-index:60;transition:background .35s ease,box-shadow .35s ease,border-color .35s ease}
+body.scrolled .as-unified-nav{background:rgba(9,14,32,.9);-webkit-backdrop-filter:saturate(180%) blur(18px);backdrop-filter:saturate(180%) blur(18px);box-shadow:0 10px 30px rgba(5,7,26,.18);border-bottom-color:rgba(255,255,255,.06)}
 .viewtabs{top:calc(var(--navh) + 8px)}
 .loadbar{top:var(--navh)!important}
 body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}

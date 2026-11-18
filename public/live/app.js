@@ -863,8 +863,14 @@ renderCards();health();
 })();
 // ---- Page polish: glass header, tile glow, hover-to-play video ----
 (function(){
- const onScroll=()=>document.body.classList.toggle("scrolled",scrollY>24);
+ // The header never changes size; only its glass background fades in, with
+ // separate on/off points so it can't flicker at the threshold.
+ let scrolled=false;
+ const onScroll=()=>{const next=scrolled?scrollY>8:scrollY>40;if(next!==scrolled){scrolled=next;document.body.classList.toggle("scrolled",next)}};
  addEventListener("scroll",onScroll,{passive:true});onScroll();
+ // Sticky tabs and loading bar sit under the header's real height (taller on phones).
+ const nav=document.querySelector(".as-unified-nav");
+ if(nav){const setH=()=>document.documentElement.style.setProperty("--navh",Math.round(nav.getBoundingClientRect().height)+"px");setH();if("ResizeObserver" in window)new ResizeObserver(setH).observe(nav);else addEventListener("resize",setH)}
  const fine=matchMedia("(hover: hover) and (pointer: fine)").matches;
  const grid=document.getElementById("cards");
  if(grid&&fine){
