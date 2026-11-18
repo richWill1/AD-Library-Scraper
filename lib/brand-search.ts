@@ -1,6 +1,9 @@
-export type AdvertiserIdentity={pageId:string;pageName:string;aliases:string[]};
+export type AdvertiserIdentity={pageId:string;pageName:string;handle?:string;aliases:string[]};
 // Previously verified advertiser identities, not a source of current ad data.
 export const knownAdvertisers:AdvertiserIdentity[]=[
+ // CareCo's own site links to this handle. The public Facebook Page card
+ // links to this numeric ID, which ads_archive independently names CareCo.
+ {pageId:'107666748486424',pageName:'CareCo',handle:'CareCoMobilityExperts',aliases:['careco','CareCoMobilityExperts','careco.co.uk']},
  {pageId:'280531915302272',pageName:'Sharps Fitted Furniture',aliases:['sharps','sharps.co.uk']},
  {pageId:'384841908531592',pageName:'Neville Johnson',aliases:['neville johnson','nevillejohnson','nevillejohnson.co.uk']},
  {pageId:'180833751931315',pageName:'Hammonds',aliases:['hammonds','hammonds furniture','hammonds-uk.com']},

@@ -1,7 +1,7 @@
 import {directorySearch,observePage} from '@/lib/advertiser-directory';
 import {getMetaCredential} from '@/lib/meta-token-store';
 import {metaFetch} from '@/lib/meta-api';
-import {facebookIdentity,brandQuery} from '@/lib/brand-search';
+import {facebookIdentity,brandQuery,knownAdvertisers} from '@/lib/brand-search';
 import {NextRequest, NextResponse} from 'next/server';
 import {collectorConfiguration} from '@/lib/meta-creative';
 export const runtime = 'nodejs';
@@ -39,15 +39,17 @@ export async function GET(req: NextRequest) {
   if(identity?.id)return reply({advertisers:[{id:identity.id,name:'Facebook Page '+identity.id}],resolved:true});
   if(identity?.handle){
     const handle=identity.handle;
+    const verified=knownAdvertisers.find(p=>p.handle?.toLowerCase()===handle.toLowerCase());
+    if(verified)return reply({advertisers:[{id:verified.pageId,name:verified.pageName,alias:handle}],resolved:true,source:'verified-page'});
     const saved=await directorySearch(handle,true);
     if(saved.length===1)return reply({advertisers:saved,resolved:true});
     try{
       const {token}=await getMetaCredential();
-      if(!token)throw Error();
+      if(!token)return reply({advertisers:[],code:'NO_PAGE_TOKEN',message:'This service has no Meta token for new Facebook handles. Paste the numeric Page ID or a Page-specific Ad Library link.'});
       const response=await metaFetch('https://graph.facebook.com/v26.0/'+encodeURIComponent(handle)+'?fields=id,name,category',{
         headers:{Authorization:'Bearer '+token},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(8000)});
       const body=await response.json();
-      if(response.ok&&/^\d{1,30}$/.test(body.id)&&clean(body.name,120)&&clean(body.category,120)){
+      if(response.ok&&/^\d{1,30}$/.test(body.id)&&clean(body.name,120)){
         observePage(body.id,body.name,[],handle,body.category);
         return reply({advertisers:[{id:body.id,name:body.name,alias:handle,category:body.category}],resolved:true});
       }

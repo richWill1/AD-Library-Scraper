@@ -15,11 +15,9 @@ const nextConfig: NextConfig = {
       beforeFiles: [
         ...home,
         { source: "/api/health", destination: `${backend}/api/health` },
-        { source: "/api/ads", destination: `${backend}/api/ads` },
         { source: "/api/media", destination: `${backend}/api/media` },
         { source: "/api/formats", destination: `${backend}/api/formats` },
         { source: "/api/popular", destination: `${backend}/api/popular` },
-        { source: "/api/advertisers", destination: `${backend}/api/advertisers` },
       ],
       afterFiles: [],
       fallback: [],

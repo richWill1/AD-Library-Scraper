@@ -264,7 +264,7 @@ function renderBrands(){
  const selected=state.choices.get(state.page);
  if(selected&&!choices.includes(selected))choices[choices.length-1]=selected;
  const list=$("brands");
- list.hidden=state.view!=="discover"||!choices.length;
+ list.hidden=state.view!=="discover"||!choices.length||Boolean(state.pick);
  list.style.cssText="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0 24px";
  if(list.hidden)list.style.display="none";
  list.innerHTML='<label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#6e6e73;max-width:100%">Advertiser<select id="advertiserSelect" aria-label="Choose advertiser" style="min-width:0;max-width:260px;padding:9px 32px 9px 12px;border:1px solid #d2d2d7;border-radius:10px;background:#fff;color:#1d1d1f;font:inherit">'+choices.map(c=>'<option value="'+esc(c.id)+'"'+(c.id===state.page?' selected':'')+'>'+esc(c.name)+'</option>').join("")+'</select></label>';
