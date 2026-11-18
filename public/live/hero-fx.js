@@ -1,5 +1,5 @@
 /* Interactive hero backgrounds for AdSnoop content pages.
-   data-fx="lightning" (Black Friday), "snow" (Christmas), "signals" (Meta updates).
+   data-fx="tiles" (Black Friday), "snow" (Christmas), "signals" (Meta updates).
    Visual only: pointer positions are never stored or sent anywhere. */
 (function(){
 "use strict";
@@ -124,6 +124,50 @@ function signals(){
   }
  };
 }
+// ---------- Black Friday: a grid of tiles that light up under the pointer ----------
+function tiles(){
+ const SIZE=34,GAP=5;let cols=0,rows=0,ox=0,oy=0,lit=[],ripples=[],next=0;
+ const cell=(c,r)=>r*cols+c;
+ function energise(x,y,radius,power){
+  const c0=Math.max(0,Math.floor((x-ox-radius)/SIZE)),c1=Math.min(cols-1,Math.ceil((x-ox+radius)/SIZE));
+  const r0=Math.max(0,Math.floor((y-oy-radius)/SIZE)),r1=Math.min(rows-1,Math.ceil((y-oy+radius)/SIZE));
+  for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){
+   const cx=ox+c*SIZE+SIZE/2,cy=oy+r*SIZE+SIZE/2,d=Math.hypot(cx-x,cy-y);
+   if(d<radius){const v=power*(1-d/radius);const i=cell(c,r);if(v>lit[i])lit[i]=v}
+  }
+ }
+ return {
+  resize(){cols=Math.ceil(W/SIZE)+1;rows=Math.ceil(H/SIZE)+1;ox=(W-cols*SIZE)/2;oy=(H-rows*SIZE)/2;lit=new Float32Array(cols*rows)},
+  tap(x,y){ripples.push({x,y,r:0})},
+  draw(dt){
+   ctx.clearRect(0,0,W,H);
+   if(pointer.active)energise(pointer.x,pointer.y,110,1);
+   for(let i=ripples.length-1;i>=0;i--){
+    const p=ripples[i];p.r+=dt*620;
+    // A ring of light moving outwards.
+    const c0=Math.max(0,Math.floor((p.x-ox-p.r)/SIZE)),c1=Math.min(cols-1,Math.ceil((p.x-ox+p.r)/SIZE)),r0=Math.max(0,Math.floor((p.y-oy-p.r)/SIZE)),r1=Math.min(rows-1,Math.ceil((p.y-oy+p.r)/SIZE));
+    for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){const d=Math.abs(Math.hypot(ox+c*SIZE+SIZE/2-p.x,oy+r*SIZE+SIZE/2-p.y)-p.r);if(d<SIZE){const v=(1-d/SIZE)*Math.max(0,1-p.r/Math.max(W,H));const k=cell(c,r);if(v>lit[k])lit[k]=v}}
+    if(p.r>Math.max(W,H)*1.1)ripples.splice(i,1);
+   }
+   if(!reduce){next-=dt;if(next<=0){const k=Math.floor(Math.random()*lit.length);lit[k]=Math.max(lit[k],rand(.35,.75));next=rand(.04,.14)}}
+   else if(!lit.some(v=>v>0))for(let k=0;k<lit.length;k+=7)lit[k]=rand(.1,.5);
+   const decay=reduce?0:dt*1.25;
+   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const k=cell(c,r),v=lit[k],x=ox+c*SIZE+GAP/2,y=oy+r*SIZE+GAP/2,s=SIZE-GAP;
+    // Fade tiles towards the edges of the banner.
+    const edge=Math.min(1,(y+s)/(H*.25),(H-y)/(H*.35),(x+s)/(W*.08),(W-x)/(W*.08));
+    ctx.fillStyle="rgba(255,255,255,"+(0.028*edge).toFixed(3)+")";
+    ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,s,s,5):ctx.rect(x,y,s,s);ctx.fill();
+    if(v>0.01){
+     ctx.fillStyle="rgba(255,206,64,"+(v*.62*Math.max(.35,edge)).toFixed(3)+")";
+     ctx.shadowColor="rgba(255,190,40,.9)";ctx.shadowBlur=v*22;
+     ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,s,s,5):ctx.rect(x,y,s,s);ctx.fill();ctx.shadowBlur=0;
+     lit[k]=Math.max(0,v-decay);
+    }
+   }
+  }
+ };
+}
 // ---------- Legal pages: calm aurora ribbons that lean toward the pointer ----------
 function aurora(){
  let t=0,lean=0;
@@ -141,7 +185,7 @@ function aurora(){
   }
  };
 }
-const fx=kind==="lightning"?lightning():kind==="snow"?snow():kind==="aurora"?aurora():signals();
+const fx=kind==="tiles"?tiles():kind==="lightning"?lightning():kind==="snow"?snow():kind==="aurora"?aurora():signals();
 function loop(now){
  const dt=Math.min(.05,(now-last)/1000);last=now;
  if(visible&&!document.hidden)fx.draw(dt);

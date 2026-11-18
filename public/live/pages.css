@@ -8,7 +8,11 @@ button{font:inherit}
 .pg-hero-in{max-width:1200px;margin:0 auto;padding:64px 24px 54px;position:relative;z-index:1}
 .fx-canvas{position:absolute;inset:0;z-index:0;display:block}
 .pg-hero::after{content:"";position:absolute;inset:auto 0 0 0;height:90px;background:linear-gradient(180deg,transparent,rgba(5,7,15,.55));z-index:0;pointer-events:none}
-/* Black Friday: storm clouds lit in gold */
+/* Black Friday: a black grid of tiles that light up in gold */
+.fx-tiles{background:radial-gradient(900px 360px at 70% -20%,rgba(255,196,40,.12),transparent 60%),linear-gradient(180deg,#030304,#0b0a0d 70%,#111014)}
+.fx-tiles .pg-eyebrow{color:#ffd23f}
+.fx-tiles .pg-hero-in h1{text-shadow:0 2px 24px rgba(0,0,0,.6)}
+/* (previous storm theme, kept for reuse) */
 .fx-lightning{background:radial-gradient(900px 380px at 75% -15%,rgba(255,196,40,.16),transparent 60%),radial-gradient(700px 300px at 15% 0%,rgba(120,90,200,.14),transparent 60%),linear-gradient(180deg,#05050a,#141020 70%,#1a1426)}
 .fx-lightning .pg-eyebrow{color:#ffd23f}
 /* Christmas: a deep winter night with a warm glow */
