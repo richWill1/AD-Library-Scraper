@@ -2,6 +2,8 @@ import {NextResponse} from 'next/server';
 import {getMetaCredential} from '@/lib/meta-token-store';
 import {metaFetch} from '@/lib/meta-api';
 import {advertiserScore} from '@/lib/brand-search';
+// 'John Lewis & Partners' matches John Lewis; 'Nextnecklace.com' must not match Next.
+const wholeWordStart=(page:string,brand:string)=>new RegExp('^'+brand.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![a-z0-9])','i').test(page.trim());
 export const runtime='nodejs';
 
 // Popular UK advertisers shown before anyone searches. Results are shared by
@@ -21,7 +23,7 @@ async function lookup(token:string,name:string):Promise<Brand|null>{
  const found=await archive(token,{search_terms:name,fields:'page_id,page_name',limit:'100'});
  const pages=new Map<string,{name:string;n:number}>();
  for(const row of found.data){const id=String(row.page_id||'');if(!/^\d{1,30}$/.test(id)||typeof row.page_name!=='string')continue;const e=pages.get(id)||{name:row.page_name,n:0};e.n++;pages.set(id,e);}
- const best=[...pages.entries()].map(([id,p])=>({id,...p,score:advertiserScore(p.name,name)})).filter(p=>p.score>=2).sort((a,b)=>b.score-a.score||b.n-a.n)[0];
+ const best=[...pages.entries()].map(([id,p])=>({id,...p,score:advertiserScore(p.name,name)})).filter(p=>p.score>=3||(p.score===2&&wholeWordStart(p.name,name))).sort((a,b)=>b.score-a.score||b.n-a.n)[0];
  if(!best)return null;
  let count=0,after='',more=false;
  for(let i=0;i<3;i++){const page=await archive(token,{search_page_ids:JSON.stringify([best.id]),fields:'id',limit:'100'},after);count+=page.data.length;after=page.next;if(!after)break;if(i===2)more=true;}

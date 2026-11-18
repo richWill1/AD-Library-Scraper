@@ -326,7 +326,8 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
     return;
    }
    const ranked=rankedBrands(),top=ranked[0];
-   if(!top||nameScore(q,top.name)<3){
+   const wholeWord=n=>new RegExp('^'+q.trim().replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![a-z0-9])','i').test(String(n).trim());
+   if(!top||!(nameScore(q,top.name)>=5||wholeWord(top.name))){
     // No advertiser by that name: show who mentions it instead of guessing.
     state.page="";state.brand="";state.rows=[];
     state.pick={q,kind:"mentions",items:ranked.slice(0,8).map(c=>({id:c.id,name:c.name,mentions:c.count}))};
