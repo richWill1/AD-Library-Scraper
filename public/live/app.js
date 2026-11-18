@@ -108,6 +108,7 @@ function showHeader(){
  $("comparisonBar").classList.toggle("show",state.compare.size>0);
  $("compareCount").textContent=state.compare.size+" of 3 selected";
 }
+function loadingCards(){return ""}
 // One-click switch between the ad grid (with the intelligence panel) and the
 // messaging map for the brand that is loaded.
 function renderViewTabs(){
