@@ -93,15 +93,20 @@ function showHeader(){
  $("heading").innerHTML=(state.view!=="saved"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg"):"")+'<span>'+esc(title)+'</span>';}
  $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
  renderViewTabs();
- $("metrics").style.display=state.view!=="insights"&&(state.rows.length||state.view==="saved")?"grid":"none";
+ {const m=$("metrics"),show=state.view!=="insights"&&(state.rows.length>0||state.view==="saved");m.hidden=!show;
+ if(show){const shown=shownRows(),live=allRows().length,saved=state.view==="saved";
+  const distinct=saved?shown.length:new Set(state.rows.map(groupKey)).size;
+  countTo($("metricAds"),distinct);
+  $("metricAdsSub").textContent=saved?"saved ads":distinct<live?"distinct ads · from "+live+" live":"live ads";
+  const starts=state.rows.map(a=>a.start).filter(Boolean).sort();
+  $("bsSince").hidden=saved||!starts.length;$("metricSince").textContent=starts.length?formatDate(starts[0]):"—";
+  const week=state.rows.filter(a=>{const d=daysRunning(a);return d!=null&&d<=7}).length;
+  $("bsNew").hidden=saved;countTo($("metricNew"),week);
+  const f=$("followBtn"),on=isFollowed(state.page);f.hidden=saved||!state.page;f.setAttribute("aria-pressed",String(on));f.querySelector(".bs-star").textContent=on?"★":"☆";f.querySelector(".bs-label").textContent=on?"Following":"Follow brand";
+  $("savedBtn").hidden=saved;}
+ }
  $("toolbar").style.display=state.rows.length||state.view==="saved"?"flex":"none";
- {const shown=shownRows(),distinct=state.view==="saved"?shown.length:[...(state.groupMeta||new Map()).values()].filter(m=>m.head).length,live=allRows().length;
- $("metricAds").textContent=String(distinct).padStart(2,"0");
- const k=$("metricAds").previousElementSibling,sub=$("metricAds").nextElementSibling;
- if(k)k.textContent=state.view==="saved"?"Saved ads shown":"Distinct ads";
- if(sub)sub.textContent=state.view==="saved"?"Stored in this browser":distinct<live?"From "+live+" live ads · repeats merged":"Live ads loaded";}
- $("metricBrands").innerHTML=state.view==="saved"?"Multiple":state.brand?'<span class="metricbrand">'+logoHTML(state.page,state.brand,"md")+esc(state.brand)+'</span>':"—";
- $("metricSaved").textContent=String(state.saved.size).padStart(2,"0");
+ $("metricSaved").textContent=String(state.saved.size);
  $("savedCount").textContent=state.saved.size?"("+state.saved.size+")":"";
  document.querySelectorAll("[data-view]").forEach(el=>el.classList.toggle("active",el.dataset.view===state.view));
  document.querySelectorAll("[data-filter]").forEach(el=>el.classList.toggle("active",el.dataset.filter===state.filter));
@@ -109,6 +114,48 @@ function showHeader(){
  $("compareCount").textContent=state.compare.size+" of 3 selected";
 }
 function loadingCards(){return ""}
+// Numbers count up the first time a brand loads, then update quietly.
+function countTo(el,to){
+ if(!el)return;const key=state.page+"|"+state.view,prev=Number(el.dataset.v||0);
+ if(el.dataset.v===String(to)&&el.dataset.k===key)return;
+ const animate=el.dataset.k!==key&&!matchMedia("(prefers-reduced-motion: reduce)").matches&&to>0;
+ el.dataset.v=String(to);el.dataset.k=key;cancelAnimationFrame(el._raf||0);
+ if(!animate){el.textContent=String(to);return}
+ const from=0,t0=performance.now(),dur=Math.min(1200,500+to*12);
+ const step=t=>{const k=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-k,3);el.textContent=String(Math.round(from+(to-from)*e));if(k<1)el._raf=requestAnimationFrame(step)};
+ el._raf=requestAnimationFrame(step);void prev;
+}
+const followKey="adsnoop-follow-v1";
+function followed(){try{const v=JSON.parse(localStorage.getItem(followKey)||"[]");return Array.isArray(v)?v.filter(b=>b&&/^\d{1,30}$/.test(b.id)&&typeof b.name==="string").slice(0,30):[]}catch{return []}}
+function isFollowed(id){return !!id&&followed().some(b=>b.id===id)}
+function toggleFollow(){
+ if(!state.page)return;let list=followed();const on=list.some(b=>b.id===state.page);
+ list=on?list.filter(b=>b.id!==state.page):[{id:state.page,name:state.brand||"Advertiser"},...list];
+ try{localStorage.setItem(followKey,JSON.stringify(list.slice(0,30)))}catch{}
+ toast(on?"Unfollowed "+(state.brand||"brand"):"Following "+(state.brand||"brand")+". It’ll be on your start page.");showHeader();
+}
+let toastTimer=0;
+function toast(msg){const t=$("toast");if(!t)return;t.textContent=msg;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2400)}
+// Start page before any search: brands you follow plus popular UK advertisers.
+let popular=null,popularLoading=false;
+const POPULAR_FALLBACK=["Dunelm","Next","IKEA","boohoo","Gymshark","Currys","Wren Kitchens","Sharps Fitted Furniture"];
+function loadPopular(){
+ if(popular||popularLoading)return;popularLoading=true;
+ fetch("/api/popular",{cache:"no-store",signal:AbortSignal.timeout(90000)}).then(r=>r.ok?r.json():{brands:[]}).then(d=>{popular=Array.isArray(d.brands)?d.brands.filter(b=>b&&/^\d{1,30}$/.test(b.pageId)):[]}).catch(()=>{popular=[]}).finally(()=>{popularLoading=false;if(isStart())renderCards()});
+}
+function isStart(){return state.view==="discover"&&!state.brand&&!state.rows.length&&!state.loading}
+function brandCard(b,i,extra){return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'">'+logoHTML(b.id,b.name,"lg")+'<span><strong>'+esc(b.name)+'</strong><br><small'+(extra?' class="live"':'')+'>'+esc(extra||"Followed brand")+'</small></span><span class="go">Explore ads →</span></button>'}
+function startHTML(){
+ loadPopular();
+ const mine=followed();
+ let html='<div class="start">';
+ if(mine.length)html+='<h3>Brands you follow</h3><div class="start-grid">'+mine.slice(0,8).map((b,i)=>brandCard(b,i,"")).join("")+'</div>';
+ html+='<h3>Popular in the UK right now</h3><div class="start-grid">';
+ if(popular&&popular.length)html+=popular.map((b,i)=>brandCard({id:b.pageId,name:b.name},i,(b.more?b.count+"+":b.count)+" live UK ads")).join("");
+ else if(popular)html+='<p class="intel-sub" style="grid-column:1/-1">Search any brand above to see its live ads.</p>';
+ else html+=POPULAR_FALLBACK.map((n,i)=>'<div class="bcard skel" style="--i:'+i+'"><span class="brandlogo lg" aria-hidden="true"><b>'+esc(n.split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase())+'</b></span><span><strong>'+esc(n)+'</strong><br><small></small></span></div>').join("");
+ return html+'</div></div>';
+}
 // One-click switch between the ad grid (with the intelligence panel) and the
 // messaging map for the brand that is loaded.
 function renderViewTabs(){
@@ -137,7 +184,7 @@ function renderCards(){
  renderBrands();
  const all=state.view==="insights"?[]:shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
  if(state.view==="insights"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();return}
- $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
+ $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(isStart()?startHTML():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin."));
  $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
  renderIntel();
@@ -298,6 +345,7 @@ function displayMedia(node,id,items){
  if(item.kind==="video"){media.controls=true;media.muted=true;media.loop=true;media.playsInline=true;media.preload="metadata";if(item.poster&&safeMedia(item.poster))media.poster=item.poster;media.setAttribute("aria-label","Meta ad video creative");}
  else media.alt="Original Meta Ad Library creative";
  media.onerror=()=>{mediaCache.delete(id);mediaState.set(id,{status:"failed",code:"FAILED",attempts:0});mediaFallback(node,id,"FAILED");node.dataset.loaded="failed"};
+ media.classList.add("mfade");media.addEventListener(item.kind==="video"?"loadeddata":"load",()=>media.classList.add("on"),{once:true});
  media.src=item.url;
  const keep=[...node.querySelectorAll(".tilebadges,.fmtbadge")];node.replaceChildren(media,...keep);node.dataset.loaded="done";
  const fb=node.querySelector(".fmtbadge"),fm=formatOf(id);if(fb&&fm){fb.textContent=formatLabel[fm];fb.className="fmtbadge fmt-"+fm}
@@ -580,6 +628,7 @@ function renderIntel(){
  const box=$("intel");if(!box)return;
  if(state.view!=="discover"||!state.rows.length){box.hidden=true;return}
  box.hidden=false;
+ if(box.dataset.k!==state.page){box.dataset.k=state.page;box.classList.add("fresh");clearTimeout(box._t);box._t=setTimeout(()=>box.classList.remove("fresh"),1600)}
  const rows=state.rows,total=rows.length;
  const stages={new:0,testing:0,proven:0,long:0};let oldest=0;
  for(const a of rows){const d=daysRunning(a),s=lifeStage(d);if(s)stages[s.key]++;if(d>oldest)oldest=d}
@@ -595,7 +644,7 @@ function renderIntel(){
  else{const add=changes.added.length,rem=changes.removed;changeHTML='<p class="intel-big"><span class="up">+'+add+'</span>'+(rem?' <span class="down">−'+rem.length+'</span>':'')+'</p><p class="intel-sub">'+(add?add+' new':'No new ads')+(rem?' · '+rem.length+' no longer running':'')+' since '+esc(new Date(changes.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))+'</p>'+(add?'<button class="linkbutton" data-filter="added">Show new ads</button>':'');}
  const chip=(key,label,n,cls)=>'<button class="stagechip '+cls+(state.filter===key?' on':'')+'" data-filter="'+key+'"><b>'+n+'</b>'+esc(label)+'</button>';
  box.innerHTML=
- '<div class="intel-card intel-wide"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days · based on '+(state.cursor?'the newest '+total:'all '+total)+' live ads</p></div>'+
+ '<div class="intel-card intel-wide"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="--i:'+i+';height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days · based on '+(state.cursor?'the newest '+total:'all '+total)+' live ads</p></div>'+
  '<div class="intel-card"><p class="intel-k">Creative mix</p>'+(collected.length?'<div class="mixbar">'+["video","static","carousel","catalogue"].map(k=>fmt[k]?'<i class="mix-'+k+'" style="width:'+(fmt[k]/fTotal*100)+'%"></i>':'').join("")+'</div><p class="intel-legend">'+["video","static","carousel","catalogue"].map(k=>'<span><i class="dot mix-'+k+'"></i>'+formatLabel[k]+' '+Math.round(fmt[k]/fTotal*100)+'%</span>').join("")+'</p><p class="intel-sub">From '+collected.length+' collected creatives</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
  '<div class="intel-card"><p class="intel-k">Since your last visit</p>'+changeHTML+'</div>'+
  '<div class="intel-card"><p class="intel-k">'+(ctas.real?'Top buttons':'Top calls to action')+'</p>'+(ctas.list.length?'<ol class="ctalist">'+ctas.list.map(c=>'<li><span>'+esc(c.label)+'</span><b>'+Math.round(c.n/ctas.base*100)+'%</b></li>').join("")+'</ol>':'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(ctas.real?'Real buttons from '+ctas.base+' collected ads':'Read from ad text until creatives load')+(scaled.length?' · '+scaled.length+' message'+(scaled.length===1?' runs':'s run')+' as several ads':'')+'</p></div>'+'<div class="intel-card"><p class="intel-k">Top landing pages</p>'+(lands.list.length?'<ol class="ctalist landlist">'+lands.list.map(l=>'<li><a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer nofollow" title="'+esc(l.url)+'">'+esc(l.path.slice(0,40))+'</a><b>'+l.n+'</b></li>').join("")+'</ol><p class="intel-sub">From '+lands.base+' collected ads</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
@@ -622,6 +671,7 @@ function setView(view){
  else if(view==="insights")feedback("");
  else feedback(state.brand?"":"Search a brand above to discover active advertisers.");
  renderCards();
+ for(const id of ["cards","intel","metrics","toolbar"]){const el=$(id);if(!el)continue;el.classList.remove("viewin");void el.offsetWidth;el.classList.add("viewin")}
  const tabs=$("viewtabs");
  if(tabs&&!tabs.hidden){const prev=tabs.previousElementSibling,r=tabs.getBoundingClientRect();if(r.top<=1&&prev)window.scrollTo({top:Math.max(0,prev.getBoundingClientRect().bottom+scrollY-8),behavior:"smooth"});else if(r.top>innerHeight*.6)tabs.scrollIntoView({behavior:"smooth",block:"start"})}
  else $("research").scrollIntoView({behavior:"smooth"});
@@ -792,7 +842,8 @@ document.addEventListener("click",e=>{
  b=e.target.closest("[data-action]");if(!b)return;
  const {action,id}=b.dataset;
  if(action==="detail")adDetails(id);
- if(action==="save"){const a=findAd(id);if(a){if(state.saved.has(id))state.saved.delete(id);else state.saved.set(id,a);save();renderCards();}}
+ if(action==="save"){const a=findAd(id);if(a){const was=state.saved.has(id);if(was)state.saved.delete(id);else state.saved.set(id,a);save();renderCards();toast(was?"Removed from saved ideas":"Saved to your ideas ♥");if(!was)document.querySelectorAll('[data-action="save"][data-id="'+id+'"]').forEach(el=>{el.classList.add("pop");setTimeout(()=>el.classList.remove("pop"),500)});}}
+ if(action==="follow")toggleFollow();
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}
  if(action==="showmore"){state.limit+=25;renderCards()}
  if(action==="group"){const gm=state.groupMeta?.get(id);if(gm){state.expanded=state.expanded||new Set();if(state.expanded.has(gm.key))state.expanded.delete(gm.key);else{state.expanded.add(gm.key);state.revealAll=true}renderCards();for(const a of state.rows)if(groupKey(a)===gm.key)requestMedia(a.id,{priority:true})}}
@@ -809,4 +860,23 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")$("modalOverlay").cl
 $("compareOpen").onclick=compareView;
 $("compareClear").onclick=()=>{state.compare.clear();renderCards()};
 renderCards();health();
+})();
+// ---- Page polish: glass header, tile glow, hover-to-play video ----
+(function(){
+ // The header never changes size; only its glass background fades in, with
+ // separate on/off points so it can't flicker at the threshold.
+ let scrolled=false;
+ const onScroll=()=>{const next=scrolled?scrollY>8:scrollY>40;if(next!==scrolled){scrolled=next;document.body.classList.toggle("scrolled",next)}};
+ addEventListener("scroll",onScroll,{passive:true});onScroll();
+ // Sticky tabs and loading bar sit under the header's real height (taller on phones).
+ const nav=document.querySelector(".as-unified-nav");
+ if(nav){const setH=()=>document.documentElement.style.setProperty("--navh",Math.round(nav.getBoundingClientRect().height)+"px");setH();if("ResizeObserver" in window)new ResizeObserver(setH).observe(nav);else addEventListener("resize",setH)}
+ const fine=matchMedia("(hover: hover) and (pointer: fine)").matches;
+ const grid=document.getElementById("cards");
+ if(grid&&fine){
+  grid.addEventListener("pointermove",e=>{const c=e.target.closest(".adcard");if(!c)return;const r=c.getBoundingClientRect();c.style.setProperty("--mx",(e.clientX-r.left)+"px");c.style.setProperty("--my",(e.clientY-r.top)+"px")},{passive:true});
+  grid.addEventListener("pointerover",e=>{const v=e.target.closest(".live-visual")?.querySelector("video");if(v&&v.paused){v.muted=true;v.dataset.hoverplay="1";v.play().catch(()=>{})}});
+  grid.addEventListener("pointerout",e=>{const box=e.target.closest(".live-visual");if(!box||box.contains(e.relatedTarget))return;const v=box.querySelector("video");if(v&&v.dataset.hoverplay==="1"){v.pause();delete v.dataset.hoverplay}});
+ }
+ document.addEventListener("click",e=>{const a=e.target.closest("[data-scrolltop]");if(a){e.preventDefault();scrollTo({top:0,behavior:"smooth"})}});
 })();
