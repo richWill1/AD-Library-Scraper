@@ -1,3 +1,4 @@
+import {observeAds} from '@/lib/advertiser-directory';
 import {NextRequest, NextResponse} from 'next/server';
 import {brandQuery} from '@/lib/brand-search';
 import {connectionSummary,metaFailure,recordMetaConnection} from '@/lib/meta-connection';
@@ -34,6 +35,7 @@ export async function GET(req:NextRequest){
  const response=await metaFetch(`https://graph.facebook.com/v26.0/ads_archive?${params}`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(20000),cache:'no-store'});const body=await response.json();
  if(!response.ok||body.error){const failure=metaFailure(body.error);recordMetaConnection(failure.state);return {error:failure.error,code:failure.code};}
  recordMetaConnection('connected');
+ observeAds(body.data||[]);
  const rows=(body.data||[]).map((a:any)=>{const copy=Array.from(new Set<string>(a.ad_creative_bodies||[])).join('\n\n');const offer=/sale|discount|% off|book|free design/i.test(copy);const product=/collection|wardrobe|storage/i.test(copy);return {id:String(a.id),pageId:String(a.page_id),pageName:a.page_name||'Advertiser',title:a.ad_creative_link_titles?.[0]||'Ad creative',copy:copy||'No ad copy provided by Meta.',start:a.ad_delivery_start_time?.slice(0,10)||'',stop:a.ad_delivery_stop_time?.slice(0,10)||null,impressions:a.impressions||null,format:'Unknown',angle:offer?'Offer':product?'Product':'Brand',image:'',source:'Meta API',analysis:'Funnel stage is an editorial estimate based on the ad copy. It is not a Meta metric or a measure of performance.',funnel:offer?'BOFU':product?'MOFU':'TOFU',platforms:a.publisher_platforms||[],reach:a.total_reach_by_location?.find((r:any)=>(r.key??r.location)==='GB')?.value??a.total_reach_by_location?.find((r:any)=>r.location==='GB')?.reach??null,locations:a.target_locations||[],ages:a.target_ages||[]};});
  const result={ads:rows,pageId:discovering?null:pageId||null,discovery:discovering||!pageId,capturedAt:new Date().toISOString(),nextCursor:body.paging?.next?body.paging?.cursors?.after||null:null};
  if(cache.size>100)cache.clear();cache.set(cacheKey,{at:now,data:result});return result;

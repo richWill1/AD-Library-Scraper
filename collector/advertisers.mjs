@@ -6,27 +6,6 @@ const cache = new Map();
 const TTL = 24 * 3600 * 1000;
 
 const text = (v, max) => (typeof v === 'string' && v.length <= max && !/[\x00-\x1f<>]/.test(v) ? v.trim() : '');
-const num = v => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : null);
-
-function pick(value, out, depth = 0, seen = { n: 0 }) {
-  if (!value || typeof value !== 'object' || depth > 25 || ++seen.n > 20000) return;
-  if (Array.isArray(value)) { for (const v of value) pick(v, out, depth + 1, seen); return; }
-  const id = String(value.page_id ?? value.pageID ?? '');
-  const name = text(value.name ?? value.page_name, 120);
-  if (/^\d{3,30}$/.test(id) && name && !out.has(id)) {
-    out.set(id, {
-      id, name,
-      alias: text(value.page_alias ?? value.alias, 80) || undefined,
-      followers: num(value.likes ?? value.page_like_count ?? value.followers),
-      verified: Boolean(value.verification === 'BLUE_VERIFIED' || value.is_verified || value.verification === 'VERIFIED'),
-      category: text(value.category ?? value.page_category, 60) || undefined,
-      instagram: text(value.ig_username, 60) || undefined,
-      igFollowers: num(value.ig_followers)
-    });
-  }
-  for (const v of Object.values(value)) pick(v, out, depth + 1, seen);
-}
-
 export async function findAdvertisers(browser, query) {
   const q = query.trim().slice(0, 80), key = q.toLowerCase();
   const hit = cache.get(key);
@@ -41,50 +20,46 @@ export async function findAdvertisers(browser, query) {
       if (!/\.(facebook\.com|fbcdn\.net|fbsbx\.com)$/.test('.' + host) || ['media', 'font', 'image'].includes(req.resourceType())) return route.abort();
       return route.continue();
     });
-    const found = new Map(), reads = []; let listening = false;
-    page.on('response', response => {
-      if (!listening || !response.url().startsWith('https://www.facebook.com/api/graphql') || reads.length >= 30) return;
-      reads.push((async () => {
-        try {
-          const body = await response.text();
-          if (body.length > 3000000 || !/page_id|pageID/.test(body)) return;
-          for (const line of body.replace(/^for \(;;\);\s*/, '').split('\n')) { try { pick(JSON.parse(line), found); } catch {} }
-        } catch {}
-      })());
-    });
-    let step = 'open';
-    try {
+    const found = new Map();
       await page.goto('https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=GB&media_type=all', { waitUntil: 'domcontentloaded', timeout: 25000 });
-      step = 'cookies';
+
       await page.getByRole('button', { name: /decline optional cookies|only allow essential cookies|reject optional|allow all cookies/i }).first().click({ timeout: 5000 }).catch(() => {});
-      step = 'find-box';
+
       const box = page.locator('input[placeholder*="keyword or advertiser" i], input[aria-label*="keyword or advertiser" i]').first();
       await box.waitFor({ state: 'visible', timeout: 15000 });
       if (!(await box.isEnabled().catch(() => false))) {
-        step = 'category';
+
         const combo = page.locator('[role="combobox"]').filter({ hasText: /ad category|all ads|issues|choose/i }).first();
         await combo.click({ timeout: 8000 }).catch(() => page.getByText(/ad category/i).first().click({ timeout: 6000 }));
-        step = 'all-ads';
+
         await page.getByRole('gridcell', { name: /^all ads$/i }).first().click({ timeout: 6000 }).catch(() => page.getByText('All ads', { exact: true }).last().click({ timeout: 6000 }));
         await page.waitForTimeout(500);
       }
-      step = 'type';
+
       await box.click({ timeout: 8000, force: true });
-      listening = true;
       await box.pressSequentially(q, { delay: 70 });
-    } catch (error) {
-      const title = await page.title().catch(() => '');
-      const url = page.url().replace(/[?#].*/, '');
-      const sample = (await page.locator('body').innerText({ timeout: 2000 }).catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
-      console.log(JSON.stringify({ event: 'advertiser_lookup_step_failed', step, title, url, sample }));
-      throw error;
-    }
-    // Wait for Meta's advertiser suggestions to arrive.
-    const until = Date.now() + 9000;
-    while (Date.now() < until) {
-      await page.waitForTimeout(400);
-      await Promise.allSettled(reads);
-      if (found.size) { await page.waitForTimeout(700); await Promise.allSettled(reads); break; }
+    // Use the public result links, including the advertiser filter set when
+    // someone selects a matching autocomplete option.
+    const selector = 'a[href*="view_all_page_id="], a[href*="profile.php?id="]';
+    const collect = async () => {
+      const links = await page.locator(selector).evaluateAll(nodes => nodes.filter(a => a.getClientRects().length).slice(0, 40).map(a => ({url:a.href, name:a.innerText.trim()})));
+      for(const link of links){
+        const url=new URL(link.url);
+        if(!/^(www\.|m\.)?facebook\.com$/i.test(url.hostname))continue;
+        const id=url.searchParams.get('view_all_page_id')||url.searchParams.get('id');
+        const name=text(link.name.split('\n')[0],120);
+        if(/^\d{3,30}$/.test(id||'')&&name)found.set(id,{id,name});
+      }
+    };
+    const option=page.getByRole('option').filter({hasText:q}).first();
+    await Promise.race([page.locator(selector).first().waitFor({timeout:7000}),option.waitFor({timeout:7000})]).catch(()=>{});
+    await collect();
+    if(!found.size&&await option.isVisible()){
+      const name=text((await option.innerText()).split('\n')[0].trim(),120);
+      await option.click();
+      await page.waitForURL(url=>url.searchParams.has('view_all_page_id'),{timeout:5000}).catch(()=>{});
+      const id=new URL(page.url()).searchParams.get('view_all_page_id');
+      if(name&&/^\d{3,30}$/.test(id||''))found.set(id,{id,name});
     }
     const results = [...found.values()].slice(0, 12);
     if (results.length) { if (cache.size > 2000) cache.delete(cache.keys().next().value); cache.set(key, { at: Date.now(), results }); }

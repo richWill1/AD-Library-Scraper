@@ -1,6 +1,12 @@
-export type AdvertiserIdentity={pageId:string;pageName:string;aliases:string[]};
+export type AdvertiserIdentity={pageId:string;pageName:string;handle?:string;aliases:string[]};
 // Previously verified advertiser identities, not a source of current ad data.
 export const knownAdvertisers:AdvertiserIdentity[]=[
+ // CareCo's own site links to this handle. The public Facebook Page card
+ // links to this numeric ID, which ads_archive independently names CareCo.
+ {pageId:'107666748486424',pageName:'CareCo',handle:'CareCoMobilityExperts',aliases:['careco','CareCoMobilityExperts','careco.co.uk']},
+ {pageId:'179100528779193',pageName:'Silentnight',handle:'Silentnightbeds',aliases:['silentnight','silentnightbeds','silentnight.co.uk']},
+ {pageId:'94971738769',pageName:'Next',handle:'nextofficial',aliases:['next','nextofficial','next.co.uk']},
+ {pageId:'112850788732826',pageName:'boohoo.com',aliases:['boohoo','boohoo.com']},
  {pageId:'280531915302272',pageName:'Sharps Fitted Furniture',aliases:['sharps','sharps.co.uk']},
  {pageId:'384841908531592',pageName:'Neville Johnson',aliases:['neville johnson','nevillejohnson','nevillejohnson.co.uk']},
  {pageId:'180833751931315',pageName:'Hammonds',aliases:['hammonds','hammonds furniture','hammonds-uk.com']},
@@ -41,4 +47,18 @@ export function advertiserScore(name:string,input:string){
  let term=input;try{term=brandQuery(input).term;}catch{}
  const compact=(s:string)=>s.toLowerCase().replace(/[^a-z\d]/g,'');const a=compact(name),b=compact(term);
  return a===b?3:a.startsWith(b)&&b.length>1?2:a.includes(b)&&b.length>1?1:0;
+}
+
+export function facebookIdentity(input:string):{id?:string;handle?:string;invalid?:boolean}|null{
+ const q=input.trim();
+ if(q.startsWith('@'))return /^@[a-z0-9.]{1,80}$/i.test(q)?{handle:q.slice(1)}:{invalid:true};
+ if(!/^(?:https?:\/\/)?(?:(?:www|m|web)\.)?facebook\.com(?:[/?#]|$)/i.test(q))return null;
+ try{
+  const url=new URL(/^https?:/i.test(q)?q:'https://'+q);
+  const path=url.pathname.split('/').filter(Boolean);
+  const id=(path[0]==='profile.php'?url.searchParams.get('id'):path[0]==='ads'&&path[1]==='library'?url.searchParams.get('view_all_page_id'):path.length===1?path[0]:['people','pages'].includes(path[0])?path[2]:null);
+  if(id&&/^\d{1,30}$/.test(id))return {id};
+  if(path.length===1&&/^[a-z0-9.]{1,80}$/i.test(path[0])&&!/^(ads|pages|groups|events|watch|reel|share|people|profile\.php|login\.php)$/i.test(path[0]))return {handle:path[0]};
+ }catch{}
+ return {invalid:true};
 }
