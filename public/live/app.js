@@ -460,28 +460,57 @@ function updateReveal(instant=false){
  // Placeholder row where the next three tiles will appear.
  if(!complete){const grid=$("cards");for(let i=0;i<Math.min(3,ids.length-upTo);i++)grid.insertAdjacentHTML("beforeend",'<div class="tile-skel" aria-hidden="true" style="animation-delay:'+i*.15+'s"></div>')}
  $("pager").style.display=complete?"":"none";
- if(complete&&ready===ids.length)setBar("done",ids.length,ids.length);
+ if(complete&&ready===ids.length)setBar("done",ids.length,ids.length,ids);
  else if(complete)setBar("hide");
- else setBar("progress",ready,ids.length);
+ else setBar("progress",ready,ids.length,ids);
  renderIntel();
  clearTimeout(revealTimer);
  // Re-check so a slow tile is released once it passes the reveal threshold.
  if(!complete)revealTimer=setTimeout(()=>updateReveal(),5000);
 }
 let barTimer=null;
-function setBar(mode,ready=0,total=0){
+let barRun={key:"",start:0,r0:0};
+function barEta(ready,total){
+ const now=Date.now(),elapsed=(now-barRun.start)/1000,done=ready-barRun.r0,left=total-ready;
+ if(left<=0)return "";
+ // Measured pace once a few creatives have landed, otherwise a typical first-collection pace.
+ const per=done>=2&&elapsed>3?elapsed/done:18/MEDIA_CONCURRENCY;
+ const secs=Math.round(left*per);
+ return secs<8?"almost there":secs<60?"about "+Math.max(10,Math.round(secs/5)*5)+"s left":"about "+Math.round(secs/60)+" min left";
+}
+function paintStrip(ids){
+ const strip=$("loadbarStrip");if(!strip)return;
+ if(!ids){strip.innerHTML="";return}
+ const want=ids.slice(0,25);
+ if(strip.dataset.ids!==want.join(",")){strip.dataset.ids=want.join(",");strip.innerHTML=want.map(id=>'<span class="lb-slot" data-slot="'+esc(id)+'"></span>').join("")}
+ for(const id of want){
+  const slot=strip.querySelector('[data-slot="'+id+'"]');if(!slot||slot.classList.contains("in"))continue;
+  const m=mediaCache.get(id);
+  if(m&&m.items&&m.items.length){const first=m.items[0],src=safeMedia(first.kind==="video"?(first.poster||""):first.url);slot.classList.add("in");if(first.kind==="video")slot.classList.add("vid");if(src){const im=new Image();im.alt="";im.decoding="async";im.src=src;slot.appendChild(im)}}
+  else if(mediaState.get(id)?.status==="failed")slot.classList.add("fail");
+ }
+}
+function setBar(mode,ready=0,total=0,ids=null){
  const bar=$("loadbar");if(!bar)return;
  clearTimeout(barTimer);
- if(mode==="hide"){bar.hidden=true;return}
+ if(mode==="hide"){bar.hidden=true;paintStrip(null);return}
  bar.hidden=false;bar.classList.toggle("indeterminate",mode==="search");bar.classList.toggle("complete",mode==="done");
  const who=state.brand||state.query||"this advertiser";
- const fill=bar.querySelector(".loadbar-fill");
- if(mode==="search"){fill.style.width="";$("loadbarText").textContent="Searching Meta for "+who+"…";$("loadbarAll").hidden=true;return}
+ const fill=bar.querySelector(".loadbar-fill"),rider=$("loadbarRider"),hint=$("loadbarHint");
+ if(mode==="search"){fill.style.width="";rider.style.left="";$("loadbarText").textContent="Snooping on "+who+"’s live ads…";hint.textContent="Asking Meta’s Ad Library for everything running in the UK.";$("loadbarAll").hidden=true;paintStrip(null);barRun={key:"",start:0,r0:0};return}
+ const key=state.page+"|"+total;if(barRun.key!==key)barRun={key,start:Date.now(),r0:ready};
  const pct=total?Math.max(6,Math.round(ready/total*100)):0;
- fill.style.width=pct+"%";
+ fill.style.width=pct+"%";rider.style.left="calc("+pct+"% - "+(pct>=100?19:0)+"px)";
  $("loadbarAll").hidden=mode==="done";
- if(mode==="done"){$("loadbarText").textContent="All "+total+" creatives ready";barTimer=setTimeout(()=>{bar.hidden=true},1600);return}
- $("loadbarText").textContent="Loading "+who+"’s creatives · "+ready+" of "+total+" ready";
+ paintStrip(ids);
+ if(mode==="done"){
+  const quick=Date.now()-barRun.start<2500;
+  $("loadbarText").textContent="All "+total+" creatives ready";
+  hint.textContent=quick?"Loaded instantly from the AdSnoop library.":"Saved to the AdSnoop library, so next time they’re instant.";
+  barTimer=setTimeout(()=>{bar.hidden=true;paintStrip(null)},2200);return}
+ const eta=barEta(ready,total);
+ $("loadbarText").textContent="Collecting "+who+"’s creatives · "+ready+" of "+total+(eta?" · "+eta:"");
+ hint.textContent=ready<total&&(Date.now()-barRun.start>2500)?"A first look at a brand takes a moment: each creative is collected from Meta once, then saved so it’s instant for everyone.":"";
 }
 // Messaging map: deterministic rules applied to loaded ad copy. Ported from
 // lib/messaging.ts so the preview and the original app classify identically.
