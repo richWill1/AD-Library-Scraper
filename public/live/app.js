@@ -94,7 +94,11 @@ function showHeader(){
  $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
  $("metrics").style.display=state.view!=="insights"&&(state.rows.length||state.view==="saved")?"grid":"none";
  $("toolbar").style.display=state.rows.length||state.view==="saved"?"flex":"none";
- $("metricAds").textContent=String(shownRows().length).padStart(2,"0");
+ {const shown=shownRows(),distinct=state.view==="saved"?shown.length:[...(state.groupMeta||new Map()).values()].filter(m=>m.head).length,live=allRows().length;
+ $("metricAds").textContent=String(distinct).padStart(2,"0");
+ const k=$("metricAds").previousElementSibling,sub=$("metricAds").nextElementSibling;
+ if(k)k.textContent=state.view==="saved"?"Saved ads shown":"Distinct ads";
+ if(sub)sub.textContent=state.view==="saved"?"Stored in this browser":distinct<live?"From "+live+" live ads · repeats merged":"Live ads loaded";}
  $("metricBrands").innerHTML=state.view==="saved"?"Multiple":state.brand?'<span class="metricbrand">'+logoHTML(state.page,state.brand,"md")+esc(state.brand)+'</span>':"—";
  $("metricSaved").textContent=String(state.saved.size).padStart(2,"0");
  $("savedCount").textContent=state.saved.size?"("+state.saved.size+")":"";
@@ -775,7 +779,7 @@ document.addEventListener("click",e=>{
  if(action==="save"){const a=findAd(id);if(a){if(state.saved.has(id))state.saved.delete(id);else state.saved.set(id,a);save();renderCards();}}
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}
  if(action==="showmore"){state.limit+=25;renderCards()}
- if(action==="group"){const gm=state.groupMeta?.get(id);if(gm){state.expanded=state.expanded||new Set();if(state.expanded.has(gm.key))state.expanded.delete(gm.key);else state.expanded.add(gm.key);renderCards()}}
+ if(action==="group"){const gm=state.groupMeta?.get(id);if(gm){state.expanded=state.expanded||new Set();if(state.expanded.has(gm.key))state.expanded.delete(gm.key);else{state.expanded.add(gm.key);state.revealAll=true}renderCards();for(const a of state.rows)if(groupKey(a)===gm.key)requestMedia(a.id,{priority:true})}}
  if(action==="revealall"){state.revealAll=true;updateReveal()}
  if(action==="exportmsg")exportMessaging();
  if(action==="retrymedia")requestMedia(id,{refresh:true,priority:true});
