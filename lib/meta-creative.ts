@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {safeMediaUrl,type CreativeMedia} from '@/lib/media';
 import {getMetaCredential} from '@/lib/meta-token-store';
+import {readStored,storeCreative} from './creative-store';
 type Cta={text?:string;type?:string;url?:string;caption?:string};
 const plain=(v:unknown,max:number)=>typeof v==='string'&&v.length<=max&&!/[\x00-\x1f<>]/.test(v)?v.trim()||undefined:undefined;
 function validCta(v:any):Cta|undefined{if(!v||typeof v!=='object')return undefined;let url:string|undefined;try{const u=new URL(String(v.url||''));if(['http:','https:'].includes(u.protocol)&&!u.username&&!u.password&&u.href.length<=500)url=u.href;}catch{}const type=typeof v.type==='string'&&/^[A-Z_]{2,40}$/.test(v.type)?v.type:undefined;const c={text:plain(v.text,40),type,url,caption:plain(v.caption,80)};return c.text||c.type||c.url?c:undefined;}
@@ -15,11 +16,13 @@ export async function fetchCreative(id:string,refresh=false,request=fetch):Promi
  let token:string;try{token=(await getMetaCredential()).token;}catch{return {items:[],code:'META_STORAGE_UNAVAILABLE'};}if(!token)return {items:[],code:'NOT_CONFIGURED'};
  const key=createHash('sha256').update(token).digest('hex')+':'+id;const hit=cache.get(key);if(!refresh&&hit&&hit.until>Date.now())return hit.result;
  if(inflight.has(key))return inflight.get(key)!;
+ // Saved creatives come straight from AdSnoop's Cloudflare storage; only new ads are collected.
+ if(!refresh){const stored=await readStored(id);if(stored){if(cache.size>=4000)cache.delete(cache.keys().next().value!);cache.set(key,{until:Date.now()+3*86400000,result:stored as unknown as Result});return stored as unknown as Result;}}
  if(inflight.size>=60)return {items:[],code:'BUSY',retryAfter:4};
  const work=(async()=>{try{
   const response=await request(`${config.url}/creative?id=${encodeURIComponent(id)}${refresh?'&refresh=1':''}`,{headers:{'X-Collector-Key':config.secret,'X-Meta-Token':token},redirect:'error',signal:AbortSignal.timeout(120000),cache:'no-store'});const body=await response.json();
   if(!response.ok)return {items:[],code:['BUSY','META_BLOCKED','META_PREVIEW_UNAVAILABLE'].includes(body.code)?body.code:'COLLECTOR_UNAVAILABLE',retryAfter:4};
   const items=validatedCreativeItems(body.items).filter(i=>!JSON.stringify(i).includes(token));const at=typeof body.collectedAt==='string'&&Number.isFinite(Date.parse(body.collectedAt))?body.collectedAt:new Date().toISOString();const shape=typeof body.displayFormat==='string'&&/^[A-Z_]{2,30}$/.test(body.displayFormat)?{displayFormat:body.displayFormat,cards:Number.isInteger(body.cards)&&body.cards>0&&body.cards<=50?body.cards:undefined}:{};const cta=validCta(body.cta);const result:Result={items,...shape,...(cta?{cta}:{}),collectedAt:at,source:'meta-official-snapshot',code:items.length?'COLLECTED':'NO_MEDIA'};
-  if(items.length){if(cache.size>=4000)cache.delete(cache.keys().next().value!);cache.set(key,{until:mediaExpiresAt(items),result});}return result;
+  if(items.length){if(cache.size>=4000)cache.delete(cache.keys().next().value!);cache.set(key,{until:mediaExpiresAt(items),result});storeCreative(id,result);}return result;
  }catch{return {items:[],code:'COLLECTOR_UNAVAILABLE',retryAfter:4};}finally{inflight.delete(key);}})();inflight.set(key,work);return work;
 }
