@@ -83,7 +83,7 @@
     const g = ground(), x = runnerX(), y = g - 13 + eyes.y;
     // Sparkle trail while running
     if (running && !finished && Math.random() < 0.55) sparks.push({ x: x - 20, y: y + (Math.random() * 10 - 2), vx: -1.2 - Math.random() * 1.4, vy: (Math.random() - 0.5) * 0.8, life: 1, c: COLORS[(Math.random() * COLORS.length) | 0], r: 1.5 + Math.random() * 2.5 });
-    for (const p of sparks) { p.x += p.vx; p.y += p.vy; p.life -= 0.035; ctx.save(); ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    for (const p of sparks) { p.x += p.vx; p.y += p.vy; p.life -= 0.035; if (p.life <= 0) continue; ctx.save(); ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.1, p.r * p.life), 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
     sparks = sparks.filter(p => p.life > 0);
     const sq = eyes.squash, sx = 1 + sq * 0.18, sy = 1 - sq * 0.18;
     // shadow
@@ -134,8 +134,8 @@
     }
     hurdles = hurdles.filter(o => o.x > -40);
     // Draw
-    ctx.clearRect(0, 0, w, h);
-    drawTrack(); hurdles.forEach(drawHurdle); drawEyes(); drawConfetti(dt);
+    // A drawing error must never stop the game loop (or the loading bar).
+    try { ctx.clearRect(0, 0, w, h); drawTrack(); hurdles.forEach(drawHurdle); drawEyes(); drawConfetti(dt); } catch (e) { try { ctx.restore(); } catch {} }
     raf = requestAnimationFrame(frame);
   }
 
