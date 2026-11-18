@@ -51,7 +51,7 @@ function shownRows(){
  const f=state.filter,added=new Set(state.changes?.added||[]);
  let rows=allRows().filter(a=>{
   if(f==="all")return true;
-  if(f==="video"||f==="static"||f==="carousel")return formatOf(a.id)===f;
+  if(f==="video"||f==="static"||f==="carousel"||f==="catalogue")return formatOf(a.id)===f;
   if(f==="added")return added.has(a.id);
   if(["new","testing","proven","long"].includes(f))return lifeStage(daysRunning(a))?.key===f;
   return (a.platforms||[]).map(p=>String(p).toLowerCase()).includes(f);
@@ -117,7 +117,7 @@ function card(a){
  const platforms=(a.platforms||[]).join(", ")||"Platform not reported";
  const format=a.format&&a.format!=="Unknown"?a.format:"Format to be verified";
  const isSaved=state.saved.has(a.id),isCompared=state.compare.has(a.id);
- return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false">'+badges+'<span class="fmtbadge" data-fmt="'+esc(a.id)+'"></span><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span class="adbrand">'+logoHTML(a.pageId,a.pageName||state.brand,"sm")+esc(a.pageName||state.brand||"Advertiser")+'</span><span class="tag">'+esc(format)+'</span></div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span'+(gm&&gm.n>1&&gm.head&&!gm.open?' title="Sum of each ad\'s reach. People who saw more than one are counted more than once."':'')+'>'+esc(reachText)+'</span></div>'+ctaLineHTML(a.id)+'<div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
+ return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false">'+badges+'<span class="fmtbadge" data-fmt="'+esc(a.id)+'"></span><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span class="adbrand">'+logoHTML(a.pageId,a.pageName||state.brand,"sm")+esc(a.pageName||state.brand||"Advertiser")+'</span>'+(a.format&&a.format!=="Unknown"?'<span class="tag">'+esc(a.format)+'</span>':'')+'</div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span'+(gm&&gm.n>1&&gm.head&&!gm.open?' title="Sum of each ad\'s reach. People who saw more than one are counted more than once."':'')+'>'+esc(reachText)+'</span></div>'+ctaLineHTML(a.id)+'<div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
 }
 function renderCards(){
  if(observer)observer.disconnect();
@@ -292,7 +292,7 @@ function displayMedia(node,id,items){
  if(items.length>1){
   const counter=document.createElement("button");
   counter.className="square";counter.style.cssText="position:absolute;bottom:12px;right:12px;background:white;width:auto;padding:0 12px;border-radius:50px;";
-  let index=0;const unit=formatOf(id)==="carousel"?"Card ":"Size ";counter.title=unit==="Card "?"Carousel cards":"Same creative in different placement sizes";counter.textContent=unit+"1 / "+items.length+" ›";
+  let index=0;const fk=formatOf(id),unit=fk==="carousel"?"Card ":fk==="catalogue"?"Product ":"Size ";counter.title=fk==="carousel"?"Carousel cards":fk==="catalogue"?"Catalogue ad: Meta shows each person products from the brand's catalogue":"Same creative in different placement sizes";counter.textContent=unit+"1 / "+items.length+" ›";
   counter.onclick=e=>{e.preventDefault();index=(index+1)%items.length;const next=items[index];const changed=document.createElement(next.kind==="video"?"video":"img");if(next.kind==="video"){changed.controls=true;changed.muted=true;changed.playsInline=true;changed.preload="metadata";if(next.poster)changed.poster=next.poster}else changed.alt="Meta ad creative";changed.onerror=()=>mediaFallback(node,id,"FAILED");changed.src=next.url;node.replaceChild(changed,node.firstChild);counter.textContent=unit+(index+1)+" / "+items.length+" ›";};
   node.appendChild(counter);
  }
@@ -349,7 +349,7 @@ function pumpMedia(){
     const resp=await fetch("/api/media?id="+encodeURIComponent(id)+(st.refresh?"&refresh=1":""),{signal:AbortSignal.timeout(115000),cache:"no-store"});
     data=await resp.json().catch(()=>({code:resp.status===429?"RATE_LIMITED":"COLLECTOR_UNAVAILABLE",items:[]}));
    }catch{data={code:"COLLECTOR_UNAVAILABLE",items:[]}}
-   const items=(Array.isArray(data.items)?data.items:[]).filter(i=>i&&["video","image"].includes(i.kind)&&safeMedia(i.url)).map(i=>({...i,url:safeMedia(i.url),poster:safeMedia(i.poster)}));
+   const items=(Array.isArray(data.items)?data.items:[]).filter(i=>i&&["video","image"].includes(i.kind)&&safeMedia(i.url)).map(i=>({...i,url:safeMedia(i.url),poster:safeMedia(i.poster)})).filter((i,n,all)=>{const f=u=>{try{return new URL(u).pathname.split("/").pop()}catch{return u}};return all.findIndex(j=>f(j.url)===f(i.url))===n});
    if(items.length){mediaCache.set(id,{items,collectedAt:data.collectedAt,displayFormat:typeof data.displayFormat==="string"?data.displayFormat:"",cards:Number(data.cards)||0,cta:cleanCta(data.cta)});paintCta(id);mediaState.set(id,{status:"done",attempts:st.attempts})}
    else if(MEDIA_RETRY_CODES.includes(data.code)&&st.attempts+1<MEDIA_MAX_ATTEMPTS){
     st.attempts++;st.status="queued";st.refresh=false;
@@ -508,10 +508,11 @@ function formatOf(id){
  const f=String(m.displayFormat||"").toUpperCase();
  if(f==="VIDEO")return "video";
  if(f==="CAROUSEL"||f==="MULTI_IMAGES"||f==="MULTI_VIDEOS"||(!f&&m.cards>1))return "carousel";
+ if(f==="DPA")return "catalogue";
  if(f==="IMAGE")return "static";
  return items.some(i=>i.kind==="video")?"video":"static";
 }
-const formatLabel={video:"Video",static:"Static",carousel:"Carousel"};
+const formatLabel={video:"Video",static:"Static",carousel:"Carousel",catalogue:"Catalogue"};
 // Real button and destination, read by the collector from Meta's own snapshot.
 function cleanCta(c){if(!c||typeof c!=="object")return null;const txt=v=>typeof v==="string"&&v.length<=80&&!/[<>\x00-\x1f]/.test(v)?v.trim():"";let url="";try{const u=new URL(String(c.url||""));if(/^https?:$/.test(u.protocol)&&!u.username&&!u.password)url=u.href}catch{}const type=typeof c.type==="string"&&/^[A-Z_]{2,40}$/.test(c.type)?c.type:"";const out={text:txt(c.text),type,url,caption:txt(c.caption)};return out.text||out.type||out.url?out:null}
 function ctaLabel(c){if(!c)return "";if(c.type==="NO_BUTTON")return "";if(c.text)return c.text;if(!c.type)return "";const t=c.type.toLowerCase().replace(/_/g," ");return t.charAt(0).toUpperCase()+t.slice(1)}
@@ -570,7 +571,7 @@ function renderIntel(){
  const rows=state.rows,total=rows.length;
  const stages={new:0,testing:0,proven:0,long:0};let oldest=0;
  for(const a of rows){const d=daysRunning(a),s=lifeStage(d);if(s)stages[s.key]++;if(d>oldest)oldest=d}
- const fmt={video:0,static:0,carousel:0},collected=rows.filter(a=>mediaCache.has(a.id));
+ const fmt={video:0,static:0,carousel:0,catalogue:0},collected=rows.filter(a=>mediaCache.has(a.id));
  for(const a of collected){const f=formatOf(a.id);if(f)fmt[f]++}
  const fTotal=Math.max(1,collected.length);
  const weeks=weeklyLaunches(rows),wMax=Math.max(1,...weeks);
@@ -583,7 +584,7 @@ function renderIntel(){
  const chip=(key,label,n,cls)=>'<button class="stagechip '+cls+(state.filter===key?' on':'')+'" data-filter="'+key+'"><b>'+n+'</b>'+esc(label)+'</button>';
  box.innerHTML=
  '<div class="intel-card intel-wide"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days · based on '+(state.cursor?'the newest '+total:'all '+total)+' live ads</p></div>'+
- '<div class="intel-card"><p class="intel-k">Creative mix</p>'+(collected.length?'<div class="mixbar">'+["video","static","carousel"].map(k=>fmt[k]?'<i class="mix-'+k+'" style="width:'+(fmt[k]/fTotal*100)+'%"></i>':'').join("")+'</div><p class="intel-legend">'+["video","static","carousel"].map(k=>'<span><i class="dot mix-'+k+'"></i>'+formatLabel[k]+' '+Math.round(fmt[k]/fTotal*100)+'%</span>').join("")+'</p><p class="intel-sub">From '+collected.length+' collected creatives</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
+ '<div class="intel-card"><p class="intel-k">Creative mix</p>'+(collected.length?'<div class="mixbar">'+["video","static","carousel","catalogue"].map(k=>fmt[k]?'<i class="mix-'+k+'" style="width:'+(fmt[k]/fTotal*100)+'%"></i>':'').join("")+'</div><p class="intel-legend">'+["video","static","carousel","catalogue"].map(k=>'<span><i class="dot mix-'+k+'"></i>'+formatLabel[k]+' '+Math.round(fmt[k]/fTotal*100)+'%</span>').join("")+'</p><p class="intel-sub">From '+collected.length+' collected creatives</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
  '<div class="intel-card"><p class="intel-k">Since your last visit</p>'+changeHTML+'</div>'+
  '<div class="intel-card"><p class="intel-k">'+(ctas.real?'Top buttons':'Top calls to action')+'</p>'+(ctas.list.length?'<ol class="ctalist">'+ctas.list.map(c=>'<li><span>'+esc(c.label)+'</span><b>'+Math.round(c.n/ctas.base*100)+'%</b></li>').join("")+'</ol>':'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(ctas.real?'Real buttons from '+ctas.base+' collected ads':'Read from ad text until creatives load')+(scaled.length?' · '+scaled.length+' message'+(scaled.length===1?' runs':'s run')+' as several ads':'')+'</p></div>'+'<div class="intel-card"><p class="intel-k">Top landing pages</p>'+(lands.list.length?'<ol class="ctalist landlist">'+lands.list.map(l=>'<li><a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer nofollow" title="'+esc(l.url)+'">'+esc(l.path.slice(0,40))+'</a><b>'+l.n+'</b></li>').join("")+'</ol><p class="intel-sub">From '+lands.base+' collected ads</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
  '<div class="intel-stages">'+chip("new","New this week",stages.new,"st-new")+chip("testing","Testing",stages.testing,"st-testing")+chip("proven","Proven 30d+",stages.proven,"st-proven")+chip("long","Long-runners 90d+",stages.long,"st-long")+'</div>';
