@@ -222,7 +222,7 @@ function compactNumber(n){return n>=1e6?(n/1e6).toFixed(n>=1e7?0:1).replace(/\.0
 function pickHTML(){
  const p=state.pick;
  const head=p.kind==="category"?"Advertisers running ads about “"+p.q+"”":p.kind==="failed"?"Meta lookup failed":p.kind==="missing"?"Couldn’t identify a Facebook Page for “"+p.q+"”":p.items.length===1&&!/^\d{3,30}$/.test(p.items[0].id||"")?"Facebook Page found":"Which advertiser do you mean?";
- const sub=p.kind==="category"?"Ranked by Meta’s estimated UK reach across the "+p.scanned+(p.more?" most recent":"")+" live UK ads that mention it. Choose one to see all of its ads.":p.message||(p.kind==="missing"?"Paste the brand’s website, Facebook Page link, @handle or Page ID.":"Choose the business you mean. A shared owner or a name inside someone else’s ad is not listed as a match.");
+ const sub=p.kind==="category"?"Ranked by Meta’s estimated UK reach across the "+p.scanned+(p.more?" most recent":"")+" live UK ads checked for the words. Choose one to see all of its ads.":p.message||(p.kind==="missing"?"Paste the brand’s website, Facebook Page link, @handle or Page ID.":"Choose the business you mean. A shared owner or a name inside someone else’s ad is not listed as a match.");
  const cards=p.items.map((a,i)=>{
   let host="";if(a.website){try{host=new URL(a.website).hostname.replace(/^www\./,"")}catch{}}
   const ads=a.activeAds===false?"No active UK ads":a.activeAds===true?"Active UK ads":"";
