@@ -216,7 +216,8 @@
   function paintHud() {
     if (!hud) return;
     hud.textContent = played ? MOODS[mood] + "  Hurdles cleared " + score + (best ? " · Best " + best : "") : "";
-    if (hint) hint.textContent = played ? "" : "Tap the track or press space to play while you wait";
+    if (hint) hint.textContent = played ? "· Space or tap to jump" : "· Jump the pop-ups with space or a tap";
+    if (host) host.classList.toggle("playing", played);
   }
 
   function onKey(e) {
