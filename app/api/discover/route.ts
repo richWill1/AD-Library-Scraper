@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 // for those brands improve too. Results are shared and cached.
 const ORIGIN = process.env.ADS_ORIGIN || 'https://ad-library-scraper-94t0.onrender.com';
 const MAIN_SERVICE = 'srv-db3ufoad0e5s73f5dudg';
-const TTL = 6 * 3600 * 1000, PAGES = 10, LIMIT = 100;
+const TTL = 6 * 3600 * 1000, PAGES = 25, LIMIT = 100;
 type Advertiser = {id: string; name: string; ads: number; reach: number; latest: string};
 type Row = {id: string; page_id: string; page_name: string; reach: number; start: string; text: string};
 // Every word of the search must appear as a whole word (so "blinds" doesn't match "blind").
