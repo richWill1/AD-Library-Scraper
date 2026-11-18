@@ -42,3 +42,17 @@ export function advertiserScore(name:string,input:string){
  const compact=(s:string)=>s.toLowerCase().replace(/[^a-z\d]/g,'');const a=compact(name),b=compact(term);
  return a===b?3:a.startsWith(b)&&b.length>1?2:a.includes(b)&&b.length>1?1:0;
 }
+
+export function facebookIdentity(input:string):{id?:string;handle?:string;invalid?:boolean}|null{
+ const q=input.trim();
+ if(q.startsWith('@'))return /^@[a-z0-9.]{1,80}$/i.test(q)?{handle:q.slice(1)}:{invalid:true};
+ if(!/^(?:https?:\/\/)?(?:(?:www|m|web)\.)?facebook\.com(?:[/?#]|$)/i.test(q))return null;
+ try{
+  const url=new URL(/^https?:/i.test(q)?q:'https://'+q);
+  const path=url.pathname.split('/').filter(Boolean);
+  const id=(path[0]==='profile.php'?url.searchParams.get('id'):path[0]==='ads'&&path[1]==='library'?url.searchParams.get('view_all_page_id'):path.length===1?path[0]:['people','pages'].includes(path[0])?path[2]:null);
+  if(id&&/^\d{1,30}$/.test(id))return {id};
+  if(path.length===1&&/^[a-z0-9.]{1,80}$/i.test(path[0])&&!/^(ads|pages|groups|events|watch|reel|share|people|profile\.php|login\.php)$/i.test(path[0]))return {handle:path[0]};
+ }catch{}
+ return {invalid:true};
+}

@@ -19,13 +19,13 @@ const sha256=(data:string|Buffer)=>createHash('sha256').update(data).digest('hex
 const hmac=(key:string|Buffer,data:string)=>createHmac('sha256',key).update(data).digest();
 const encodeKey=(key:string)=>key.split('/').map(encodeURIComponent).join('/');
 
-async function r2(method:string,key:string,body:Buffer|null=null,contentType=''){
+async function r2(method:string,key:string,body:Buffer|null=null,contentType='', conditional:Record<string,string>={}){
  const host=`${ACCOUNT}.r2.cloudflarestorage.com`,path=`/${BUCKET}/${encodeKey(key)}`;
  const now=new Date(),amzDate=now.toISOString().replace(/[:-]|\.\d{3}/g,''),day=amzDate.slice(0,8);
  const payload=body?sha256(body):sha256('');
- const headers:Record<string,string>={host,'x-amz-content-sha256':payload,'x-amz-date':amzDate};
+ const headers:Record<string,string>={...conditional,host,'x-amz-content-sha256':payload,'x-amz-date':amzDate};
  if(contentType)headers['content-type']=contentType;
- if(body)headers['cache-control']='public, max-age=31536000, immutable';
+ if(body)headers['cache-control']=key.startsWith('directory/')?'no-store':'public, max-age=31536000, immutable';
  const names=Object.keys(headers).sort();
  const canonical=[method,path,'',names.map(n=>`${n}:${headers[n]}`).join('\n')+'\n',names.join(';'),payload].join('\n');
  const scope=`${day}/auto/s3/aws4_request`;
@@ -33,8 +33,14 @@ async function r2(method:string,key:string,body:Buffer|null=null,contentType='')
  const signingKey=hmac(hmac(hmac(hmac('AWS4'+SECRET,day),'auto'),'s3'),'aws4_request');
  const signature=createHmac('sha256',signingKey).update(toSign).digest('hex');
  const {host:_h,...send}=headers;
- return fetch(`https://${host}${path}`,{method,body:body?new Uint8Array(body):undefined,cache:'no-store',headers:{...send,authorization:`AWS4-HMAC-SHA256 Credential=${KEY_ID}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}`},signal:AbortSignal.timeout(60000)});
+ return fetch(`https://${host}${path}`,{method,body:body?new Uint8Array(body):undefined,cache:'no-store',headers:{...send,authorization:`AWS4-HMAC-SHA256 Credential=${KEY_ID}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}`},signal:AbortSignal.timeout(key.startsWith('directory/')?3500:60000)});
 }
+
+// An ETag precondition keeps simultaneous directory writers from losing updates.
+const directoryKey = 'directory/v1/pages.json';
+export const readDirectoryObject = () => r2('GET', directoryKey);
+export const writeDirectoryObject = (json:string, etag:string|null) =>
+ r2('PUT', directoryKey, Buffer.from(json), 'application/json', etag ? {'if-match':etag} : {'if-none-match':'*'});
 
 const publicUrl=(key:string)=>`${PUBLIC}/${encodeKey(key)}`;
 const isPublic=(u:unknown):u is string=>typeof u==='string'&&u.startsWith(PUBLIC+'/');

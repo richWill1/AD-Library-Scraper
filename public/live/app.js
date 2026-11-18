@@ -53,19 +53,23 @@ async function resolveByName(q){
  const rid=++requestNumber;
  error("");busy(true);state.rows=[];renderCards();
  feedback("Looking up advertisers called “"+q+"”…");
- let list=[];
- try{const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(50000)});const d=await r.json();list=Array.isArray(d.advertisers)?d.advertisers.filter(a=>a&&/^\d{3,30}$/.test(a.id)&&typeof a.name==="string"):[]}catch{}
+ let list=[],resolved=false,message="";
+ try{const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(50000)});const d=await r.json();resolved=d.resolved===true;message=d.message||"";list=Array.isArray(d.advertisers)?d.advertisers.filter(a=>a&&/^\d{3,30}$/.test(a.id)&&typeof a.name==="string"):[]}catch{}
  if(rid!==requestNumber)return;
+ if(resolved&&list.length===1){state.brand=list[0].name;state.page=list[0].id;busy(false);void runSearch(list[0].id,list[0].id);return}
+ if(message||/^@|^(?:https?:\/\/)?(?:(?:www|m|web)\.)?facebook\.com(?:[/?#]|$)/i.test(q)){
+  busy(false);feedback("");state.pick={q,kind:"link",items:[],message:message||"Page lookup is unavailable. Try its numeric Page ID."};renderCards();return;
+ }
  const ranked=list.map(a=>({...a,score:Math.max(nameScore(q,a.name),a.alias?nameScore(q,a.alias)-1:0)})).sort((a,b)=>b.score-a.score||Number(b.verified)-Number(a.verified)||(b.followers||0)-(a.followers||0));
- for(const a of ranked)rememberPageId(a.name,a.id);
+
  const exact=ranked.filter(a=>a.score>=5);
- const clear=exact.length===1||(exact.length>1&&(exact[0].followers||0)>5*Math.max(1,exact[1].followers||0));
+ const clear=exact.length===1;
  if(clear){
   const a=exact[0];state.page=a.id;state.brand=a.name;state.choices.clear();
   for(const c of ranked)state.choices.set(c.id,{id:c.id,name:c.name,count:0});
   busy(false);void runSearch(q,a.id);return;
  }
- if(ranked.some(a=>a.score>=1)){
+ if(ranked.length){
   busy(false);state.pick={q,kind:"name",items:ranked.slice(0,8)};feedback("");renderCards();return;
  }
  // Nothing found by name: fall back to searching ad text (never auto-loading a mismatch).
@@ -181,10 +185,10 @@ function isStart(){return state.view==="discover"&&!state.brand&&!state.rows.len
 function compactNumber(n){return n>=1e6?(n/1e6).toFixed(n>=1e7?0:1).replace(/\.0$/,"")+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1).replace(/\.0$/,"")+"K":String(n)}
 function pickHTML(){
  const p=state.pick,named=p.kind==="name";
- const head=named?"Which advertiser do you mean?":"We couldn’t find an advertiser called “"+p.q+"”";
- const sub=named?"Meta has several pages with a similar name. Pick the one you want to research.":p.items.length?"These advertisers have ads that mention “"+p.q+"”. If the brand you want isn’t here, paste its Facebook page link into the search box.":"Try a different spelling, or paste the brand’s Facebook page link into the search box.";
+ const head=p.kind==="link"?"Facebook Page lookup":named?"Which advertiser do you mean?":"We couldn’t find an advertiser called “"+p.q+"”";
+ const sub=p.message|| (named?"Choose an advertiser below, or paste its Facebook Page link, @handle or Page ID.":p.items.length?"These advertisers have ads that mention “"+p.q+"”. If the brand you want isn’t here, paste its Facebook page link into the search box.":"Try a different spelling, or paste the brand’s Facebook page link into the search box.");
  const cards=p.items.map((a,i)=>{
-  const meta=named?[a.followers!=null?compactNumber(a.followers)+" followers":"",a.category||""].filter(Boolean).join(" · "):a.mentions+" ad"+(a.mentions===1?"":"s")+" mention it";
+  const meta=named?[a.followers!=null?compactNumber(a.followers)+" followers":"",a.category||"",a.adCount?Math.min(100,a.adCount)+(a.adCount>=100?"+":"")+" distinct ads seen":""].filter(Boolean).join(" · "):a.mentions+" ad"+(a.mentions===1?"":"s")+" mention it";
   return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(a.id)+'" data-name="'+esc(a.name)+'">'+logoHTML(a.id,a.name,"lg")+'<span><strong>'+esc(a.name)+(a.verified?' <span class="vtick" title="Verified by Meta">✓</span>':'')+'</strong><br><small>'+esc(meta||"Facebook page")+'</small>'+(a.alias?'<br><small class="alias">@'+esc(a.alias)+'</small>':'')+'</span><span class="go">See their ads →</span></button>';
  }).join("");
  return '<div class="start pick"><h3>'+esc(head)+'</h3><p class="pick-sub">'+esc(sub)+'</p>'+(cards?'<div class="start-grid">'+cards+'</div>':'')+'</div>';
@@ -1001,26 +1005,6 @@ function suggestRank(term,list){
 const pageIdKey="adsnoop-page-ids-v1";
 function pageIds(){try{const v=JSON.parse(localStorage.getItem(pageIdKey)||"{}");return v&&typeof v==="object"?v:{}}catch{return {}}}
 function rememberPageId(name,id){if(!name||!/^\d{1,30}$/.test(id||""))return;const m=pageIds();m[canonicalName(name)]=id;try{localStorage.setItem(pageIdKey,JSON.stringify(m))}catch{}}
-const logoLookups=new Map();
-// Find the Page behind a well-known name so its logo can be shown. Results are
-// remembered in this browser; at most two lookups run per keystroke pause.
-function resolveLogos(){
- const want=suggest.items.filter(s=>!s.id&&!logoLookups.has(canonicalName(s.name))).slice(0,2);
- for(const s of want){
-  const key=canonicalName(s.name);
-  logoLookups.set(key,(async()=>{
-   try{
-    const params=new URLSearchParams({q:s.name,coverage:state.coverage,discover:"1"});
-    const data=await fetch("/api/ads?"+params,{cache:"no-store"}).then(r=>r.ok?r.json():null);
-    const hit=(data?.ads||[]).find(a=>a.pageId&&canonicalName(a.pageName)===key);
-    if(!hit)return;
-    rememberPageId(s.name,hit.pageId);
-    let changed=false;for(const it of suggest.items)if(canonicalName(it.name)===key&&!it.id){it.id=hit.pageId;changed=true}
-    if(changed&&!$("suggest").hidden)renderSuggest("");
-   }catch{}
-  })());
- }
-}
 function localSuggestions(term){
  if(canonicalName(term).length<2)return [];
  return [
@@ -1036,7 +1020,7 @@ function renderSuggest(state_){
  if(state_==="hide"||(!suggest.items.length&&state_!=="loading"&&state_!=="empty"&&state_!=="limited")){box.hidden=true;input.setAttribute("aria-expanded","false");return}
  box.hidden=false;input.setAttribute("aria-expanded","true");
  const head=state_==="loading"?'<li class="sg-status"><span class="sg-dots"><i></i><i></i><i></i></span>Finding advertisers…</li>':state_==="empty"?'<li class="sg-status">No advertisers found yet. Press Enter to search ads mentioning “'+esc(suggest.term)+'”.</li>':state_==="limited"?'<li class="sg-status">Keep typing, or press Enter to search.</li>':"";
- box.innerHTML=head+suggest.items.map((s,i)=>'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'">'+logoHTML(s.id,s.name,"md sg-logo")+'<span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.source==="history"?'Searched before':s.source==="known"?'Verified advertiser':s.source==="popular"?'Popular UK advertiser':s.count+' active UK ad'+(s.count===1?'':'s')+' found')+'</small></span><span class="sg-go">↗</span></li>').join("");
+ box.innerHTML=head+suggest.items.map((s,i)=>'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'">'+logoHTML(s.id,s.name,"md sg-logo")+'<span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.source==="history"?'Searched before':s.source==="known"?'Verified advertiser':s.source==="popular"?'Popular UK advertiser':s.count?s.count+(s.count>=100?"+":"")+" ads seen":"Advertiser directory")+'</small></span><span class="sg-go">↗</span></li>').join("");
  input.setAttribute("aria-activedescendant",suggest.active>=0?"sg-"+suggest.active:"");
 }
 async function fetchSuggestions(term){
@@ -1044,28 +1028,28 @@ async function fetchSuggestions(term){
  if(suggest.cache.has(key))return suggest.cache.get(key);
  if(suggest.controller)suggest.controller.abort();
  const controller=new AbortController();suggest.controller=controller;
- const params=new URLSearchParams({q:term,coverage:state.coverage,discover:"1"});
- const resp=await fetch("/api/ads?"+params,{signal:controller.signal,cache:"no-store"});
- if(resp.status===429)throw Object.assign(Error("limited"),{code:"RATE_LIMITED"});
- const data=await resp.json();if(!resp.ok||data.error)throw Error(data.error||"failed");
- const pages=new Map();for(const ad of data.ads||[]){if(!ad.pageId||!ad.pageName)continue;const e=pages.get(ad.pageId);if(e)e.count++;else pages.set(ad.pageId,{id:ad.pageId,name:ad.pageName,count:1})}
- const list=[...pages.values()].map(p=>(rememberPageId(p.name,p.id),{...p,source:"meta"}));suggest.cache.set(key,list);return list;
+ const resp=await fetch("/api/advertisers?"+new URLSearchParams({q:term,suggest:"1"}),{signal:controller.signal,cache:"no-store"});
+ if(!resp.ok)return [];
+ const data=await resp.json();
+ const list=(data.advertisers||[]).map(p=>({...p,count:p.adCount||0,source:"directory"}));
+ if(list.length){if(suggest.cache.size>=100)suggest.cache.clear();suggest.cache.set(key,list);}
+ return list;
 }
 function onSearchInput(){
  const term=$("searchInput").value.trim();suggest.term=term;suggest.active=-1;
  clearTimeout(suggest.timer);
- if(term.length<2){suggest.items=[];renderSuggest("hide");return}
+ if(term.length<2||/^@|facebook\.com[/?#]/i.test(term)){suggest.items=[];renderSuggest("hide");return}
  // Known advertisers appear instantly; Meta results follow after a short pause.
  const local=localSuggestions(term);suggest.items=suggestRank(term,local);
  const cached=suggest.cache.get(canonicalName(term));
- if(cached){suggest.items=suggestRank(term,mergeSuggestions(local,cached));renderSuggest(suggest.items.length?"":"empty");resolveLogos();return}
+ if(cached){suggest.items=suggestRank(term,mergeSuggestions(local,cached));renderSuggest(suggest.items.length?"":"empty");return}
  renderSuggest(suggest.items.length?"":"loading");
  suggest.timer=setTimeout(async()=>{
   try{
    const list=await fetchSuggestions(term);
    if($("searchInput").value.trim()!==term)return;
    suggest.items=suggestRank(term,mergeSuggestions(local,list));
-   renderSuggest(suggest.items.length?"":"empty");resolveLogos();
+   renderSuggest(suggest.items.length?"":"empty");
   }catch(err){
    if(err.name==="AbortError")return;
    renderSuggest(suggest.items.length?"":err.code==="RATE_LIMITED"?"limited":"hide");
