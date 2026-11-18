@@ -10,7 +10,7 @@ const metaUrl=id=>'https://www.facebook.com/ads/library/?id='+encodeURIComponent
 function bars(list,max,color){return '<div class="bars" style="--bar:'+color+'">'+list.map(r=>'<div class="bar-row"><span>'+esc(r.label)+'</span><span class="track"><i style="width:'+(max?Math.round(r.ads/max*100):0)+'%"></i></span><b>'+r.ads+'</b></div>').join("")+'</div>'}
 function render(d){
  const s=d.stats;
- $("stats").innerHTML=[["ads",num(s.ads),"live UK ads mention "+d.name],["advertisers",num(s.advertisers),"advertisers running them"],["new",num(s.newThisWeek),"launched in the last 7 days"],["disc",s.typicalDiscount!=null?s.typicalDiscount+"%":"—","typical discount"+(s.deepest?" · up to "+s.deepest+"%":"")]].map(([k,v,l])=>'<div class="pg-stat"><b>'+v+'</b><span>'+esc(l)+'</span></div>').join("");
+ $("stats").innerHTML=[["ads",num(s.ads),d.name+" ads analysed (newest live UK ads)"],["advertisers",num(s.advertisers),"advertisers running them"],["new",num(s.newThisWeek),"of them launched in the last 7 days"],["disc",s.typicalDiscount!=null?s.typicalDiscount+"%":"—","typical discount"+(s.deepest?" · up to "+s.deepest+"%":"")]].map(([k,v,l])=>'<div class="pg-stat"><b>'+v+'</b><span>'+esc(l)+'</span></div>').join("");
  $("updated").textContent="Updated "+new Date(d.updatedAt).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+". Refreshed every few hours from Meta’s Ad Library.";
  if(!s.ads){$("content").innerHTML='<div class="pg-card"><h3>Not much running yet</h3><p>Few UK advertisers are running '+esc(d.name)+' ads right now. Check back closer to the date.</p></div>';return}
  const max=Math.max(1,...d.timeline);

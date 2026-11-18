@@ -42,7 +42,7 @@ async function read(source: typeof SOURCES[number]) {
     const text = `${title} ${summary}`;
     const tags = TAGS.filter(t => t.re.test(text)).map(t => t.tag);
     return {title: clip(title, 160), url, date: Number.isFinite(date) ? new Date(date).toISOString() : null, summary, tags, source: source.name, official: source.official, text};
-  }).filter(i => i.title && /^https?:\/\//.test(i.url) && i.tags.length && (source.official ? i.tags.some(t => t !== 'AI & automation') : META_TOPIC.test(i.text)))
+  }).filter(i => i.title && /^https?:\/\//.test(i.url) && i.tags.length && (source.official ? i.tags.some(t => ['Ads & campaigns', 'Measurement', 'Policy & privacy', 'Business tools'].includes(t)) && /advertis|\bads?\b|business|marketing|brand|creator|measurement|api|commerce|polic/i.test(i.text) : META_TOPIC.test(i.text)))
     .map(({text: _t, ...rest}) => rest);
 }
 
