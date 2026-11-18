@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /connection
+
+Sitemap: https://adsnoop.co.uk/sitemap.xml
