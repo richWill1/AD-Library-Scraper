@@ -27,3 +27,6 @@ The two pupils slowly track side-to-side during advertiser loading and media col
 
 ## Release protection
 All initial branding changes are confined to GitHub branch `preview/apple-inspired-adsnoop` (Render `adsnoop-live-design-test`, `preview.adsnoop.co.uk`). Production branch `main` is not updated.
+
+## Unified header & interactive pupils (18 November 2026)
+The preview now merges the dark navigation and light product strip into a single premium-dark header. The full logo is an inline vector at 200 CSS pixels wide on desktop, 174 on mobile, avoiding tiny eye features at 132px. A compact tagline and Meta-live status sit alongside the primary navigation. Mobile keeps a single dark header with a second internal navigation row. The two white pupils follow mouse movement within the eye circles smoothly with movement clamped to keep them inside the rings. Disabled for touch devices and reduced-motion settings. These are purely local UI effects.
