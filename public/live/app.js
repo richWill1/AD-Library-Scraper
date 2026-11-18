@@ -121,11 +121,11 @@ function logoHTML(id,name,cls){
  return '<span class="brandlogo '+(cls||"")+'" aria-hidden="true"><b>'+esc(ini)+'</b>'+(id&&/^\d{1,30}$/.test(id)?'<img alt="" loading="lazy" referrerpolicy="no-referrer" src="https://graph.facebook.com/'+encodeURIComponent(id)+'/picture?type=square&width=128&height=128" onerror="this.remove()">':'')+'</span>';
 }
 function showHeader(){
- {const title=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.brand?state.brand+" — Active ads":"The creative library.";
- $("heading").innerHTML=(state.view!=="saved"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg"):"")+'<span>'+esc(title)+'</span>';}
- $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
+ {const title=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="compare"?"You vs your competitors.":state.brand?state.brand+" — Active ads":"The creative library.";
+ $("heading").innerHTML=(state.view!=="saved"&&state.view!=="compare"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg"):"")+'<span>'+esc(title)+'</span>';}
+ $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.view==="compare"?"Your brand side by side with up to 5 pinned competitors, from their live UK ads.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
  renderViewTabs();
- {const m=$("metrics"),show=state.view!=="insights"&&(state.rows.length>0||state.view==="saved");m.hidden=!show;
+ {const m=$("metrics"),show=state.view!=="insights"&&state.view!=="compare"&&(state.rows.length>0||state.view==="saved");m.hidden=!show;
  if(show){const shown=shownRows(),live=allRows().length,saved=state.view==="saved";
   const distinct=saved?shown.length:new Set(state.rows.map(groupKey)).size;
   countTo($("metricAds"),distinct);
@@ -134,7 +134,8 @@ function showHeader(){
   $("bsSince").hidden=saved||!starts.length;$("metricSince").textContent=starts.length?formatDate(starts[0]):"—";
   const week=state.rows.filter(a=>{const d=daysRunning(a);return d!=null&&d<=7}).length;
   $("bsNew").hidden=saved;countTo($("metricNew"),week);
-  const f=$("followBtn"),on=isFollowed(state.page);f.hidden=saved||!state.page;f.setAttribute("aria-pressed",String(on));f.querySelector(".bs-star").textContent=on?"★":"☆";f.querySelector(".bs-label").textContent=on?"Following":"Follow brand";
+  const f=$("followBtn"),on=isFollowed(state.page);f.hidden=saved||!state.page;f.setAttribute("aria-pressed",String(on));const isMine=myBrand()?.id===state.page;f.hidden=f.hidden||isMine;f.querySelector(".bs-star").textContent=on?"★":"☆";f.querySelector(".bs-label").textContent=on?"Pinned":"Pin competitor";
+  const mb=$("mineBtn");if(mb){mb.hidden=saved||!state.page;mb.setAttribute("aria-pressed",String(isMine));mb.querySelector(".bs-label").textContent=isMine?"Your brand ✓":"This is my brand";}
   $("savedBtn").hidden=saved;}
  }
  $("toolbar").style.display=state.rows.length||state.view==="saved"?"flex":"none";
@@ -158,13 +159,14 @@ function countTo(el,to){
  el._raf=requestAnimationFrame(step);void prev;
 }
 const followKey="adsnoop-follow-v1";
-function followed(){try{const v=JSON.parse(localStorage.getItem(followKey)||"[]");return Array.isArray(v)?v.filter(b=>b&&/^\d{1,30}$/.test(b.id)&&typeof b.name==="string").slice(0,30):[]}catch{return []}}
+function followed(){try{const v=JSON.parse(localStorage.getItem(followKey)||"[]");return Array.isArray(v)?v.filter(b=>b&&/^\d{1,30}$/.test(b.id)&&typeof b.name==="string").slice(0,PIN_MAX):[]}catch{return []}}
 function isFollowed(id){return !!id&&followed().some(b=>b.id===id)}
 function toggleFollow(){
  if(!state.page)return;let list=followed();const on=list.some(b=>b.id===state.page);
- list=on?list.filter(b=>b.id!==state.page):[{id:state.page,name:state.brand||"Advertiser"},...list];
- try{localStorage.setItem(followKey,JSON.stringify(list.slice(0,30)))}catch{}
- toast(on?"Unfollowed "+(state.brand||"brand"):"Following "+(state.brand||"brand")+". It’ll be on your start page.");showHeader();
+ if(!on&&list.length>=PIN_MAX){toast("You can pin up to "+PIN_MAX+" competitors. Unpin one first.");return}
+ list=on?list.filter(b=>b.id!==state.page):[...list,{id:state.page,name:state.brand||"Advertiser"}];
+ try{localStorage.setItem(followKey,JSON.stringify(list.slice(0,PIN_MAX)))}catch{}
+ toast(on?"Unpinned "+(state.brand||"brand"):"Pinned "+(state.brand||"brand")+" ("+list.length+"/"+PIN_MAX+"). Compare it any time.");cmp.data.delete(state.page);showHeader();renderPinbar();
 }
 let toastTimer=0;
 function toast(msg){const t=$("toast");if(!t)return;t.textContent=msg;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2400)}
@@ -192,7 +194,8 @@ function startHTML(){
  loadPopular();
  const mine=followed();
  let html='<div class="start">';
- if(mine.length)html+='<h3>Brands you follow</h3><div class="start-grid">'+mine.slice(0,8).map((b,i)=>brandCard(b,i,"")).join("")+'</div>';
+ {const me=myBrand();html+='<button class="cmp-cta" data-view="compare"><b>Compare'+(me?' '+esc(me.name):' your brand')+' with up to '+PIN_MAX+' pinned competitors</b><span>See gaps in messaging, offers and testing pace →</span></button>'}
+ if(mine.length)html+='<h3>Pinned competitors ('+mine.length+'/'+PIN_MAX+')</h3><div class="start-grid">'+mine.map((b,i)=>brandCard(b,i,"Pinned competitor")).join("")+'</div>';
  html+='<h3>Popular in the UK right now</h3><div class="start-grid">';
  if(popular&&popular.length)html+=popular.map((b,i)=>brandCard({id:b.pageId,name:b.name},i,(b.more?b.count+"+":b.count)+" live UK ads")).join("");
  else if(popular)html+='<p class="intel-sub" style="grid-column:1/-1">Search any brand above to see its live ads.</p>';
@@ -203,12 +206,13 @@ function startHTML(){
 // messaging map for the brand that is loaded.
 function renderViewTabs(){
  const el=$("viewtabs");if(!el)return;
- const show=!!state.brand&&state.rows.length>0&&(state.view==="discover"||state.view==="insights");
+ const has=!!state.brand&&state.rows.length>0,show=state.view==="compare"||(has&&(state.view==="discover"||state.view==="insights"));
  el.hidden=!show;document.body.classList.toggle("has-tabs",show);if(!show){el.innerHTML="";return}
  const distinct=new Set(state.rows.map(groupKey)).size;
  let themes=0;try{themes=messagingThemes(state.rows).length}catch{}
  const tab=(view,label,count)=>'<button class="viewtab" role="tab" data-view="'+view+'" aria-selected="'+(state.view===view)+'" tabindex="'+(state.view===view?0:-1)+'">'+label+(count?'<small>'+count+'</small>':'')+'</button>';
- el.innerHTML=tab("discover","Ads &amp; insights",(distinct||state.rows.length)+" ads")+tab("insights","Messaging",themes?themes+" themes":"");
+ const n=compareBrands().length;
+ el.innerHTML=(has?tab("discover","Ads &amp; insights",(distinct||state.rows.length)+" ads")+tab("insights","Messaging",themes?themes+" themes":""):"")+tab("compare","Compare",n?n+" brands":"");
 }
 function empty(title,detail){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p></div>'}
 function card(a){
@@ -226,8 +230,10 @@ function renderCards(){
  showHeader();
  renderBrands();
  const all=state.view==="insights"?[]:shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
- if(state.view==="insights"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();return}
+ if(state.view==="insights"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();renderPinbar();return}
+ if(state.view==="compare"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin."));
+ renderPinbar();
  $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
  renderIntel();
@@ -562,6 +568,145 @@ function setBar(mode,ready=0,total=0,ids=null){
  $("loadbarText").textContent="Collecting "+who+"’s creatives · "+ready+" of "+total+(eta?" · "+eta:"");
  hint.textContent=ready<total&&(Date.now()-barRun.start>2500)?"A first look at a brand takes a moment: each creative is collected from Meta once, then saved so it’s instant for everyone.":"";
 }
+// ---- Pinned competitors, your brand and the comparison view ----
+const PIN_MAX=5,MINE_KEY="adsnoop-mybrand-v1";
+function myBrand(){try{const v=JSON.parse(localStorage.getItem(MINE_KEY)||"null");return v&&/^\d{1,30}$/.test(v.id)&&typeof v.name==="string"?v:null}catch{return null}}
+function toggleMine(){
+ if(!state.page)return;const cur=myBrand();
+ if(cur&&cur.id===state.page){try{localStorage.removeItem(MINE_KEY)}catch{};toast("Cleared your brand.")}
+ else{try{localStorage.setItem(MINE_KEY,JSON.stringify({id:state.page,name:state.brand||"My brand"}))}catch{}
+  if(isFollowed(state.page))try{localStorage.setItem(followKey,JSON.stringify(followed().filter(b=>b.id!==state.page)))}catch{}
+  toast("Saved "+(state.brand||"this brand")+" as your brand. Open Compare to see it against your pins.")}
+ cmp.data.delete(state.page);showHeader();renderPinbar();
+}
+function unpin(id){try{localStorage.setItem(followKey,JSON.stringify(followed().filter(b=>b.id!==id)))}catch{};renderPinbar();if(state.view==="compare")renderCards();else showHeader()}
+function renderPinbar(){
+ const el=$("pinbar");if(!el)return;const list=followed(),mine=myBrand();
+ const show=(list.length||mine)&&!isStart();el.hidden=!show;if(!show){el.innerHTML="";return}
+ const chip=(b,cls,label)=>'<span class="pinchip'+(b.id===state.page&&state.view!=="compare"?' on':'')+(cls?' '+cls:'')+'"><button data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'" title="Open '+esc(b.name)+'">'+logoHTML(b.id,b.name,"")+'<span>'+esc(label||b.name)+'</span></button>'+(cls?'':'<button class="unpin" data-action="unpin" data-id="'+esc(b.id)+'" aria-label="Unpin '+esc(b.name)+'">×</button>')+'</span>';
+ el.innerHTML='<span class="pin-k">Pinned '+list.length+'/'+PIN_MAX+'</span>'+(mine?chip(mine,"mine",mine.name+" · you"):'')+list.map(b=>chip(b)).join("")+'<button class="pin-cmp'+(state.view==="compare"?' on':'')+'" data-view="compare">Compare →</button>';
+}
+const cmp={data:new Map(),running:false};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function compareBrands(){const mine=myBrand(),list=followed().filter(b=>!mine||b.id!==mine.id);return (mine?[{...mine,mine:true}]:[]).concat(list.slice(0,PIN_MAX))}
+async function loadBrandRows(b){
+ if(b.id===state.page&&state.rows.length&&!state.loading)return {at:Date.now(),rows:state.rows,more:!!state.cursor};
+ let rows=[],cursor=null,pages=0,seen=new Set();
+ do{
+  const p=new URLSearchParams({q:b.name,coverage:state.coverage,page:b.id});if(cursor)p.set("after",cursor);
+  let d;
+  try{d=await request("/api/ads?"+p)}catch(e){if(e.code!=="RATE_LIMITED")throw e;await sleep(20000);d=await request("/api/ads?"+p)}
+  for(const a of Array.isArray(d.ads)?d.ads:[])if(!seen.has(a.id)){seen.add(a.id);rows.push(a)}
+  cursor=d.nextCursor||null;
+ }while(cursor&&++pages<2);
+ return {at:Date.now(),rows,more:!!cursor};
+}
+async function loadCompare(force,only){
+ if(cmp.running)return;cmp.running=true;
+ try{for(const b of compareBrands()){
+  if(only&&b.id!==only)continue;
+  const hit=cmp.data.get(b.id);if(!force&&hit&&(hit.loading||hit.error||(hit.rows&&Date.now()-hit.at<20*60000)))continue;
+  cmp.data.set(b.id,{loading:true});if(state.view==="compare")renderCards();
+  try{cmp.data.set(b.id,await loadBrandRows(b))}catch(e){cmp.data.set(b.id,{error:e.message||"Couldn’t load"})}
+  if(state.view==="compare")renderCards();
+ }}finally{cmp.running=false}
+}
+const median=xs=>{const s=xs.filter(x=>x!=null).sort((a,b)=>a-b);return s.length?s[Math.floor(s.length/2)]:null};
+const pctOf=(n,t)=>t?Math.round(n/t*100):0;
+function brandStats(rows){
+ const total=rows.length,days=rows.map(daysRunning),themes=messagingThemes(rows),share={};
+ for(const t of themes)share[t.id]=pctOf(t.ads.length,total);
+ const offerIds=new Set(themes.filter(t=>t.category==="offers").flatMap(t=>t.ads.map(a=>a.id)));
+ const top=cat=>themes.find(t=>t.category===cat)?.label||"—";
+ return {total,distinct:new Set(rows.map(groupKey)).size,median:median(days),new30:pctOf(days.filter(d=>d!=null&&d<=30).length,total),long:pctOf(days.filter(d=>d!=null&&d>=90).length,total),offers:pctOf(offerIds.size,total),share,hook:top("hooks"),benefit:top("benefits"),proof:top("proof"),cta:topCTAs(rows).list[0]?.label||"—"};
+}
+function compareInsights(cols){
+ const me=cols.find(c=>c.mine),rivals=cols.filter(c=>!c.mine),out=[];
+ if(!rivals.length)return out;
+ const name=c=>c.name;
+ if(me){
+  const gaps=[],edges=[];
+  for(const r of messageRules){
+   const mine=me.stats.share[r.id]||0,users=rivals.filter(c=>(c.stats.share[r.id]||0)>=10).sort((a,b)=>b.stats.share[r.id]-a.stats.share[r.id]);
+   if(mine<5&&(users.length>=2||users.some(c=>c.stats.share[r.id]>=25)))gaps.push({r,users,score:users.reduce((s,c)=>s+c.stats.share[r.id],0)});
+   if(mine>=10&&rivals.every(c=>(c.stats.share[r.id]||0)<5))edges.push({r,mine});
+  }
+  gaps.sort((a,b)=>b.score-a.score);
+  for(const g of gaps.slice(0,3))out.push({kind:"gap",title:"Gap: "+g.r.label,text:g.users.slice(0,3).map(c=>name(c)+" "+c.stats.share[g.r.id]+"%").join(", ")+" of ads use it. You "+((me.stats.share[g.r.id]||0)?"barely do ("+me.stats.share[g.r.id]+"%)":"don’t")+".",tip:g.r.test});
+  for(const e of edges.slice(0,2))out.push({kind:"edge",title:"Only you: "+e.r.label,text:e.mine+"% of your ads lean on it; no pinned competitor does. Keep it distinctive."});
+  const avgOffer=Math.round(rivals.reduce((s,c)=>s+c.stats.offers,0)/rivals.length);
+  if(Math.abs(me.stats.offers-avgOffer)>=15)out.push({kind:me.stats.offers>avgOffer?"note":"gap",title:me.stats.offers>avgOffer?"You discount more":"Competitors push offers harder",text:"Offers appear in "+me.stats.offers+"% of your ads vs "+avgOffer+"% on average for your pins."});
+ }
+ const fresh=[...cols].sort((a,b)=>b.stats.new30-a.stats.new30)[0];
+ if(fresh&&fresh.stats.new30>=20)out.push({kind:"note",title:name(fresh)+" is testing hardest",text:fresh.stats.new30+"% of their live ads launched in the last 30 days."});
+ const durable=[...cols].sort((a,b)=>b.stats.long-a.stats.long)[0];
+ if(durable&&durable.stats.long>=20)out.push({kind:"note",title:name(durable)+" has the most long-runners",text:durable.stats.long+"% of their ads have run 90+ days. Study these: brands keep paying for what works."});
+ return out.slice(0,6);
+}
+function compareHTML(){
+ const brands=compareBrands(),mine=myBrand();
+ if(!mine&&!brands.length)return '<div class="cmp-empty"><h3>Compare your brand with your competitors</h3><ol><li>Search your own brand and press <b>This is my brand</b>.</li><li>Search up to 5 competitors and press <b>Pin competitor</b> on each.</li><li>Come back here to see the gaps.</li></ol></div>';
+ const need=brands.some(b=>{const d=cmp.data.get(b.id);return !d||(!d.rows&&!d.loading&&!d.error)});
+ if(need)setTimeout(()=>loadCompare(false),0);
+ const cols=brands.map(b=>{const d=cmp.data.get(b.id);return {...b,d,stats:d&&d.rows?brandStats(d.rows):null}});
+ const ready=cols.filter(c=>c.stats);
+ const head='<tr><th></th>'+cols.map(c=>'<th class="'+(c.mine?'me':'')+'"><button class="cmp-brand" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'">'+logoHTML(c.id,c.name,"")+'<span>'+esc(c.name)+'</span></button>'+(c.mine?'<small>Your brand</small>':'<small>Competitor</small>')+'</th>').join("")+'</tr>';
+ const cell=(c,f)=>c.stats?f(c.stats):c.d&&c.d.error?'<span class="cmp-err">Couldn’t load</span>':'<span class="cmp-wait"></span>';
+ const row=(label,f,hint)=>'<tr><th scope="row">'+esc(label)+(hint?'<small>'+esc(hint)+'</small>':'')+'</th>'+cols.map(c=>'<td class="'+(c.mine?'me':'')+'">'+cell(c,f)+'</td>').join("")+'</tr>';
+ const stats='<table class="cmp-table"><thead>'+head+'</thead><tbody>'+
+  row("Live ads",s=>'<b>'+s.distinct+'</b>'+(s.distinct<s.total?' <small>('+s.total+' incl. variants)</small>':''),"Most recent 100 per brand")+
+  row("Launched in 30 days",s=>'<b>'+s.new30+'%</b>',"How hard they’re testing")+
+  row("Long-runners 90d+",s=>'<b>'+s.long+'%</b>',"Ads they keep paying for")+
+  row("Median days live",s=>'<b>'+(s.median??"—")+'</b>')+
+  row("Ads with an offer",s=>'<b>'+s.offers+'%</b>')+
+  row("Lead hook",s=>esc(s.hook))+row("Lead benefit",s=>esc(s.benefit))+row("Lead proof",s=>esc(s.proof))+row("Top call to action",s=>esc(s.cta))+
+ '</tbody></table>';
+ const me=cols.find(c=>c.mine&&c.stats);
+ const matrix='<table class="cmp-table cmp-matrix"><thead>'+head+'</thead><tbody>'+messageCategories.map(cat=>{
+  const rules=messageRules.filter(r=>r.category===cat.id&&ready.some(c=>c.stats.share[r.id]));
+  if(!rules.length)return "";
+  return '<tr class="cmp-cat"><th colspan="'+(cols.length+1)+'">'+esc(cat.label)+'</th></tr>'+rules.map(r=>{
+   const rivalUse=cols.filter(c=>!c.mine&&c.stats&&(c.stats.share[r.id]||0)>=10).length;
+   return '<tr><th scope="row">'+esc(r.label)+'</th>'+cols.map(c=>{
+    if(!c.stats)return '<td class="'+(c.mine?'me':'')+'">'+cell(c,()=>"")+'</td>';
+    const v=c.stats.share[r.id]||0,gap=c.mine&&v<5&&rivalUse>=2;
+    return '<td class="heat'+(c.mine?' me':'')+(gap?' gap':'')+'" style="--h:'+Math.min(1,v/50).toFixed(2)+'">'+(v?v+'%':'·')+(gap?'<em>gap</em>':'')+'</td>';
+   }).join("")+'</tr>';
+  }).join("");
+ }).join("")+'</tbody></table>';
+ const ins=compareInsights(ready);
+ const insHTML=ready.length>1?(ins.length?'<div class="ins-grid">'+ins.map(i=>'<div class="ins-card ins-'+i.kind+'"><p class="ins-t">'+esc(i.title)+'</p><p>'+esc(i.text)+'</p>'+(i.tip?'<p class="ins-tip">Try: '+esc(i.tip)+'</p>':'')+'</div>').join("")+'</div>':'<p class="intel-sub">No standout gaps yet. Your messaging overlaps closely with your pins.</p>'):'';
+ const hint=!mine?'<p class="cmp-hint">Tip: search your own brand and press <b>This is my brand</b> to see your gaps highlighted.</p>':brands.length<2?'<p class="cmp-hint">Pin some competitors (up to 5) to compare against.</p>':'';
+ return '<div class="cmp-wrap">'+hint+(insHTML?'<h3 class="cmp-h">What stands out</h3>'+insHTML:'')+'<h3 class="cmp-h">At a glance</h3><div class="cmp-scroll">'+stats+'</div><h3 class="cmp-h">Messaging matrix <small>Share of each brand’s ads using the theme'+(me?' · <em class="gapkey">gap</em> = 2+ competitors use it, you don’t':'')+'</small></h3><div class="cmp-scroll">'+matrix+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh data</button><span class="intel-sub">Based on each brand’s most recent live UK ads in Meta’s Ad Library. Themes come from ad text; claims aren’t verified.</span></div></div>';
+}
+// Messaging tab: what is rising, what lasts, and how it compares with your brand.
+function themeTrend(t,ads){
+ const recent=ads.filter(a=>{const d=daysRunning(a);return d!=null&&d<=30}),older=ads.filter(a=>{const d=daysRunning(a);return d!=null&&d>30});
+ if(recent.length<4||older.length<4)return 0;
+ const ids=new Set(t.ads.map(a=>a.id));
+ return pctOf(recent.filter(a=>ids.has(a.id)).length,recent.length)-pctOf(older.filter(a=>ids.has(a.id)).length,older.length);
+}
+function messagingInsights(ads,themes){
+ const out=[],total=ads.length,overall=median(ads.map(daysRunning));
+ if(themes[0])out.push({kind:"note",title:"Lead message: "+themes[0].label,text:"In "+pctOf(themes[0].ads.length,total)+"% of ads. "+(themes[1]?"Next: "+themes[1].label+" ("+pctOf(themes[1].ads.length,total)+"%).":"")});
+ const trends=themes.map(t=>({t,d:themeTrend(t,ads)}));
+ const up=trends.filter(x=>x.d>=10).sort((a,b)=>b.d-a.d)[0],down=trends.filter(x=>x.d<=-10).sort((a,b)=>a.d-b.d)[0];
+ if(up)out.push({kind:"edge",title:"Rising: "+up.t.label,text:"+"+up.d+" points in ads launched in the last 30 days vs older ads. A message they’re actively testing."});
+ if(down)out.push({kind:"gap",title:"Fading: "+down.t.label,text:down.d+" points in newer ads. They may be moving away from it."});
+ if(overall!=null){const dur=themes.filter(t=>t.ads.length>=3).map(t=>({t,m:median(t.ads.map(daysRunning))})).filter(x=>x.m!=null&&x.m>=overall*1.3&&x.m-overall>=10).sort((a,b)=>b.m-a.m)[0];
+  if(dur)out.push({kind:"note",title:"Staying power: "+dur.t.label,text:"These ads have run a median "+dur.m+" days vs "+overall+" overall. Brands keep paying for what works."});}
+ const offerIds=new Set(themes.filter(t=>t.category==="offers").flatMap(t=>t.ads.map(a=>a.id)));
+ out.push({kind:"note",title:pctOf(offerIds.size,total)>=40?"Offer-led":"Offers: "+pctOf(offerIds.size,total)+"% of ads",text:pctOf(offerIds.size,total)>=40?pctOf(offerIds.size,total)+"% of ads carry a price, free or finance offer. Competing on value.":"Mostly sells on product and benefits rather than discounts."});
+ const missing=messageCategories.filter(c=>!themes.some(t=>t.category===c.id));
+ if(missing.length)out.push({kind:"edge",title:"Unused angle"+(missing.length>1?"s":""),text:"No "+missing.map(c=>c.label.toLowerCase()).join(" or ")+" detected. Space you could own."});
+ const mine=myBrand(),md=mine&&mine.id!==state.page?cmp.data.get(mine.id):null;
+ if(md&&md.rows&&md.rows.length){const ms=brandStats(md.rows);
+  const theirs=themes.filter(t=>pctOf(t.ads.length,total)>=15&&(ms.share[t.id]||0)<5).slice(0,2);
+  for(const t of theirs)out.push({kind:"gap",title:"They use, you don’t: "+t.label,text:esc0(state.brand)+" "+pctOf(t.ads.length,total)+"% vs "+mine.name+" "+(ms.share[t.id]||0)+"%.",tip:t.test});}
+ else if(mine&&mine.id!==state.page&&!cmp.running&&!cmp.data.has(mine.id))setTimeout(()=>loadCompare(false,mine.id).then(()=>{if(state.view==="insights")renderCards()}),0);
+ return out.slice(0,6);
+}
+const esc0=s=>String(s||"");
 // Messaging map: deterministic rules applied to loaded ad copy. Ported from
 // lib/messaging.ts so the preview and the original app classify identically.
 const messageCategories=[
@@ -621,20 +766,23 @@ function messagingView(){
  const themes=messagingThemes(ads),total=ads.length,distinct=new Set(ads.map(copyPattern)).size;
  const mapped=new Set(themes.flatMap(t=>t.ads.map(a=>a.id))).size;
  if(!themes.some(t=>t.id===state.theme))state.theme=themes[0]?.id||"";
+ const trend={};for(const t of themes)trend[t.id]=themeTrend(t,ads);
+ const ins=messagingInsights(ads,themes),overallMed=median(ads.map(daysRunning));
+ const insHTML=ins.length?'<h3 class="cmp-h">Key insights</h3><div class="ins-grid msg-ins">'+ins.map(i=>'<div class="ins-card ins-'+i.kind+'"><p class="ins-t">'+esc(i.title)+'</p><p>'+esc(i.text)+'</p>'+(i.tip?'<p class="ins-tip">Try: '+esc(i.tip)+'</p>':'')+'</div>').join("")+'</div><h3 class="cmp-h">Messaging matrix</h3>':'';
  const cols=messageCategories.map(cat=>{
   const list=themes.filter(t=>t.category===cat.id);
   return '<section class="msg-col msg-'+cat.id+'"><div class="msg-colhead"><h3>'+esc(cat.label)+'</h3><span>'+list.length+'</span></div><p class="msg-q">'+esc(cat.question)+'</p>'+
-   (list.length?list.map(t=>{const pct=Math.round(t.ads.length/total*100);return '<button class="msg-theme'+(t.id===state.theme?' on':'')+'" data-theme="'+t.id+'" aria-pressed="'+(t.id===state.theme)+'"><span class="msg-label">'+esc(t.label)+'</span><span class="msg-count">'+t.ads.length+'</span><span class="msg-bar"><i style="width:'+pct+'%"></i></span><span class="msg-pct">'+pct+'% of ads</span></button>'}).join(""):'<p class="msg-none">Not detected in the loaded copy.</p>')+'</section>';
+   (list.length?list.map(t=>{const pct=Math.round(t.ads.length/total*100);return '<button class="msg-theme'+(t.id===state.theme?' on':'')+'" data-theme="'+t.id+'" aria-pressed="'+(t.id===state.theme)+'"><span class="msg-label">'+esc(t.label)+'</span><span class="msg-count">'+t.ads.length+'</span><span class="msg-bar"><i style="width:'+pct+'%"></i></span><span class="msg-pct">'+pct+'% of ads'+(trend[t.id]>=10?' <b class="tr up" title="Rising in newer ads">↑</b>':trend[t.id]<=-10?' <b class="tr down" title="Fading in newer ads">↓</b>':'')+'</span></button>'}).join(""):'<p class="msg-none">Not detected in the loaded copy.</p>')+'</section>';
  }).join("");
  const t=themes.find(x=>x.id===state.theme);
  let detail="";
  if(t){
   const ex=themeExamples(t),note=readNotes()[t.id]||"";
-  detail='<section class="msg-detail" aria-live="polite"><div class="msg-dhead"><div><p class="eyebrow">'+esc(messageCategories.find(c=>c.id===t.category).label)+'</p><h3>'+esc(t.label)+'</h3><p>'+t.ads.length+' of '+total+' ads ('+Math.round(t.ads.length/total*100)+'%) · '+ex.length+' distinct message'+(ex.length===1?'':'s')+'</p></div></div>'+
+  detail='<section class="msg-detail" aria-live="polite"><div class="msg-dhead"><div><p class="eyebrow">'+esc(messageCategories.find(c=>c.id===t.category).label)+'</p><h3>'+esc(t.label)+'</h3><p>'+t.ads.length+' of '+total+' ads ('+Math.round(t.ads.length/total*100)+'%) · '+ex.length+' distinct message'+(ex.length===1?'':'s')+'</p><p class="msg-stats"><span>Median <b>'+(median(t.ads.map(daysRunning))??"—")+'</b> days live'+(overallMed!=null?' (vs '+overallMed+' overall)':'')+'</span><span><b>'+t.ads.filter(a=>{const d=daysRunning(a);return d!=null&&d<=30}).length+'</b> launched in 30 days</span>'+(trend[t.id]?'<span>'+(trend[t.id]>0?'↑ +':'↓ ')+trend[t.id]+' pts in newer ads</span>':'')+(topCTAs(t.ads).list[0]?'<span>Usual CTA: <b>'+esc(topCTAs(t.ads).list[0].label)+'</b></span>':'')+'</p></div></div>'+
    '<div class="msg-dgrid"><div><h4>How '+esc(state.brand||"they")+' say it</h4><ul class="msg-evidence">'+ex.slice(0,8).map(a=>'<li><blockquote>“'+highlight(t.evidence[a.id],t.match)+'”</blockquote><div class="msg-meta"><span>'+(a.reach!=null?'UK reach '+reach(a.reach):'Reach not reported')+' · since '+esc(formatDate(a.start))+'</span><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button></div></li>').join("")+'</ul>'+(ex.length>8?'<p class="msg-more">+ '+(ex.length-8)+' more variations in the loaded ads.</p>':'')+'</div>'+
    '<div class="msg-test"><h4>Your test direction</h4><textarea data-note="'+t.id+'" rows="6" placeholder="'+esc(t.test)+'">'+esc(note)+'</textarea><p>Starts from a suggested direction; edit it for your brand. Saved in this browser.</p></div></div></section>';
  }
- return '<div class="msg-wrap"><div class="msg-top" style="align-items:center"><div><p>'+total+' ads analysed · '+distinct+' distinct copy variations · '+themes.length+' themes · '+(total-mapped)+' ads with no detected theme</p></div><button class="ghost" data-action="exportmsg">Export map ↓</button></div><div class="msg-grid">'+cols+'</div>'+detail+'<p class="notice">Themes are detected from ad text with fixed rules; ads can appear in several themes. Claims are not verified, and this is not a measure of performance. English copy only.</p></div>';
+ return '<div class="msg-wrap"><div class="msg-top" style="align-items:center"><div><p>'+total+' ads analysed · '+distinct+' distinct copy variations · '+themes.length+' themes · '+(total-mapped)+' ads with no detected theme</p></div><button class="ghost" data-action="exportmsg">Export map ↓</button></div>'+insHTML+'<div class="msg-grid">'+cols+'</div>'+detail+'<p class="notice">Themes are detected from ad text with fixed rules; ads can appear in several themes. Claims are not verified, and this is not a measure of performance. English copy only.</p></div>';
 }
 function exportMessaging(){
  const themes=messagingThemes(state.rows),notes=readNotes();
@@ -754,7 +902,7 @@ function setView(view){
  state.view=view;
  $("brands").hidden=true;
  if(view==="saved")feedback("Your saved creative records are stored locally in this browser. For an up-to-date ad, open its official Meta link.");
- else if(view==="insights")feedback("");
+ else if(view==="insights"||view==="compare")feedback("");
  else feedback(state.brand?"":"Search a brand above to discover active advertisers.");
  renderCards();
  for(const id of ["cards","intel","metrics","toolbar"]){const el=$(id);if(!el)continue;el.classList.remove("viewin");void el.offsetWidth;el.classList.add("viewin")}
@@ -921,7 +1069,7 @@ $("sort").addEventListener("change",e=>{state.sort=e.target.value;state.limit=25
 document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest(".viewtab");if(!t||!["ArrowLeft","ArrowRight"].includes(e.key))return;const tabs=[...document.querySelectorAll(".viewtab")];const next=tabs[(tabs.indexOf(t)+(e.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];if(next){e.preventDefault();setView(next.dataset.view);requestAnimationFrame(()=>document.querySelector('.viewtab[aria-selected="true"]')?.focus())}});
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
- b=e.target.closest("[data-page]");if(b){if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){state.choices.clear();for(const it of state.pick.items)state.choices.set(it.id,{id:it.id,name:it.name,count:it.mentions||0})}state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
+ b=e.target.closest("[data-page]");if(b){if(state.view==="compare"){state.view="discover";if(b.dataset.page===state.page&&state.rows.length){renderCards();return}}if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){state.choices.clear();for(const it of state.pick.items)state.choices.set(it.id,{id:it.id,name:it.name,count:it.mentions||0})}state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
  b=e.target.closest("[data-theme]");if(b){state.theme=b.dataset.theme;renderCards();document.querySelector(".msg-detail")?.scrollIntoView({behavior:"smooth",block:"nearest"});return}
  b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;state.limit=25;renderCards();return}
@@ -930,6 +1078,9 @@ document.addEventListener("click",e=>{
  if(action==="detail")adDetails(id);
  if(action==="save"){const a=findAd(id);if(a){const was=state.saved.has(id);if(was)state.saved.delete(id);else state.saved.set(id,a);save();renderCards();toast(was?"Removed from saved ideas":"Saved to your ideas ♥");if(!was)document.querySelectorAll('[data-action="save"][data-id="'+id+'"]').forEach(el=>{el.classList.add("pop");setTimeout(()=>el.classList.remove("pop"),500)});}}
  if(action==="follow")toggleFollow();
+ if(action==="mybrand")toggleMine();
+ if(action==="unpin")unpin(b.dataset.id);
+ if(action==="cmpreload"){cmp.data.clear();loadCompare(true)}
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}
  if(action==="showmore"){state.limit+=25;renderCards()}
  if(action==="group"){const gm=state.groupMeta?.get(id);if(gm){state.expanded=state.expanded||new Set();if(state.expanded.has(gm.key))state.expanded.delete(gm.key);else{state.expanded.add(gm.key);state.revealAll=true}renderCards();for(const a of state.rows)if(groupKey(a)===gm.key)requestMedia(a.id,{priority:true})}}
