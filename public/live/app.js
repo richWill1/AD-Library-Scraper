@@ -762,6 +762,31 @@ function highlight(sentence,re){
  const m=sentence.match(re);if(!m)return esc(sentence);
  const i=m.index;return esc(sentence.slice(0,i))+"<mark>"+esc(m[0])+"</mark>"+esc(sentence.slice(i+m[0].length));
 }
+const catColor={hooks:"#a347d1",benefits:"#0071e3",offers:"#e07800",proof:"#1f9d4c",actions:"#0a8fb5"};
+function strategyMap(themes,total,overallMed,trend){
+ const pts=themes.map(t=>({t,x:pctOf(t.ads.length,total),y:median(t.ads.map(daysRunning))})).filter(p=>p.y!=null);
+ if(pts.length<3||overallMed==null)return "";
+ const W=560,H=320,L=44,R=16,T=16,B=40,xMax=Math.max(20,Math.ceil(Math.max(...pts.map(p=>p.x))/10)*10),yMax=Math.max(overallMed*2,Math.ceil(Math.max(...pts.map(p=>p.y))/10)*10,10);
+ const xs=x=>L+(x/xMax)*(W-L-R),ys=y=>H-B-(Math.min(y,yMax)/yMax)*(H-T-B);
+ const xSplit=Math.max(10,median(pts.map(p=>p.x))),qx=xs(xSplit),qy=ys(overallMed);
+ const quad=(x,y,w,h,label,fill)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="'+fill+'"/><text x="'+(x+8)+'" y="'+(y+16)+'" class="sm-q">'+label+'</text>';
+ let svg='<svg class="sm-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Strategy map: share of ads against median days live for each message theme">'+
+  quad(qx,T,W-R-qx,qy-T,"CORE MESSAGES","rgba(31,157,76,.06)")+quad(L,T,qx-L,qy-T,"QUIET PERFORMERS","rgba(0,113,227,.05)")+quad(qx,qy,W-R-qx,H-B-qy,"CURRENT PUSH","rgba(224,120,0,.06)")+quad(L,qy,qx-L,H-B-qy,"EXPERIMENTS","rgba(0,0,0,.025)")+
+  '<line x1="'+L+'" y1="'+(H-B)+'" x2="'+(W-R)+'" y2="'+(H-B)+'" class="sm-axis"/><line x1="'+L+'" y1="'+T+'" x2="'+L+'" y2="'+(H-B)+'" class="sm-axis"/>'+
+  '<text x="'+((L+W-R)/2)+'" y="'+(H-8)+'" class="sm-lab" text-anchor="middle">Share of ads →</text><text x="12" y="'+((T+H-B)/2)+'" class="sm-lab" text-anchor="middle" transform="rotate(-90 12 '+((T+H-B)/2)+')">Days live (median) →</text>'+
+  '<text x="'+(L-6)+'" y="'+(qy+4)+'" class="sm-tick" text-anchor="end">'+overallMed+'d</text><text x="'+qx+'" y="'+(H-B+14)+'" class="sm-tick" text-anchor="middle">'+Math.round(xSplit)+'%</text><text x="'+(W-R)+'" y="'+(H-B+14)+'" class="sm-tick" text-anchor="end">'+xMax+'%</text>';
+ const placed=[];
+ for(const p of [...pts].sort((a,b)=>b.t.ads.length-a.t.ads.length)){
+  const cx=xs(p.x),cy=ys(p.y),r=5+Math.sqrt(p.t.ads.length/total)*12,on=p.t.id===state.theme;
+  let ly=cy+4,lx=cx+r+5,anchor="start";if(cx>W-150){lx=cx-r-5;anchor="end"}
+  for(let k=0;k<6&&placed.some(q=>Math.abs(q.y-ly)<13&&Math.abs(q.x-lx)<110);k++)ly+=(k%2?-1:1)*13*(k+1);
+  placed.push({x:lx,y:ly});
+  svg+='<g class="sm-dot'+(on?' on':'')+'" data-theme="'+p.t.id+'" tabindex="0" role="button" aria-label="'+esc(p.t.label)+': '+p.x+'% of ads, median '+p.y+' days"><circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r.toFixed(1)+'" fill="'+catColor[p.t.category]+'"/><text x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" text-anchor="'+anchor+'">'+esc(p.t.label)+(trend[p.t.id]>=10?' ↑':trend[p.t.id]<=-10?' ↓':'')+'</text></g>';
+ }
+ svg+='</svg>';
+ const legend=messageCategories.map(c=>'<span><i style="background:'+catColor[c.id]+'"></i>'+esc(c.label)+'</span>').join("");
+ return '<section class="sm"><div class="sm-head"><h3>Strategy map</h3><p>Each dot is a message theme. Further right = used in more ads; higher = those ads stay live longer, a sign the brand keeps paying for them.</p></div>'+svg+'<p class="sm-legend">'+legend+'</p><div class="sm-key"><p><b>Core messages</b> Used a lot and kept running: what they bank on.</p><p><b>Current push</b> Used a lot in newer ads: what they’re betting on now.</p><p><b>Quiet performers</b> Rare but long-running: worth testing.</p><p><b>Experiments</b> Small and new: being tried out.</p></div></section>';
+}
 function messagingView(){
  const ads=state.rows;
  if(!ads.length)return empty("No messaging to map yet.","Search an advertiser above, then open Messaging to see its hooks, benefits, offers and proof points.");
@@ -770,21 +795,25 @@ function messagingView(){
  if(!themes.some(t=>t.id===state.theme))state.theme=themes[0]?.id||"";
  const trend={};for(const t of themes)trend[t.id]=themeTrend(t,ads);
  const ins=messagingInsights(ads,themes),overallMed=median(ads.map(daysRunning));
- const insHTML=ins.length?'<h3 class="cmp-h">Key insights</h3><div class="ins-grid msg-ins">'+ins.map(i=>'<div class="ins-card ins-'+i.kind+'"><p class="ins-t">'+esc(i.title)+'</p><p>'+esc(i.text)+'</p>'+(i.tip?'<p class="ins-tip">Try: '+esc(i.tip)+'</p>':'')+'</div>').join("")+'</div><h3 class="cmp-h">Messaging matrix</h3>':'';
- const cols=messageCategories.map(cat=>{
+ const story=ins.length?'<section class="story"><p class="eyebrow">The story</p><ul>'+ins.map(i=>'<li class="st-'+i.kind+'"><b>'+esc(i.title)+'.</b> '+esc(i.text)+(i.tip?' <span class="st-tip">Try: '+esc(i.tip)+'</span>':'')+'</li>').join("")+'</ul></section>':'';
+ const momentum=d=>d>=10?'<span class="mom up">↑ +'+d+' pts</span>':d<=-10?'<span class="mom down">↓ '+d+' pts</span>':'<span class="mom">Steady</span>';
+ const rows=messageCategories.map(cat=>{
   const list=themes.filter(t=>t.category===cat.id);
-  return '<section class="msg-col msg-'+cat.id+'"><div class="msg-colhead"><h3>'+esc(cat.label)+'</h3><span>'+list.length+'</span></div><p class="msg-q">'+esc(cat.question)+'</p>'+
-   (list.length?list.map(t=>{const pct=Math.round(t.ads.length/total*100);return '<button class="msg-theme'+(t.id===state.theme?' on':'')+'" data-theme="'+t.id+'" aria-pressed="'+(t.id===state.theme)+'"><span class="msg-label">'+esc(t.label)+'</span><span class="msg-count">'+t.ads.length+'</span><span class="msg-bar"><i style="width:'+pct+'%"></i></span><span class="msg-pct">'+pct+'% of ads'+(trend[t.id]>=10?' <b class="tr up" title="Rising in newer ads">↑</b>':trend[t.id]<=-10?' <b class="tr down" title="Fading in newer ads">↓</b>':'')+'</span></button>'}).join(""):'<p class="msg-none">Not detected in the loaded copy.</p>')+'</section>';
+  const head='<tr class="mx-cat"><th colspan="6"><i style="background:'+catColor[cat.id]+'"></i>'+esc(cat.label)+' <small>'+esc(cat.question)+'</small></th></tr>';
+  if(!list.length)return head+'<tr class="mx-none"><td colspan="6">None detected: an angle you could own.</td></tr>';
+  return head+list.map(t=>{const pct=pctOf(t.ads.length,total),md=median(t.ads.map(daysRunning)),n30=t.ads.filter(a=>{const d=daysRunning(a);return d!=null&&d<=30}).length,cta=topCTAs(t.ads).list[0]?.label;
+   return '<tr class="mx-row'+(t.id===state.theme?' on':'')+'" data-theme="'+t.id+'" tabindex="0"><th scope="row">'+esc(t.label)+'</th><td class="mx-share"><span class="mx-bar"><i style="width:'+pct+'%;background:'+catColor[cat.id]+'"></i></span><b>'+pct+'%</b><small>'+t.ads.length+' ads</small></td><td>'+momentum(trend[t.id])+'</td><td>'+(md??"—")+(md!=null&&overallMed?(md>=overallMed*1.3?' <span class="mom up">long</span>':md<=overallMed*.6?' <span class="mom down">short</span>':''):'')+'</td><td>'+n30+'</td><td class="mx-cta">'+esc(cta||"—")+'</td></tr>'}).join("");
  }).join("");
+ const matrix='<section class="mx"><div class="sm-head"><h3>Messaging matrix</h3><p>Pick a row to see the exact wording they use.</p></div><div class="cmp-scroll"><table class="mx-table"><thead><tr><th>Theme</th><th>Share of ads</th><th>Momentum <small>newer vs older ads</small></th><th>Median days live <small>overall '+(overallMed??"—")+'</small></th><th>New in 30 days</th><th>Usual CTA</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
  const t=themes.find(x=>x.id===state.theme);
  let detail="";
  if(t){
   const ex=themeExamples(t),note=readNotes()[t.id]||"";
-  detail='<section class="msg-detail" aria-live="polite"><div class="msg-dhead"><div><p class="eyebrow">'+esc(messageCategories.find(c=>c.id===t.category).label)+'</p><h3>'+esc(t.label)+'</h3><p>'+t.ads.length+' of '+total+' ads ('+Math.round(t.ads.length/total*100)+'%) · '+ex.length+' distinct message'+(ex.length===1?'':'s')+'</p><p class="msg-stats"><span>Median <b>'+(median(t.ads.map(daysRunning))??"—")+'</b> days live'+(overallMed!=null?' (vs '+overallMed+' overall)':'')+'</span><span><b>'+t.ads.filter(a=>{const d=daysRunning(a);return d!=null&&d<=30}).length+'</b> launched in 30 days</span>'+(trend[t.id]?'<span>'+(trend[t.id]>0?'↑ +':'↓ ')+trend[t.id]+' pts in newer ads</span>':'')+(topCTAs(t.ads).list[0]?'<span>Usual CTA: <b>'+esc(topCTAs(t.ads).list[0].label)+'</b></span>':'')+'</p></div></div>'+
+  detail='<section class="msg-detail" aria-live="polite"><div class="msg-dhead"><div><p class="eyebrow" style="color:'+catColor[t.category]+'">'+esc(messageCategories.find(c=>c.id===t.category).label)+'</p><h3>'+esc(t.label)+'</h3><p>'+t.ads.length+' of '+total+' ads ('+pctOf(t.ads.length,total)+'%) · '+ex.length+' distinct message'+(ex.length===1?'':'s')+'</p></div></div>'+
    '<div class="msg-dgrid"><div><h4>How '+esc(state.brand||"they")+' say it</h4><ul class="msg-evidence">'+ex.slice(0,8).map(a=>'<li><blockquote>“'+highlight(t.evidence[a.id],t.match)+'”</blockquote><div class="msg-meta"><span>'+(a.reach!=null?'UK reach '+reach(a.reach):'Reach not reported')+' · since '+esc(formatDate(a.start))+'</span><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button></div></li>').join("")+'</ul>'+(ex.length>8?'<p class="msg-more">+ '+(ex.length-8)+' more variations in the loaded ads.</p>':'')+'</div>'+
    '<div class="msg-test"><h4>Your test direction</h4><textarea data-note="'+t.id+'" rows="6" placeholder="'+esc(t.test)+'">'+esc(note)+'</textarea><p>Starts from a suggested direction; edit it for your brand. Saved in this browser.</p></div></div></section>';
  }
- return '<div class="msg-wrap"><div class="msg-top" style="align-items:center"><div><p>'+total+' ads analysed · '+distinct+' distinct copy variations · '+themes.length+' themes · '+(total-mapped)+' ads with no detected theme</p></div><button class="ghost" data-action="exportmsg">Export map ↓</button></div>'+insHTML+'<div class="msg-grid">'+cols+'</div>'+detail+'<p class="notice">Themes are detected from ad text with fixed rules; ads can appear in several themes. Claims are not verified, and this is not a measure of performance. English copy only.</p></div>';
+ return '<div class="msg-wrap"><div class="msg-top" style="align-items:center"><div><p>'+total+' ads analysed · '+distinct+' distinct copy variations · '+themes.length+' themes · '+(total-mapped)+' ads with no detected theme</p></div><button class="ghost" data-action="exportmsg">Export map ↓</button></div>'+story+'<div class="msg-split">'+strategyMap(themes,total,overallMed,trend)+matrix+'</div>'+detail+'<p class="notice">Themes are detected from ad text with fixed rules; ads can appear in several themes. Days live and momentum are clues, not proof of performance. English copy only.</p></div>';
 }
 function exportMessaging(){
  const themes=messagingThemes(state.rows),notes=readNotes();
@@ -1096,6 +1125,7 @@ document.addEventListener("input",e=>{const t=e.target.closest("[data-note]");if
 $("closeModal").onclick=()=>$("modalOverlay").classList.remove("open");
 $("modalOverlay").onclick=e=>{if(e.target===$("modalOverlay"))$("modalOverlay").classList.remove("open")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("modalOverlay").classList.remove("open")});
+document.addEventListener("keydown",e=>{if(e.key!=="Enter"&&e.key!==" ")return;const r=e.target.closest&&e.target.closest("tr[data-theme],g[data-theme]");if(!r)return;e.preventDefault();r.dispatchEvent(new MouseEvent("click",{bubbles:true}))});
 $("compareOpen").onclick=compareView;
 $("compareClear").onclick=()=>{state.compare.clear();renderCards()};
 renderCards();health();
