@@ -469,7 +469,9 @@ function updateReveal(instant=false){
  if(!complete)revealTimer=setTimeout(()=>updateReveal(),5000);
 }
 let barTimer=null;
-let barRun={key:"",start:0,r0:0};
+let barRun={key:"",start:0,r0:0},gameTimer=0,gameMounted=false;
+function stopGame(){clearTimeout(gameTimer);gameTimer=0;const g=window.AdSnoopDash;if(g)g.stop();$("loadbar")?.classList.remove("game")}
+function mountGame(){if(gameMounted||!window.AdSnoopDash)return;gameMounted=true;window.AdSnoopDash.mount($("loadbarGame"))}
 function barEta(ready,total){
  const now=Date.now(),elapsed=(now-barRun.start)/1000,done=ready-barRun.r0,left=total-ready;
  if(left<=0)return "";
@@ -491,23 +493,27 @@ function paintStrip(ids){
  }
 }
 function setBar(mode,ready=0,total=0,ids=null){
- const bar=$("loadbar");if(!bar)return;
+ const bar=$("loadbar");if(!bar)return;mountGame();
  clearTimeout(barTimer);
- if(mode==="hide"){bar.hidden=true;paintStrip(null);return}
+ const game=window.AdSnoopDash;
+ if(mode==="hide"){bar.hidden=true;paintStrip(null);stopGame();return}
  bar.hidden=false;bar.classList.toggle("indeterminate",mode==="search");bar.classList.toggle("complete",mode==="done");
  const who=state.brand||state.query||"this advertiser";
  const fill=bar.querySelector(".loadbar-fill"),rider=$("loadbarRider"),hint=$("loadbarHint");
- if(mode==="search"){fill.style.width="";rider.style.left="";$("loadbarText").textContent="Snooping on "+who+"’s live ads…";hint.textContent="Asking Meta’s Ad Library for everything running in the UK.";$("loadbarAll").hidden=true;paintStrip(null);barRun={key:"",start:0,r0:0};return}
+ if(mode==="search"){stopGame();fill.style.width="";rider.style.left="";$("loadbarText").textContent="Snooping on "+who+"’s live ads…";hint.textContent="Asking Meta’s Ad Library for everything running in the UK.";$("loadbarAll").hidden=true;paintStrip(null);barRun={key:"",start:0,r0:0};return}
  const key=state.page+"|"+total;if(barRun.key!==key)barRun={key,start:Date.now(),r0:ready};
  const pct=total?Math.max(6,Math.round(ready/total*100)):0;
  fill.style.width=pct+"%";rider.style.left="calc("+pct+"% - "+(pct>=100?19:0)+"px)";
+ // The mini-game only appears when there is a real wait (not for instant loads).
+ if(game&&game.supported){game.progress(total?ready/total:0);if(mode==="progress"&&!game.running&&!gameTimer)gameTimer=setTimeout(()=>{gameTimer=0;if(!$("loadbar").hidden&&!$("loadbar").classList.contains("complete")){bar.classList.add("game");game.start()}},900)}
  $("loadbarAll").hidden=mode==="done";
  paintStrip(ids);
  if(mode==="done"){
   const quick=Date.now()-barRun.start<2500;
   $("loadbarText").textContent="All "+total+" creatives ready";
-  hint.textContent=quick?"Loaded instantly from the AdSnoop library.":"Saved to the AdSnoop library, so next time they’re instant.";
-  barTimer=setTimeout(()=>{bar.hidden=true;paintStrip(null)},2200);return}
+  const gameLine=game&&game.running?game.finish():"";clearTimeout(gameTimer);gameTimer=0;
+  hint.textContent=(gameLine?gameLine+" · ":"")+(quick?"Loaded instantly from the AdSnoop library.":"Saved to the AdSnoop library, so next time they’re instant.");
+  barTimer=setTimeout(()=>{bar.hidden=true;paintStrip(null);stopGame()},game&&game.running?3200:2200);return}
  const eta=barEta(ready,total);
  $("loadbarText").textContent="Collecting "+who+"’s creatives · "+ready+" of "+total+(eta?" · "+eta:"");
  hint.textContent=ready<total&&(Date.now()-barRun.start>2500)?"A first look at a brand takes a moment: each creative is collected from Meta once, then saved so it’s instant for everyone.":"";
