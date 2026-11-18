@@ -1,16 +1,19 @@
 import type { NextConfig } from "next";
 
-// Preview-only: forward public research requests to the existing AdSnoop API.
-// The production service keeps Meta tokens and collector credentials private.
-// This branch is deployed separately; the main branch is unchanged.
+// Main AdSnoop service config. Previews without Meta credentials forward
+// research requests to the main service, which keeps credentials private.
 const backend = "https://ad-library-scraper-94t0.onrender.com";
 const nextConfig: NextConfig = {
   async rewrites() {
-    // A configured preview can use its own API routes without the public Render proxy.
-    if (process.env.META_ACCESS_TOKEN?.trim()) return [];
+    // The AdSnoop research app is the homepage.
+    const home = [{ source: "/", destination: "/live/index.html" }];
+    // A service with its own Meta token uses its own API routes; a preview
+    // without one forwards public research requests to the main service.
+    if (process.env.META_ACCESS_TOKEN?.trim()) return { beforeFiles: home, afterFiles: [], fallback: [] };
 
     return {
       beforeFiles: [
+        ...home,
         { source: "/api/health", destination: `${backend}/api/health` },
         { source: "/api/ads", destination: `${backend}/api/ads` },
         { source: "/api/media", destination: `${backend}/api/media` },

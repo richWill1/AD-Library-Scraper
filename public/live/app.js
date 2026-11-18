@@ -1,7 +1,7 @@
 (function(){
 "use strict";
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const homeUrl="https://ad-library-scraper-94t0.onrender.com";
+const homeUrl="";
 const storeKey="adsnoop-live-preview-saved-v1";
 const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"reach",limit:25,theme:"",revealAll:false,loading:false,saved:new Map(),compare:new Map(),health:null};
 const mediaCache=new Map(),mediaState=new Map(),mediaQueue=[];let collectorStatus="checking",mediaActive=0;
