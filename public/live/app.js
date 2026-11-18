@@ -733,7 +733,8 @@ function readNotes(){try{const v=JSON.parse(localStorage.getItem(notesKey())||"{
 function writeNote(id,text){const n=readNotes();if(text)n[id]=text;else delete n[id];try{localStorage.setItem(notesKey(),JSON.stringify(n))}catch{}}
 function highlight(sentence,re){
  const m=sentence.match(re);if(!m)return esc(sentence);
- const i=m.index;return esc(sentence.slice(0,i))+"<mark>"+esc(m[0])+"</mark>"+esc(sentence.slice(i+m[0].length));
+ let end=m.index+m[0].length;if(/[£$€]\s*$/.test(m[0])){const num=sentence.slice(end).match(/^[\d,.]+/);if(num)end+=num[0].length}
+ const i=m.index;return esc(sentence.slice(0,i))+"<mark>"+esc(sentence.slice(i,end))+"</mark>"+esc(sentence.slice(end));
 }
 const catColor={hooks:"#a347d1",benefits:"#0071e3",offers:"#e07800",proof:"#1f9d4c",actions:"#0a8fb5"};
 // ---- Messaging explorer: what is this advertiser saying, which ads prove it,
@@ -816,7 +817,8 @@ function messagingView(){
  const list=lists[state.msgFilter];
  if(!list.some(t=>t.id===state.theme))state.theme=list[0]?.id||"";
  const mapped=new Set(themes.flatMap(t=>t.ads.map(a=>a.id))).size;
- const head='<div class="mx-head"><div><p class="mx-base"><b>'+total+'</b> loaded ad'+(total===1?'':'s')+' from '+esc(state.brand||"this advertiser")+' · '+(total-mapped)+' with no detected theme</p><p class="mx-note">Shares are of all '+total+' loaded ads. An ad can match more than one theme, so shares can add up to more than 100%.</p></div><div class="mx-tools"><div class="seg" role="group" aria-label="Theme type"><button type="button" data-msgfilter="messages" aria-pressed="'+(state.msgFilter==="messages")+'">Messages <span>'+lists.messages.length+'</span></button><button type="button" data-msgfilter="actions" aria-pressed="'+(state.msgFilter==="actions")+'">Calls to action <span>'+lists.actions.length+'</span></button></div><button class="ghost" data-action="exportmsg">Export ↓</button></div></div>';
+ const distinct=new Set(ads.map(groupKey)).size;
+ const head='<div class="mx-head"><div><p class="mx-base"><b>'+total+'</b> loaded ad'+(total===1?'':'s')+(distinct<total?' ('+distinct+' after merging duplicate creatives)':'')+' from '+esc(state.brand||"this advertiser")+' · '+(total-mapped)+' with no detected theme</p><p class="mx-note">Shares are of all '+total+' loaded ads. An ad can match more than one theme, so shares can add up to more than 100%.</p></div><div class="mx-tools"><div class="seg" role="group" aria-label="Theme type"><button type="button" data-msgfilter="messages" aria-pressed="'+(state.msgFilter==="messages")+'">Messages <span>'+lists.messages.length+'</span></button><button type="button" data-msgfilter="actions" aria-pressed="'+(state.msgFilter==="actions")+'">Calls to action <span>'+lists.actions.length+'</span></button></div><button class="ghost" data-action="exportmsg">Export ↓</button></div></div>';
  if(!themes.length)return '<div class="msg-wrap">'+head+'<div class="mx-empty"><h3>No themes detected</h3><p>None of the '+total+' loaded ad'+(total===1?'':'s')+' matched a hook, benefit, offer, proof point or call to action. Their copy may be very short, image-only or not in English. Open the ads in Ads &amp; insights to read them directly.</p></div></div>';
  if(!list.length)return '<div class="msg-wrap">'+head+'<div class="mx-empty"><h3>Nothing in this view</h3><p>Switch the filter above to see the other themes.</p></div></div>';
  const t=list.find(x=>x.id===state.theme);
@@ -1115,7 +1117,7 @@ document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
  b=e.target.closest("[data-page]");if(b){if(state.view==="compare"){state.view="discover";if(b.dataset.page===state.page&&state.rows.length){renderCards();return}}if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){state.choices.clear();for(const it of state.pick.items)state.choices.set(it.id,{id:it.id,name:it.name,count:it.mentions||0})}state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
- b=e.target.closest("[data-theme]");if(b){const id=b.dataset.theme;state.theme=id;state.msgAllExamples="";renderCards();const nb=document.querySelector('.mx-item[data-theme="'+id+'"]');nb?.focus({preventScroll:true});if(matchMedia("(max-width:820px)").matches)$("mxDetail")?.scrollIntoView({behavior:"smooth",block:"nearest"});return}
+ b=e.target.closest("[data-theme]");if(b){const id=b.dataset.theme;state.theme=id;state.msgAllExamples="";renderCards();const nb=document.querySelector('.mx-item[data-theme="'+id+'"]');nb?.focus({preventScroll:true});if(nb&&matchMedia("(max-width:820px)").matches){const navh=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--navh"))||64,tabs=$("viewtabs")?.offsetHeight||0;scrollTo({top:nb.getBoundingClientRect().top+scrollY-navh-tabs-16,behavior:"smooth"})}return}
  b=e.target.closest("[data-msgfilter]");if(b){state.msgFilter=b.dataset.msgfilter;state.theme="";renderCards();document.querySelector('[data-msgfilter="'+b.dataset.msgfilter+'"]')?.focus();return}
  b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;state.limit=25;renderCards();return}
  b=e.target.closest("[data-action]");if(!b)return;
