@@ -4,19 +4,22 @@ import {chromium} from 'playwright';
 import {safe,videoCandidate} from './media.mjs';
 const cache=new Map();let browserPromise=null;let active=0;const waiting=[];const maximum=2;
 
+// The landing page is shown to marketers, so unwrap Meta's redirect and drop click-tracking parameters.
+function landing(input){try{let u=new URL(String(input||''));if(/(^|\.)facebook\.com$/.test(u.hostname)&&u.pathname==='/l.php'&&u.searchParams.get('u'))u=new URL(u.searchParams.get('u'));if(!['http:','https:'].includes(u.protocol)||u.username||u.password||/(^|\.)(facebook|fb|instagram)\.com$/.test(u.hostname)&&u.pathname.length<2)return null;for(const k of [...u.searchParams.keys()])if(/^(utm_|fbclid$|gclid$|mc_|_ga$|dclid$|msclkid$)/i.test(k))u.searchParams.delete(k);u.hash='';const v=u.href;return v.length<=500?v:null;}catch{return null;}}
+function ctaOf(text,type,link,caption){const t=typeof text==='string'&&text.length<=40&&!/[\x00-\x1f<>]/.test(text)?text.trim():'';const k=typeof type==='string'&&/^[A-Z_]{2,40}$/.test(type)?type:'';const url=landing(link);const cap=typeof caption==='string'&&caption.length<=80&&!/[\x00-\x1f<>]/.test(caption)?caption.trim():'';return t||k||url?{text:t||undefined,type:k||undefined,url:url||undefined,caption:cap||undefined}:null;}
 function expiry(items){return Math.min(Date.now()+900000,...items.flatMap(i=>[i.url,i.poster].filter(Boolean).map(u=>{const oe=new URL(u).searchParams.get('oe');return oe&&/^[a-f\d]+$/i.test(oe)?parseInt(oe,16)*1000-60000:Infinity;})));}
 function acquire(){if(active<maximum){active++;return Promise.resolve();}if(waiting.length>=20)return Promise.reject(Error('BUSY'));return new Promise((resolve,reject)=>{const ticket={resolve:null,timer:null};ticket.resolve=()=>{clearTimeout(ticket.timer);resolve();};ticket.timer=setTimeout(()=>{const at=waiting.indexOf(ticket);if(at>=0)waiting.splice(at,1);reject(Error('BUSY'));},75000);waiting.push(ticket);});}
 function release(){const next=waiting.shift();if(next)next.resolve();else active--;}
 async function browser(){if(!browserPromise)browserPromise=chromium.launch({headless:true}).then(b=>{b.on('disconnected',()=>browserPromise=null);return b;}).catch(()=>{browserPromise=null;throw Error('COLLECTOR_UNAVAILABLE');});return browserPromise;}
 async function collect(id,token){
- let context,page;let phase='browser';const started=Date.now();const streamed=new Map();const jsonItems=[];const shape={format:'',cards:0,own:false};
+ let context,page;let phase='browser';const started=Date.now();const streamed=new Map();const jsonItems=[];const shape={format:'',cards:0,own:false,cta:null};
  try{
   const b=await browser();context=await b.newContext({viewport:{width:680,height:900},locale:'en-GB'});page=await context.newPage();const reads=[];
   page.on('request',request=>{const candidate=videoCandidate(request.url());if(candidate)streamed.set(candidate.url,candidate.score);});
   page.on('response',response=>{if(!response.url().startsWith('https://www.facebook.com/api/graphql')||reads.length>=20)return;reads.push((async()=>{try{const text=await response.text();if(text.length>2000000||!text.includes(id))return;let visited=0;
    const walk=(value,depth=0)=>{if(!value||typeof value!=='object'||depth>30||++visited>10000)return;if(Array.isArray(value)){for(const child of value)walk(child,depth+1);return;}
     // Meta states the real format; several images alone usually means one creative in several placement sizes.
-    if(typeof value.display_format==='string'&&/^[A-Z_]{2,30}$/.test(value.display_format)){const own=String(value.ad_archive_id||value.adArchiveID||'')===id;if(!shape.format||(own&&!shape.own)){shape.format=value.display_format;shape.own=own;if(Array.isArray(value.cards))shape.cards=value.cards.filter(c=>c&&typeof c==='object').length;}}
+    if(typeof value.display_format==='string'&&/^[A-Z_]{2,30}$/.test(value.display_format)){const own=String(value.ad_archive_id||value.adArchiveID||'')===id;if(!shape.format||(own&&!shape.own)){shape.format=value.display_format;shape.own=own;if(Array.isArray(value.cards))shape.cards=value.cards.filter(c=>c&&typeof c==='object').length;const src=[value,...(Array.isArray(value.cards)?value.cards:[])].find(c=>c&&(c.cta_text||c.link_url));const cta=src&&ctaOf(src.cta_text,src.cta_type,src.link_url,src.caption);if(cta)shape.cta=cta;}}
     const video=safe(value.video_hd_url||value.video_sd_url||value.browser_native_hd_url||value.browser_native_sd_url);if(video)jsonItems.push({kind:'video',url:video,poster:safe(value.video_preview_image_url)||undefined});
     const image=safe(value.original_image_url||value.resized_image_url);if(image)jsonItems.push({kind:'image',url:image});
     for(const child of Object.values(value))walk(child,depth+1);
@@ -50,9 +53,10 @@ async function collect(id,token){
   // The exact Library ID was verified above. A CDN video request can arrive
   // before React creates its player; aborting its download must not hide that URL.
   if(fallback&&!records.some(r=>r.kind==='video'&&safe(r.url)))records.push({kind:'video',url:fallback,poster:records.find(r=>r.kind==='video')?.poster});
+  if(!shape.cta?.url){const dom=await root.evaluate(m=>{const a=Array.from(m.querySelectorAll('a[href]')).find(x=>/l\.facebook\.com\/l\.php|^https?:\/\/(?!([a-z0-9-]+\.)*(facebook|fb|instagram|fbcdn)\.)/i.test(x.href));if(!a)return null;const btn=Array.from(a.querySelectorAll('div,span')).map(e=>e.textContent.trim()).filter(t=>t&&t.length<=24).pop()||'';return {href:a.href,text:btn};}).catch(()=>null);const known=/^(shop now|learn more|sign up|book now|order now|get offer|buy now|download|apply now|contact us|subscribe|get quote|see menu|watch more|send message|install now|play game|donate now|get directions|call now|listen now|see more|get started|view products|get access|request time|book a visit|find out more)$/i;const c=dom&&ctaOf(shape.cta?.text||(known.test(dom.text)?dom.text:''),shape.cta?.type,dom.href,shape.cta?.caption);if(c)shape.cta=c;}
   const items=[];for(const r of [...records,...jsonItems]){const url=safe(r.url);if(url&&!items.some(v=>v.url===url))items.push({kind:r.kind,url,poster:safe(r.poster)||undefined});}
   const posters=new Set(items.filter(i=>i.kind==='video').map(i=>i.poster));const filtered=items.filter(i=>i.kind!=='image'||!posters.has(i.url)).slice(0,20);
-  return {items:filtered,displayFormat:shape.format||undefined,cards:shape.cards||undefined,collectedAt:new Date().toISOString(),code:filtered.length?'COLLECTED':'NO_MEDIA',source:'meta-official-snapshot'};
+  return {items:filtered,displayFormat:shape.format||undefined,cards:shape.cards||undefined,cta:shape.cta||undefined,collectedAt:new Date().toISOString(),code:filtered.length?'COLLECTED':'NO_MEDIA',source:'meta-official-snapshot'};
  }catch(error){error.collectionPhase=phase;error.collectionMs=Date.now()-started;
   // Only structural counters and known public error phrases, never HTML, URLs or tokens.
   if(page)error.previewSignals=await page.evaluate(()=>({videos:document.querySelectorAll('video').length,images:document.querySelectorAll('img').length,buttons:document.querySelectorAll('button,[role="button"]').length,unavailable:/content isn't available|ad isn't available|ad is unavailable/i.test(document.body?.innerText||''),login:/log in to continue|you must log in/i.test(document.body?.innerText||'')})).catch(()=>null);
