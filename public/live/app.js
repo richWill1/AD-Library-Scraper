@@ -234,7 +234,7 @@ function renderCards(){
  showHeader();
  renderBrands();
  const all=state.view==="insights"?[]:shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
- if(state.view==="insights"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();renderPinbar();return}
+ if(state.view==="insights"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();renderPinbar();return}
  if(state.view==="compare"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin."));
  renderPinbar();
@@ -431,6 +431,7 @@ function mediaPending(node,title,detail){
  node.append(...keepP);
 }
 function paintMedia(id){
+ paintThumbs(id);
  const nodes=mediaNodes(id);if(!nodes.length)return;
  const cached=mediaCache.get(id),st=mediaState.get(id);
  for(const node of nodes){
@@ -808,6 +809,44 @@ async function copyBrief(id,btn){
  if(btn&&ok){btn.textContent="Copied ✓";clearTimeout(btn._t);btn._t=setTimeout(()=>{btn.textContent="Copy brief"},2200)}
  toast(ok?"Test brief copied":"Copy failed — try again");
 }
+// ---- Creative thumbnails for the message explorer (reuses the site's media cache) ----
+function thumbHTML(id,cls,pri){return '<span class="th'+(cls?' '+cls:'')+'" data-thumb="'+esc(id)+'"'+(pri?' data-pri="1"':'')+' aria-hidden="true"></span>'}
+function fillThumb(node,id){
+ const c=mediaCache.get(id),st=mediaState.get(id);
+ if(c&&c.items&&c.items.length){
+  if(node.dataset.done==="1")return;
+  const img=c.items.find(i=>i.kind==="image"),vid=c.items.find(i=>i.kind==="video");
+  const src=img?.url||vid?.poster||"";
+  if(!src){node.classList.add("none");node.dataset.done="1";return}
+  node.innerHTML='<img alt="" loading="lazy" referrerpolicy="no-referrer" src="'+esc(src)+'">'+(!img&&vid?'<b class="th-play">▶</b>':'');
+  node.dataset.done="1";node.classList.add("ok");
+  const im=node.querySelector("img");im.onerror=()=>{node.classList.remove("ok");node.classList.add("none");im.remove()};
+ }else if(st&&st.status==="failed")node.classList.add("none");
+}
+function paintThumbs(id){for(const n of document.querySelectorAll('[data-thumb="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]'))fillThumb(n,id)}
+function hydrateThumbs(){
+ const seen=new Set();
+ for(const n of document.querySelectorAll("[data-thumb]")){
+  const id=n.dataset.thumb;fillThumb(n,id);
+  if(n.dataset.done!=="1"&&!seen.has(id)){seen.add(id);requestMedia(id,{priority:n.dataset.pri==="1"})}
+ }
+}
+// ---- Launch timeline: when this theme's ads went live vs the advertiser's other ads ----
+function launchTimeline(t,ads){
+ const WINDOW=120,ids=new Set(t.ads.map(a=>a.id));
+ const pts=ads.map(a=>({a,d:daysRunning(a),on:ids.has(a.id)})).filter(p=>p.d!=null);
+ if(pts.length<2)return "";
+ const W=640,H=118,L=112,R=12,rowY={on:42,off:84};
+ const x=d=>L+(1-Math.min(d,WINDOW)/WINDOW)*(W-L-R);
+ const jit=id=>{let h=0;for(const c of id)h=(h*31+c.charCodeAt(0))|0;return ((h>>>0)%13)-6};
+ let svg='<svg class="tl-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Launch dates of ads using '+esc(t.label)+' compared with the advertiser’s other loaded ads, last '+WINDOW+' days">';
+ svg+='<rect x="'+x(RECENT_DAYS)+'" y="18" width="'+(x(0)-x(RECENT_DAYS))+'" height="'+(H-36)+'" class="tl-band"/><text x="'+((x(RECENT_DAYS)+x(0))/2)+'" y="13" class="tl-bandlab" text-anchor="middle">Last '+RECENT_DAYS+' days</text>';
+ for(const d of [0,30,60,90,120]){svg+='<line x1="'+x(d)+'" x2="'+x(d)+'" y1="20" y2="'+(H-20)+'" class="tl-grid"/><text x="'+x(d)+'" y="'+(H-4)+'" class="tl-tick" text-anchor="middle">'+(d===0?'Today':d===120?'120d+':d+'d ago')+'</text>'}
+ const onN=pts.filter(p=>p.on).length,offN=pts.length-onN;
+ svg+='<text x="0" y="'+(rowY.on+4)+'" class="tl-row">This theme ('+onN+')</text><text x="0" y="'+(rowY.off+4)+'" class="tl-row muted">Other ads ('+offN+')</text>';
+ for(const p of pts)svg+='<circle cx="'+x(p.d).toFixed(1)+'" cy="'+((p.on?rowY.on:rowY.off)+jit(p.a.id))+'" r="'+(p.on?4.2:3.4)+'" class="'+(p.on?'tl-on':'tl-off')+'" style="'+(p.on?'fill:'+catColor[t.category]:'')+'"><title>'+esc(formatDate(p.a.start))+(p.on?' · uses this theme':'')+'</title></circle>';
+ return svg+'</svg>';
+}
 function messagingView(){
  const ads=state.rows,total=ads.length;
  if(!total)return empty("No messaging to map yet.","Search an advertiser above, then open Messaging to see what they say and which ads prove it.");
@@ -816,38 +855,45 @@ function messagingView(){
  if(!state.msgFilter||!lists[state.msgFilter].length&&lists[state.msgFilter==="messages"?"actions":"messages"].length)state.msgFilter=lists.messages.length||!lists.actions.length?"messages":"actions";
  const list=lists[state.msgFilter];
  if(!list.some(t=>t.id===state.theme))state.theme=list[0]?.id||"";
- const mapped=new Set(themes.flatMap(t=>t.ads.map(a=>a.id))).size;
- const distinct=new Set(ads.map(groupKey)).size;
+ const mapped=new Set(themes.flatMap(t=>t.ads.map(a=>a.id))).size,distinct=new Set(ads.map(groupKey)).size;
  const head='<div class="mx-head"><div><p class="mx-base"><b>'+total+'</b> loaded ad'+(total===1?'':'s')+(distinct<total?' ('+distinct+' after merging duplicate creatives)':'')+' from '+esc(state.brand||"this advertiser")+' · '+(total-mapped)+' with no detected theme</p><p class="mx-note">Shares are of all '+total+' loaded ads. An ad can match more than one theme, so shares can add up to more than 100%.</p></div><div class="mx-tools"><div class="seg" role="group" aria-label="Theme type"><button type="button" data-msgfilter="messages" aria-pressed="'+(state.msgFilter==="messages")+'">Messages <span>'+lists.messages.length+'</span></button><button type="button" data-msgfilter="actions" aria-pressed="'+(state.msgFilter==="actions")+'">Calls to action <span>'+lists.actions.length+'</span></button></div><button class="ghost" data-action="exportmsg">Export ↓</button></div></div>';
  if(!themes.length)return '<div class="msg-wrap">'+head+'<div class="mx-empty"><h3>No themes detected</h3><p>None of the '+total+' loaded ad'+(total===1?'':'s')+' matched a hook, benefit, offer, proof point or call to action. Their copy may be very short, image-only or not in English. Open the ads in Ads &amp; insights to read them directly.</p></div></div>';
- if(!list.length)return '<div class="msg-wrap">'+head+'<div class="mx-empty"><h3>Nothing in this view</h3><p>Switch the filter above to see the other themes.</p></div></div>';
+ // At a glance: the leading message in each part of the pitch, with a real creative.
+ const glance='<div class="mx-glance" role="group" aria-label="Leading message by category">'+[...messageCategories].map(c=>{
+  const top=themes.find(x=>x.category===c.id);
+  if(!top)return '<div class="gl gl-none"><p class="gl-cat"><i style="background:'+catColor[c.id]+'"></i>'+esc(c.label)+'</p><p class="gl-name">None detected</p><p class="gl-sub">An angle no loaded ad uses</p></div>';
+  const rep=themeWordings(top)[0]?.ads[0];
+  return '<button type="button" class="gl'+(top.id===state.theme?' on':'')+'" data-theme="'+top.id+'" style="--c:'+catColor[c.id]+'">'+(rep?thumbHTML(rep.id,"gl-th"):'')+'<span class="gl-body"><span class="gl-cat"><i></i>'+esc(c.label)+'</span><span class="gl-name">'+esc(top.label)+'</span><span class="gl-pct"><b>'+pctOf(top.ads.length,total)+'%</b> of ads</span></span></button>';
+ }).join("")+'</div>';
+ if(!list.length)return '<div class="msg-wrap">'+head+glance+'<div class="mx-empty"><h3>Nothing in this view</h3><p>Switch the filter above to see the other themes.</p></div></div>';
  const t=list.find(x=>x.id===state.theme);
  let items="";
  list.forEach((x,i)=>{
   const pct=pctOf(x.ads.length,total),on=x.id===t.id,cat=messageCategories.find(c=>c.id===x.category);
-  items+='<button type="button" class="mx-item'+(on?' on':'')+'" data-theme="'+x.id+'" aria-pressed="'+on+'" aria-controls="mxDetail" style="grid-row:'+(i+1)+'"><span class="mx-rank">'+(i+1)+'</span><span class="mx-name">'+esc(x.label)+'<small><i style="background:'+catColor[x.category]+'"></i>'+esc(cat?.label||"")+'</small></span><span class="mx-num"><b>'+x.ads.length+'</b> ad'+(x.ads.length===1?'':'s')+'<small>'+pct+'% of '+total+'</small></span><span class="mx-track" aria-hidden="true"><i style="width:'+Math.max(2,pct)+'%;background:'+catColor[x.category]+'"></i></span></button>';
+  const reps=themeWordings(x).slice(0,3).map(g=>g.ads[0].id);
+  items+='<button type="button" class="mx-item'+(on?' on':'')+'" data-theme="'+x.id+'" aria-pressed="'+on+'" aria-controls="mxDetail" style="grid-row:'+(i+1)+';--c:'+catColor[x.category]+'"><span class="mx-rank">'+(i+1)+'</span><span class="mx-name">'+esc(x.label)+'<small><i></i>'+esc(cat?.label||"")+'</small></span><span class="mx-stack">'+reps.map(id=>thumbHTML(id,"st")).join("")+'</span><span class="mx-num"><b>'+pct+'%</b><small>'+x.ads.length+' of '+total+'</small></span><span class="mx-track" aria-hidden="true"><i style="width:'+Math.max(2,pct)+'%"></i></span></button>';
   if(on)items+=detailPanel(x,ads,list.length);
  });
- return '<div class="msg-wrap">'+head+'<div class="mx2" style="--rows:'+list.length+'">'+items+'</div><p class="notice">Themes are detected from ad text with fixed rules and describe what was published, not how ads performed. English copy only.</p></div>';
+ return '<div class="msg-wrap">'+head+glance+'<div class="mx2">'+items+'</div><p class="notice">Themes are detected from ad text with fixed rules and describe what was published, not how ads performed. English copy only.</p></div>';
 }
 function detailPanel(t,ads,rows){
  const total=ads.length,w=themeWordings(t),cat=messageCategories.find(c=>c.id===t.category),f=briefFields(t),pc=periodComparison(t,ads);
  const ds=t.ads.map(daysRunning).filter(d=>d!=null),med=median(ds);
  const showAll=state.msgAllExamples===t.id,shown=showAll?w:w.slice(0,3);
- const ex=shown.map(g=>{const a=g.ads[0],when=g.first?(g.first===g.last||!g.last?"Launched "+formatDate(g.first):"Launched "+formatDate(g.first)+" – "+formatDate(g.last)):"Launch date not available";
-  return '<li><blockquote>“'+highlight(g.sentence,t.match)+'”</blockquote><div class="mx-exmeta"><span>'+esc(when)+(g.ads.length>1?' · used in '+g.ads.length+' ads':'')+'</span><span class="mx-exlinks"><button type="button" class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button><a href="'+esc(metaUrl(a.id))+'" target="_blank" rel="noopener">Meta Ad Library ↗</a></span></div></li>'}).join("");
+ const ex=shown.map(g=>{const a=g.ads[0],when=g.first?(g.first===g.last||!g.last?formatDate(g.first):formatDate(g.first)+" – "+formatDate(g.last)):"Launch date not available";
+  return '<li class="ev"><button type="button" class="ev-media" data-action="detail" data-id="'+esc(a.id)+'" aria-label="View ad">'+thumbHTML(a.id,"big",true)+(g.ads.length>1?'<span class="ev-count">×'+g.ads.length+'</span>':'')+'</button><div class="ev-body"><blockquote>“'+highlight(g.sentence,t.match)+'”</blockquote><p class="ev-meta">'+esc(when)+(g.ads.length>1?' · used in '+g.ads.length+' ads':'')+'</p><p class="ev-links"><button type="button" class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button><a href="'+esc(metaUrl(a.id))+'" target="_blank" rel="noopener">Ad Library ↗</a></p></div></li>'}).join("");
  let timing;
- if(!pc.enough)timing='Not enough dated ads to compare launch periods. '+pc.recent+' launched in the last '+RECENT_DAYS+' days and '+pc.earlier+' earlier; at least '+MIN_PERIOD+' in each and '+MIN_MATCHES+' matching ads are needed.';
- else timing='Last '+RECENT_DAYS+' days: <b>'+pc.r+' of '+pc.recent+'</b> ads ('+pctOf(pc.r,pc.recent)+'%). Earlier: <b>'+pc.e+' of '+pc.earlier+'</b> ('+pctOf(pc.e,pc.earlier)+'%). '+(pc.claim?'<strong class="mx-claim">'+(pc.claim==="more"?'More':'Less')+' common in newer ads.</strong>':'No clear difference between the two periods.');
- if(pc.undated)timing+=' '+pc.undated+' ad'+(pc.undated===1?' has':'s have')+' no launch date and '+(pc.undated===1?'is':'are')+' excluded.';
+ if(!pc.enough)timing='Not enough dated ads to compare periods: '+pc.recent+' launched in the last '+RECENT_DAYS+' days and '+pc.earlier+' earlier (at least '+MIN_PERIOD+' in each and '+MIN_MATCHES+' matching ads are needed).';
+ else timing='Last '+RECENT_DAYS+' days: <b>'+pc.r+' of '+pc.recent+'</b> ads ('+pctOf(pc.r,pc.recent)+'%) · Earlier: <b>'+pc.e+' of '+pc.earlier+'</b> ('+pctOf(pc.e,pc.earlier)+'%). '+(pc.claim?'<strong class="mx-claim mx-claim-'+pc.claim+'">'+(pc.claim==="more"?'↑ More':'↓ Less')+' common in newer ads</strong>':'No clear difference between the periods.');
+ if(pc.undated)timing+=' '+pc.undated+' undated ad'+(pc.undated===1?'':'s')+' excluded.';
  const field=(key,label,val,ph)=>'<label class="mx-field"><span>'+label+'</span><textarea data-note="'+esc(key)+'" rows="2" placeholder="'+esc(ph)+'">'+esc(val)+'</textarea></label>';
- return '<section class="mx-detail" id="mxDetail" aria-live="polite" style="grid-row:1 / span '+(rows+1)+'">'+
-  '<header class="mx-dhead"><p class="mx-cat"><i style="background:'+catColor[t.category]+'"></i>'+esc(cat?.label||"")+' · '+esc(cat?.question||"")+'</p><h3>'+esc(t.label)+'</h3><p class="mx-stat"><b>'+t.ads.length+' of '+total+'</b> loaded ads ('+pctOf(t.ads.length,total)+'%) · '+w.length+' distinct wording'+(w.length===1?'':'s')+(med!=null?' · median '+med+' days since launch':'')+'</p></header>'+
-  '<h4 class="mx-sub">How they say it</h4><ol class="mx-ex">'+ex+'</ol>'+(w.length>3?'<button type="button" class="linkbutton mx-more" data-action="msgall" data-id="'+t.id+'">'+(showAll?'Show fewer':'Show all '+w.length+' wordings')+'</button>':'')+
-  '<h4 class="mx-sub">Launch timing</h4><p class="mx-timing">'+timing+'</p>'+
+ return '<section class="mx-detail" id="mxDetail" aria-live="polite" style="grid-row:1 / span '+(rows+1)+';--c:'+catColor[t.category]+'">'+
+  '<header class="mx-dhead"><p class="mx-cat"><i></i>'+esc(cat?.label||"")+' · '+esc(cat?.question||"")+'</p><div class="mx-titlerow"><h3>'+esc(t.label)+'</h3><div class="mx-big"><b>'+pctOf(t.ads.length,total)+'%</b><span>'+t.ads.length+' of '+total+' ads</span></div></div><p class="mx-stat">'+w.length+' distinct wording'+(w.length===1?'':'s')+(med!=null?' · median '+med+' days since launch':'')+'</p></header>'+
+  '<h4 class="mx-sub">How they say it</h4><ol class="mx-ev">'+ex+'</ol>'+(w.length>3?'<button type="button" class="linkbutton mx-more" data-action="msgall" data-id="'+t.id+'">'+(showAll?'Show fewer':'Show all '+w.length+' wordings')+'</button>':'')+
+  '<h4 class="mx-sub">When these ads launched</h4>'+launchTimeline(t,ads)+'<p class="mx-timing">'+timing+'</p>'+
   '<div class="mx-brief"><div class="mx-brief-head"><h4>Test brief</h4><span class="mx-brief-actions"><span id="briefStatus" class="mx-status" role="status"></span><button type="button" class="pill sm" data-action="copybrief" data-id="'+t.id+'">Copy brief</button></span></div>'+
-  '<div class="mx-observed"><p class="mx-label">What they’re doing · observed</p><p>'+esc(observedLine(t,total,w.length))+'</p>'+(w[0]?'<p class="mx-quote">“'+esc(w[0].sentence)+'” <a href="'+esc(metaUrl(w[0].ads[0].id))+'" target="_blank" rel="noopener">Source ↗</a></p>':'')+'</div>'+
-  '<div class="mx-ours"><p class="mx-label">Our test · proposed</p>'+field(t.id,"Challenger",f.challenger,f.placeholders.challenger)+field(t.id+":constant","Hold constant",f.constant,f.placeholders.constant)+field(t.id+":metric","Success metric",f.metric,f.placeholders.metric)+'<p class="mx-hint">Empty fields use the suggestion shown. Saved in this browser for '+esc(state.brand||"this advertiser")+'.</p></div></div>'+
+  '<div class="mx-brief-grid"><div class="mx-observed"><p class="mx-label">What they’re doing · observed</p><p>'+esc(observedLine(t,total,w.length))+'</p>'+(w[0]?'<p class="mx-quote">“'+esc(w[0].sentence)+'” <a href="'+esc(metaUrl(w[0].ads[0].id))+'" target="_blank" rel="noopener">Source ↗</a></p>':'')+'</div>'+
+  '<div class="mx-ours"><p class="mx-label">Our test · proposed</p>'+field(t.id,"Challenger",f.challenger,f.placeholders.challenger)+field(t.id+":constant","Hold constant",f.constant,f.placeholders.constant)+field(t.id+":metric","Success metric",f.metric,f.placeholders.metric)+'<p class="mx-hint">Empty fields use the suggestion shown. Saved in this browser.</p></div></div></div>'+
  '</section>';
 }
 function exportMessaging(){
@@ -1117,7 +1163,7 @@ document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
  b=e.target.closest("[data-page]");if(b){if(state.view==="compare"){state.view="discover";if(b.dataset.page===state.page&&state.rows.length){renderCards();return}}if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){state.choices.clear();for(const it of state.pick.items)state.choices.set(it.id,{id:it.id,name:it.name,count:it.mentions||0})}state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
- b=e.target.closest("[data-theme]");if(b){const id=b.dataset.theme;state.theme=id;state.msgAllExamples="";renderCards();const nb=document.querySelector('.mx-item[data-theme="'+id+'"]');nb?.focus({preventScroll:true});if(nb&&matchMedia("(max-width:820px)").matches){const navh=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--navh"))||64,tabs=$("viewtabs")?.offsetHeight||0;scrollTo({top:nb.getBoundingClientRect().top+scrollY-navh-tabs-16,behavior:"smooth"})}return}
+ b=e.target.closest("[data-theme]");if(b){const id=b.dataset.theme;state.theme=id;state.msgFilter=messageRules.find(r=>r.id===id)?.category==="actions"?"actions":"messages";state.msgAllExamples="";renderCards();const nb=document.querySelector('.mx-item[data-theme="'+id+'"]');nb?.focus({preventScroll:true});if(nb&&matchMedia("(max-width:820px)").matches){const navh=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--navh"))||64,tabs=$("viewtabs")?.offsetHeight||0;scrollTo({top:nb.getBoundingClientRect().top+scrollY-navh-tabs-16,behavior:"smooth"})}return}
  b=e.target.closest("[data-msgfilter]");if(b){state.msgFilter=b.dataset.msgfilter;state.theme="";renderCards();document.querySelector('[data-msgfilter="'+b.dataset.msgfilter+'"]')?.focus();return}
  b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;state.limit=25;renderCards();return}
  b=e.target.closest("[data-action]");if(!b)return;
