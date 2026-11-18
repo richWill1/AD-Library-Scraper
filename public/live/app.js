@@ -1190,7 +1190,8 @@ renderCards();health();
 {const p=new URLSearchParams(location.search),pg=p.get("page")||"",nm=(p.get("name")||"").slice(0,120),q=(p.get("q")||"").slice(0,120);
  if(/^\d{1,30}$/.test(pg)){state.brand=nm;state.page=pg;state.query=nm||pg;state.choices.set(pg,{id:pg,name:nm||"Advertiser",count:0});if(nm)rememberPageId(nm,pg);void runSearch(nm||pg,pg);setTimeout(()=>$("cards")?.scrollIntoView({behavior:"smooth"}),300)}
  else if(q){const i=$("searchInput");if(i)i.value=q;searchClient(q)}
- if(pg||q)history.replaceState(null,"",location.pathname);}
+ const vw=p.get("view");if(!pg&&!q&&(vw==="saved"||vw==="insights"))setView(vw);
+ if(pg||q||vw)history.replaceState(null,"",location.pathname);}
 })();
 // ---- Page polish: glass header, tile glow, hover-to-play video ----
 (function(){
