@@ -2,6 +2,7 @@ import http from 'node:http';
 import {timingSafeEqual,createHash} from 'node:crypto';
 import {chromium} from 'playwright';
 import {safe,videoCandidate} from './media.mjs';
+import {readStored,storeCreative,storeStatus} from './store.mjs';
 const cache=new Map();let browserPromise=null;let active=0;const waiting=[];const maximum=2;
 
 // The landing page is shown to marketers, so unwrap Meta's redirect and drop click-tracking parameters.
@@ -65,11 +66,15 @@ async function collect(id,token){
 const inflight=new Map();
 const server=http.createServer(async(req,res)=>{
  const reply=(status,body)=>{if(res.destroyed)return;res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
- const url=new URL(req.url,'http://localhost');if(url.pathname==='/health')return reply(200,{status:'ok',collector:'owned-meta-snapshot',active,queued:waiting.length});
+ const url=new URL(req.url,'http://localhost');if(url.pathname==='/health')return reply(200,{status:'ok',collector:'owned-meta-snapshot',active,queued:waiting.length,storage:storeStatus().configured});
  const expected=process.env.COLLECTOR_SECRET||'';const supplied=req.headers['x-collector-key']||'';if(typeof supplied!=='string'||!expected||Buffer.byteLength(supplied)!==Buffer.byteLength(expected)||!timingSafeEqual(Buffer.from(supplied),Buffer.from(expected)))return reply(401,{code:'UNAUTHORIZED',items:[]});
  const id=url.searchParams.get('id')||'',token=req.headers['x-meta-token'];if(req.method!=='GET'||url.pathname!=='/creative'||!/^\d{1,30}$/.test(id)||typeof token!=='string'||token.length<20||token.length>4096||/[\s\x00-\x1f]/.test(token))return reply(400,{code:'INVALID_REQUEST',items:[]});
  const key=createHash('sha256').update(token).digest('hex')+':'+id,hit=cache.get(key);if(url.searchParams.get('refresh')!=='1'&&hit&&Date.now()<hit.until)return reply(200,hit.result);
- let work=inflight.get(key);if(!work){work=(async()=>{await acquire();try{const result=await collect(id,token);if(result.items.length){if(cache.size>=4000)cache.delete(cache.keys().next().value);cache.set(key,{until:expiry(result.items),result});}return result;}finally{release();}})();inflight.set(key,work);work.finally(()=>inflight.delete(key)).catch(()=>{});}
+ const refresh=url.searchParams.get('refresh')==='1';
+ let work=inflight.get(key);if(!work){work=(async()=>{
+  // Stored creatives come back instantly; only ads never seen before are collected.
+  if(!refresh){const stored=await readStored(id);if(stored){if(cache.size>=4000)cache.delete(cache.keys().next().value);cache.set(key,{until:Date.now()+3*86400000,result:stored});return stored;}}
+  await acquire();try{const result=await collect(id,token);if(result.items.length){storeCreative(id,result);if(cache.size>=4000)cache.delete(cache.keys().next().value);cache.set(key,{until:expiry(result.items),result});}return result;}finally{release();}})();inflight.set(key,work);work.finally(()=>inflight.delete(key)).catch(()=>{});}
  try{reply(200,await work);}catch(error){const code=['META_BLOCKED','BUSY','COLLECTOR_UNAVAILABLE'].includes(error.message)?error.message:error.name==='TimeoutError'?'META_PREVIEW_UNAVAILABLE':'COLLECTOR_ERROR';const phase=['browser','snapshot','ad-identity','creative-elements','creative-ready','media-source'].includes(error.collectionPhase)?error.collectionPhase:'queue';console.log(JSON.stringify({event:'collection_failed',ad:id,code,phase,durationMs:error.collectionMs||null,signals:error.previewSignals||null,streamedVideos:error.streamedVideos||0,metadataItems:error.metadataItems||0}));reply(code==='BUSY'?429:502,{code,items:[],retryAfter:4});}
 });server.listen(Number(process.env.PORT||10000),'0.0.0.0');
 for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>server.close(async()=>{await(await browserPromise)?.close();process.exit(0);}));

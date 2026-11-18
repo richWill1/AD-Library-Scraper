@@ -8,7 +8,7 @@ const mediaCache=new Map(),mediaState=new Map(),mediaQueue=[];
 // Collected creatives are remembered in this browser until Meta's signed links
 // expire, so returning to a brand shows its ads instantly.
 const MEDIA_STORE="adsnoop-media-v1",MEDIA_STORE_MAX=900;const mediaRetried=new Set();
-function mediaUntil(items){let until=Date.now()+3*86400000;for(const i of items)for(const u of [i.url,i.poster])if(u)try{const oe=new URL(u).searchParams.get("oe");if(oe&&/^[a-f\d]+$/i.test(oe))until=Math.min(until,parseInt(oe,16)*1000-600000)}catch{}return until}
+function mediaUntil(items){let until=Date.now()+(items.every(i=>/^https:\/\/media\.adsnoop\.co\.uk\//.test(i.url))?30:3)*86400000;for(const i of items)for(const u of [i.url,i.poster])if(u)try{const oe=new URL(u).searchParams.get("oe");if(oe&&/^[a-f\d]+$/i.test(oe))until=Math.min(until,parseInt(oe,16)*1000-600000)}catch{}return until}
 let mediaSaveTimer=0;
 function persistMedia(){clearTimeout(mediaSaveTimer);mediaSaveTimer=setTimeout(()=>{try{const now=Date.now(),rows=[...mediaCache.entries()].filter(([,v])=>v.until>now).slice(-MEDIA_STORE_MAX);localStorage.setItem(MEDIA_STORE,JSON.stringify(rows))}catch{try{localStorage.removeItem(MEDIA_STORE)}catch{}}},400)}
 (function restoreMedia(){try{const rows=JSON.parse(localStorage.getItem(MEDIA_STORE)||"[]"),now=Date.now();if(!Array.isArray(rows))return;for(const [id,v] of rows){if(!/^\d{1,30}$/.test(id)||!v||!(v.until>now)||!Array.isArray(v.items))continue;const items=v.items.filter(i=>i&&(i.kind==="image"||i.kind==="video")&&safeMedia(i.url)&&(!i.poster||safeMedia(i.poster)));if(items.length)mediaCache.set(id,{...v,items})}}catch{}})();let collectorStatus="checking",mediaActive=0;
@@ -51,7 +51,7 @@ const reach=n=>typeof n==="number"&&Number.isFinite(n)?n.toLocaleString("en-GB")
 function error(msg){const el=$("error");el.textContent=msg;el.hidden=!msg;}
 function feedback(message){const el=$("feedback");el.textContent=message;el.hidden=!message;}
 function busy(v){state.loading=v;const stage=$("as-search-stage");if(stage){stage.hidden=!v;if(v){const label=$("as-stage-query");if(label)label.textContent="Scanning "+(state.brand||state.query||"competitor")+"…";}}if(v)setBar("search");else if(!state.rows.length)setBar("hide");else updateReveal(true);$("searchGo").disabled=v;$("searchGo").textContent=v?"Searching…":"Search ↗";}
-function safeMedia(input){try{const u=new URL(input);return u.protocol==="https:"&&u.hostname.endsWith(".fbcdn.net")&&!u.username&&!u.password&&!u.searchParams.has("access_token")?u.href:null}catch{return null}}
+function safeMedia(input){try{const u=new URL(input);return u.protocol==="https:"&&(u.hostname.endsWith(".fbcdn.net")||u.hostname==="media.adsnoop.co.uk")&&!u.username&&!u.password&&!u.searchParams.has("access_token")?u.href:null}catch{return null}}
 function save(){try{localStorage.setItem(storeKey,JSON.stringify(Array.from(state.saved.values()).slice(0,300)))}catch(e){feedback("Saved research cannot be written to this browser. Use a local download for a backup.");}}
 function allRows(){return state.view==="saved"?Array.from(state.saved.values()):state.rows}
 function shownRows(){
