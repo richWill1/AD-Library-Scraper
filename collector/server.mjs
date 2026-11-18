@@ -76,6 +76,8 @@ const server=http.createServer(async(req,res)=>{
  // Advertiser lookup by name (Meta Ad Library advertiser search).
  if(req.method==='GET'&&url.pathname==='/advertisers'){
   const q=(url.searchParams.get('q')||'').trim();if(q.length<2||q.length>80||/[\x00-\x1f<>]/.test(q))return reply(400,{code:'INVALID_REQUEST',advertisers:[]});
+  // Off by default: loading Meta's Ad Library page exceeds this instance's 512 MB.
+  if(process.env.ADVERTISER_BROWSER_LOOKUP!=='1')return reply(503,{code:'LOOKUP_DISABLED',advertisers:[]});
   try{await acquireExclusive();}catch{return reply(429,{code:'BUSY',advertisers:[]});}
   try{const advertisers=await findAdvertisers(await browser(),q);return reply(200,{advertisers,source:'meta-ad-library-search'});}
   catch(error){console.log(JSON.stringify({event:'advertiser_lookup_failed',reason:String(error?.message||'ERROR').slice(0,60)}));return reply(502,{code:'LOOKUP_FAILED',advertisers:[]});}
