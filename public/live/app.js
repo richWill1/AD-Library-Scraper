@@ -92,6 +92,7 @@ function showHeader(){
  {const title=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.brand?state.brand+" — Active ads":"The creative library.";
  $("heading").innerHTML=(state.view!=="saved"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg"):"")+'<span>'+esc(title)+'</span>';}
  $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
+ renderViewTabs();
  $("metrics").style.display=state.view!=="insights"&&(state.rows.length||state.view==="saved")?"grid":"none";
  $("toolbar").style.display=state.rows.length||state.view==="saved"?"flex":"none";
  {const shown=shownRows(),distinct=state.view==="saved"?shown.length:[...(state.groupMeta||new Map()).values()].filter(m=>m.head).length,live=allRows().length;
@@ -107,7 +108,17 @@ function showHeader(){
  $("comparisonBar").classList.toggle("show",state.compare.size>0);
  $("compareCount").textContent=state.compare.size+" of 3 selected";
 }
-function loadingCards(){return ""}
+// One-click switch between the ad grid (with the intelligence panel) and the
+// messaging map for the brand that is loaded.
+function renderViewTabs(){
+ const el=$("viewtabs");if(!el)return;
+ const show=!!state.brand&&state.rows.length>0&&(state.view==="discover"||state.view==="insights");
+ el.hidden=!show;document.body.classList.toggle("has-tabs",show);if(!show){el.innerHTML="";return}
+ const distinct=new Set(state.rows.map(groupKey)).size;
+ let themes=0;try{themes=messagingThemes(state.rows).length}catch{}
+ const tab=(view,label,count)=>'<button class="viewtab" role="tab" data-view="'+view+'" aria-selected="'+(state.view===view)+'" tabindex="'+(state.view===view?0:-1)+'">'+label+(count?'<small>'+count+'</small>':'')+'</button>';
+ el.innerHTML=tab("discover","Ads &amp; insights",(distinct||state.rows.length)+" ads")+tab("insights","Messaging",themes?themes+" themes":"");
+}
 function empty(title,detail){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p></div>'}
 function card(a){
  const d=daysRunning(a),stage=lifeStage(d),gm=state.groupMeta?.get(a.id);
@@ -610,7 +621,9 @@ function setView(view){
  else if(view==="insights")feedback("");
  else feedback(state.brand?"":"Search a brand above to discover active advertisers.");
  renderCards();
- $("research").scrollIntoView({behavior:"smooth"});
+ const tabs=$("viewtabs");
+ if(tabs&&!tabs.hidden){const prev=tabs.previousElementSibling,r=tabs.getBoundingClientRect();if(r.top<=1&&prev)window.scrollTo({top:Math.max(0,prev.getBoundingClientRect().bottom+scrollY-8),behavior:"smooth"});else if(r.top>innerHeight*.6)tabs.scrollIntoView({behavior:"smooth",block:"start"})}
+ else $("research").scrollIntoView({behavior:"smooth"});
 }
 async function health(){
  const status=$("status"),details=$("serviceDetails");
@@ -768,6 +781,7 @@ $("searchForm").addEventListener("submit",e=>{
 $("coverage").addEventListener("change",e=>{state.coverage=e.target.value;if(state.query)searchClient(state.query)});
 $("sort").value=state.sort;
 $("sort").addEventListener("change",e=>{state.sort=e.target.value;state.limit=25;renderCards()});
+document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest(".viewtab");if(!t||!["ArrowLeft","ArrowRight"].includes(e.key))return;const tabs=[...document.querySelectorAll(".viewtab")];const next=tabs[(tabs.indexOf(t)+(e.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];if(next){e.preventDefault();setView(next.dataset.view);requestAnimationFrame(()=>document.querySelector('.viewtab[aria-selected="true"]')?.focus())}});
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
  b=e.target.closest("[data-page]");if(b){if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
