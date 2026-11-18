@@ -26,7 +26,8 @@ const TACTICS: {id: string; label: string; re: RegExp}[] = [
 ];
 // Keyword search only returns the newest few hundred matching ads, so big
 // retailers get crowded out. Their own pages are checked directly as well.
-const MAJOR_PAGES: Record<string, string> = {Currys: '282722695080974', Argos: '108712049190071', 'Boots UK': '137917343831'};
+// Page IDs verified in Meta's Ad Library advertiser search.
+const MAJOR_PAGES: Record<string, string> = {Currys: '282722695080974', Argos: '108712049190071', 'Boots UK': '137917343831', 'John Lewis & Partners': '145210795501787', 'Amazon.co.uk': '136154403098698'};
 const MAJOR_NAMES = ['John Lewis & Partners', 'John Lewis', 'AO.com', 'Very', 'Amazon', 'Lidl GB', 'Aldi UK', 'Tesco', "Sainsbury's", 'Marks and Spencer', 'M&S', 'JD Sports', 'Superdrug', 'Dunelm', 'IKEA UK', 'Next', 'ASOS', 'boohoo', 'Gymshark', 'Smyths Toys', 'The Perfume Shop', 'Ninja Kitchen UK', 'Dyson', 'Samsung UK', 'Selfridges', 'Debenhams', 'Wayfair UK', 'B&Q', 'Halfords', 'Matalan', 'Primark'];
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 let lastCall = 0;
