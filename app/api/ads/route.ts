@@ -10,20 +10,6 @@ const buckets=new Map<string,{at:number,count:number}>();
 const cache=new Map<string,{at:number,data:unknown}>();
 const inflight=new Map<string,Promise<any>>();
 export async function GET(req:NextRequest){
- // The credential-free preview uses the same public ad proxy as before, but
- // observes its authenticated upstream results in the preview directory.
- if(!process.env.META_ACCESS_TOKEN?.trim()&&['preview.adsnoop.co.uk','adsnoop-live-design-test.onrender.com'].includes(req.nextUrl.hostname)){
-  const url=new URL('/api/ads','https://ad-library-scraper-94t0.onrender.com');
-  for(const key of ['q','page','after','coverage','discover']){
-   const v=req.nextUrl.searchParams.get(key);if(v!==null)url.searchParams.set(key,v);
-  }
-  try{
-   const upstream=await fetch(url,{cache:'no-store',redirect:'error',signal:AbortSignal.timeout(25000)});
-   const data=await upstream.json();
-   if(upstream.ok&&Array.isArray(data.ads))observeAds(data.ads.map((a:{id:string;pageId:string;pageName:string})=>({id:a.id,page_id:a.pageId,page_name:a.pageName})));
-   return NextResponse.json(data,{status:upstream.status});
-  }catch{return NextResponse.json({error:'The preview ad connection is temporarily unavailable.'},{status:502});}
- }
  let token:string;try{token=(await getMetaCredential()).token;}catch{return NextResponse.json({error:'The research connection is temporarily unavailable. Your research board remains available.',code:'META_STORAGE_UNAVAILABLE'},{status:503});}
  if(!token)return NextResponse.json({error:'Live Meta search is awaiting connection. You can still explore the verified sample.',code:'NOT_CONFIGURED'},{status:503});
  const connection=connectionSummary();if(connection.state==='expired'&&connection.expiresAt)return NextResponse.json({error:connection.message,code:'META_EXPIRED'},{status:503});

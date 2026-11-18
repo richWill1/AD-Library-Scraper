@@ -9,11 +9,12 @@ const nextConfig: NextConfig = {
     const home = [{ source: "/", destination: "/live/index.html" }];
     // A service with its own Meta token uses its own API routes; a preview
     // without one forwards public research requests to the main service.
-    if (process.env.META_ACCESS_TOKEN?.trim()) return { beforeFiles: home, afterFiles: [], fallback: [] };
+    if (process.env.META_ACCESS_TOKEN?.trim() || process.env.RENDER_SERVICE_ID === "srv-db3ufoad0e5s73f5dudg") return { beforeFiles: home, afterFiles: [], fallback: [] };
 
     return {
       beforeFiles: [
         ...home,
+        { source: "/api/ads", destination: "/api/preview-ads" },
         { source: "/api/health", destination: `${backend}/api/health` },
         { source: "/api/media", destination: `${backend}/api/media` },
         { source: "/api/formats", destination: `${backend}/api/formats` },
