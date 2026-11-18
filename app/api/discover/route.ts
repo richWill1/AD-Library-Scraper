@@ -13,6 +13,10 @@ const ORIGIN = process.env.ADS_ORIGIN || 'https://ad-library-scraper-94t0.onrend
 const MAIN_SERVICE = 'srv-db3ufoad0e5s73f5dudg';
 const TTL = 6 * 3600 * 1000, PAGES = 6, LIMIT = 100;
 type Advertiser = {id: string; name: string; ads: number; reach: number; latest: string};
+type Row = {id: string; page_id: string; page_name: string; reach: number; start: string; text: string};
+// Every word of the search must appear as a whole word (so "blinds" doesn't match "blind").
+const wordsOf = (q: string) => q.toLowerCase().split(/\s+/).filter(Boolean).map(w => new RegExp('(^|[^a-z0-9])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])', 'i'));
+const mentions = (text: string, res: RegExp[]) => res.every(re => re.test(text));
 type Result = {q: string; advertisers: Advertiser[]; scanned: number; more: boolean; updatedAt: string};
 const cache = new Map<string, {at: number; data: Result}>();
 const inflight = new Map<string, Promise<Result>>();
@@ -24,28 +28,33 @@ const ukReach = (a: {total_reach_by_location?: {key?: string; location?: string;
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 };
 
-function rank(rows: {id: string; page_id: string; page_name: string; reach: number; start: string}[], q: string, more: boolean): Result {
-  const byPage = new Map<string, Advertiser>();
+function rank(rows: Row[], q: string, more: boolean): Result {
+  const byPage = new Map<string, Advertiser>(), res = wordsOf(q), named = new Set<string>();
   for (const r of rows) {
     if (!/^\d{1,30}$/.test(r.page_id) || !r.page_name) continue;
+    const nameHit = mentions(r.page_name, res);
+    if (nameHit) named.add(r.page_id);
+    // Only count ads that actually use the words (Meta's keyword search is fuzzy).
+    if (!nameHit && !mentions(r.text, res)) continue;
     const e = byPage.get(r.page_id) || {id: r.page_id, name: r.page_name.slice(0, 120), ads: 0, reach: 0, latest: ''};
     e.ads++; e.reach += r.reach; if (r.start > e.latest) e.latest = r.start;
     byPage.set(r.page_id, e);
   }
-  const advertisers = [...byPage.values()].sort((a, b) => b.reach - a.reach || b.ads - a.ads).slice(0, 36);
+  // A single passing mention isn't an advertiser in the category, unless it's in their name.
+  const advertisers = [...byPage.values()].filter(a => named.has(a.id) || a.ads >= 2).sort((a, b) => b.reach - a.reach || b.ads - a.ads).slice(0, 36);
   return {q, advertisers, scanned: rows.length, more, updatedAt: new Date().toISOString()};
 }
 
 async function buildWithToken(q: string, token: string): Promise<Result> {
-  const rows: {id: string; page_id: string; page_name: string; reach: number; start: string}[] = [];
+  const rows: Row[] = [];
   let after = '';
   for (let i = 0; i < PAGES; i++) {
-    const p = new URLSearchParams({ad_reached_countries: JSON.stringify(['GB']), ad_type: 'ALL', ad_active_status: 'ACTIVE', search_terms: q, limit: String(LIMIT), fields: 'id,page_id,page_name,total_reach_by_location,ad_delivery_start_time'});
+    const p = new URLSearchParams({ad_reached_countries: JSON.stringify(['GB']), ad_type: 'ALL', ad_active_status: 'ACTIVE', search_terms: q, search_type: 'KEYWORD_EXACT_PHRASE', limit: String(LIMIT), fields: 'id,page_id,page_name,total_reach_by_location,ad_delivery_start_time,ad_creative_bodies,ad_creative_link_titles'});
     if (after) p.set('after', after);
     const res = await metaFetch(`https://graph.facebook.com/v26.0/ads_archive?${p}`, {headers: {Authorization: `Bearer ${token}`}, signal: AbortSignal.timeout(20000), cache: 'no-store'});
     const body = await res.json();
     if (!res.ok || body.error || !Array.isArray(body.data)) { if (!rows.length) throw Error('META'); break; }
-    for (const a of body.data) rows.push({id: String(a.id), page_id: String(a.page_id || ''), page_name: typeof a.page_name === 'string' ? a.page_name : '', reach: ukReach(a), start: String(a.ad_delivery_start_time || '').slice(0, 10)});
+    for (const a of body.data) rows.push({id: String(a.id), page_id: String(a.page_id || ''), page_name: typeof a.page_name === 'string' ? a.page_name : '', reach: ukReach(a), start: String(a.ad_delivery_start_time || '').slice(0, 10), text: [...(a.ad_creative_bodies || []), ...(a.ad_creative_link_titles || [])].join('\n').slice(0, 4000)});
     after = body.paging?.next && body.paging?.cursors?.after ? String(body.paging.cursors.after) : '';
     if (!after) break;
   }
@@ -55,14 +64,14 @@ async function buildWithToken(q: string, token: string): Promise<Result> {
 
 // Without its own Meta access (preview), read the main service's public ads search instead.
 async function buildViaAds(q: string): Promise<Result> {
-  const rows: {id: string; page_id: string; page_name: string; reach: number; start: string}[] = [];
+  const rows: Row[] = [];
   let after = '';
-  for (let i = 0; i < 3; i++) {
-    const p = new URLSearchParams({q, coverage: 'GB', discover: '1'}); if (after) p.set('after', after);
+  for (let i = 0; i < 4; i++) {
+    const p = new URLSearchParams({q, coverage: 'GB'}); if (after) p.set('after', after);
     const res = await fetch(`${ORIGIN}/api/ads?${p}`, {signal: AbortSignal.timeout(25000), cache: 'no-store'});
     if (!res.ok) break;
     const body = await res.json();
-    for (const a of Array.isArray(body.ads) ? body.ads : []) rows.push({id: String(a.id), page_id: String(a.pageId || ''), page_name: String(a.pageName || ''), reach: 0, start: String(a.start || '')});
+    for (const a of Array.isArray(body.ads) ? body.ads : []) rows.push({id: String(a.id), page_id: String(a.pageId || ''), page_name: String(a.pageName || ''), reach: typeof a.reach === 'number' ? a.reach : 0, start: String(a.start || ''), text: `${a.copy || ''}\n${a.title || ''}`});
     after = body.nextCursor || ''; if (!after) break;
   }
   if (!rows.length) throw Error('UNAVAILABLE');
