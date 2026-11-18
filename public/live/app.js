@@ -146,6 +146,20 @@ async function request(path,method,body,signal){
  if(!resp.ok||data.error){const ex=new Error(data.error||"Live search failed. Status "+resp.status);ex.code=data.code||"";throw ex;}
  return data;
 }
+const FULL_SET_CAP=300;
+async function collectPageAds(q,page,signal,rows,cursor){
+ // Meta returns the newest 50 first; longevity, launch and change stats are
+ // only meaningful across all of an advertiser's live ads.
+ const seen=new Set(rows.map(a=>a.id));let all=[...rows];
+ while(cursor&&all.length<FULL_SET_CAP){
+  const t=$("loadbarText");if(t)t.textContent="Gathering all of "+(state.brand||q)+"’s active ads · "+all.length+" found…";
+  const params=new URLSearchParams({q:q||page,coverage:state.coverage,page,after:cursor});
+  const data=await request("/api/ads?"+params,"GET",null,signal);
+  for(const a of Array.isArray(data.ads)?data.ads:[])if(!seen.has(a.id)){seen.add(a.id);all.push(a)}
+  cursor=data.nextCursor||null;
+ }
+ return {rows:all,cursor};
+}
 async function runSearch(query,page="",after="",moreBrands=false,appendAds=false){
  const q=(query||"").trim();if(!q&&!page)return;
  if(requestController)requestController.abort();
@@ -176,15 +190,24 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
    const match=rankedBrands()[0];
    state.page=match?.id||"";
    state.brand=match?.name||"";
-   state.rows=rows.filter(ad=>ad.pageId===state.page);
-   state.cursor=data.pageId===state.page?data.nextCursor||null:null;
-   // A term-search cursor cannot be used to paginate a specific advertiser.
-   state.needsPageStart=Boolean(match&&data.pageId!==state.page&&data.nextCursor);
+   if(match&&data.pageId!==state.page){
+    // A keyword search only returns some of this advertiser's ads; load the Page itself.
+    const first=await request("/api/ads?"+new URLSearchParams({q,coverage:state.coverage,page:state.page}),"GET",null,controller.signal);
+    if(rid!==requestNumber)return;
+    const full=await collectPageAds(q,state.page,controller.signal,Array.isArray(first.ads)?first.ads:[],first.nextCursor||null);
+    if(rid!==requestNumber)return;
+    state.rows=full.rows;state.cursor=full.cursor;
+   }else{
+    const full=match?await collectPageAds(q,state.page,controller.signal,rows.filter(ad=>ad.pageId===state.page),data.nextCursor||null):{rows:[],cursor:null};
+    if(rid!==requestNumber)return;
+    state.rows=full.rows;state.cursor=full.cursor;
+   }
+   state.needsPageStart=false;
   }else{
    state.page=page;state.brand=rows[0]?.pageName||state.brand||q;
    const seen=new Set(state.rows.map(ad=>ad.id));
-   state.rows=after||appendAds?[...state.rows,...rows.filter(ad=>!seen.has(ad.id))]:rows;
-   state.cursor=data.nextCursor||null;
+   if(after||appendAds){state.rows=[...state.rows,...rows.filter(ad=>!seen.has(ad.id))];state.cursor=data.nextCursor||null}
+   else{const full=await collectPageAds(q,page,controller.signal,rows,data.nextCursor||null);if(rid!==requestNumber)return;state.rows=full.rows;state.cursor=full.cursor}
    state.needsPageStart=false;
   }
   state.variations=variationCounts(state.rows);
@@ -503,7 +526,7 @@ function renderIntel(){
  else{const add=changes.added.length,rem=changes.removed;changeHTML='<p class="intel-big"><span class="up">+'+add+'</span>'+(rem?' <span class="down">−'+rem.length+'</span>':'')+'</p><p class="intel-sub">'+(add?add+' new':'No new ads')+(rem?' · '+rem.length+' no longer running':'')+' since '+esc(new Date(changes.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))+'</p>'+(add?'<button class="linkbutton" data-filter="added">Show new ads</button>':'');}
  const chip=(key,label,n,cls)=>'<button class="stagechip '+cls+(state.filter===key?' on':'')+'" data-filter="'+key+'"><b>'+n+'</b>'+esc(label)+'</button>';
  box.innerHTML=
- '<div class="intel-card intel-wide"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days</p></div>'+
+ '<div class="intel-card intel-wide"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days · based on '+total+(state.cursor?'+ (first '+total+')':'')+' live ads</p></div>'+
  '<div class="intel-card"><p class="intel-k">Creative mix</p>'+(collected.length?'<div class="mixbar">'+["video","static","carousel"].map(k=>fmt[k]?'<i class="mix-'+k+'" style="width:'+(fmt[k]/fTotal*100)+'%"></i>':'').join("")+'</div><p class="intel-legend">'+["video","static","carousel"].map(k=>'<span><i class="dot mix-'+k+'"></i>'+formatLabel[k]+' '+Math.round(fmt[k]/fTotal*100)+'%</span>').join("")+'</p><p class="intel-sub">From '+collected.length+' collected creatives</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
  '<div class="intel-card"><p class="intel-k">Since your last visit</p>'+changeHTML+'</div>'+
  '<div class="intel-card"><p class="intel-k">Top calls to action</p>'+(ctas.length?'<ol class="ctalist">'+ctas.map(c=>'<li><span>'+esc(c.label)+'</span><b>'+Math.round(c.n/total*100)+'%</b></li>').join("")+'</ol>':'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(scaled.length?scaled.length+' message'+(scaled.length===1?'':'s')+' running in multiple variations':'Every ad uses unique copy')+'</p></div>'+
