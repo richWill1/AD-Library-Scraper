@@ -3,7 +3,7 @@
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const homeUrl="";
 const storeKey="adsnoop-live-preview-saved-v1";
-const state={view:"discover",query:"",page:"",brand:"",coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"reach",limit:25,theme:"",revealAll:false,loading:false,saved:new Map(),compare:new Map(),health:null};
+const state={view:"discover",query:"",page:"",brand:"",identity:null,adsFailed:false,coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"reach",limit:25,theme:"",revealAll:false,loading:false,saved:new Map(),compare:new Map(),health:null};
 const mediaCache=new Map(),mediaState=new Map(),mediaQueue=[];
 // Collected creatives are remembered in this browser until Meta's signed links
 // expire, so returning to a brand shows its ads instantly.
@@ -43,37 +43,38 @@ function searchClient(query){
  state.canFindAlternates=Boolean(exact&&!/^\d{1,30}$/.test(q));
  state.brand=exact?.name||"";
  state.page=exact?.id||"";
- state.pick=null;
+ state.pick=null;state.identity=null;state.adsFailed=false;
  if(exact){state.choices.set(exact.id,{id:exact.id,name:exact.name,count:0});void runSearch(q,state.page);return}
  void resolveByName(q);
 }
-// Find the advertiser Page by name (Meta Ad Library advertiser search). A brand only
-// loads automatically on a clear name match; otherwise people choose from a list.
+// A trading name opens on its own only when the server verified one Page.
+// Ad-text mentions are never treated as that Page.
 async function resolveByName(q){
  const rid=++requestNumber;
- error("");busy(true);state.rows=[];renderCards();
- feedback("Looking up advertisers called “"+q+"”…");
- let list=[],resolved=false,message="";
- try{const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(50000)});const d=await r.json();resolved=d.resolved===true;message=d.message||"";list=Array.isArray(d.advertisers)?d.advertisers.filter(a=>a&&/^\d{3,30}$/.test(a.id)&&typeof a.name==="string"):[]}catch{}
+ error("");busy(true);state.rows=[];state.identity=null;state.adsFailed=false;renderCards();
+ feedback("Checking the brand’s website and the Ad Library for “"+q+"”…");
+ let d=null,ok=false;
+ try{
+  const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(25000)});
+  ok=r.ok;try{d=await r.json()}catch{d=null}
+  if(r.status===429)d=Object.assign(d||{},{code:"RATE_LIMITED",status:"lookup_failed"});
+ }catch{d=null}
  if(rid!==requestNumber)return;
- if(resolved&&list.length===1){state.brand=list[0].name;state.page=list[0].id;busy(false);void runSearch(list[0].id,list[0].id);return}
- if(message||/^@|^(?:https?:\/\/)?(?:(?:www|m|web)\.)?facebook\.com(?:[/?#]|$)/i.test(q)){
-  busy(false);feedback("");state.pick={q,kind:"link",items:[],message:message||"Page lookup is unavailable. Try its numeric Page ID."};renderCards();return;
+ const usable=a=>a&&typeof a.name==="string"&&(/^\d{3,30}$/.test(a.id||"")||(typeof a.handle==="string"&&a.handle.length>1));
+ const list=Array.isArray(d&&d.advertisers)?d.advertisers.filter(usable):[];
+ const mentions=Array.isArray(d&&d.mentions)?d.mentions.filter(a=>a&&/^\d{3,30}$/.test(a.id)&&typeof a.name==="string"):[];
+ const open=a=>{state.identity=a;state.brand=a.name;state.page=a.id;state.choices.clear();state.choices.set(a.id,{id:a.id,name:a.name,count:a.adCount||0});busy(false);void runSearch(q,a.id)};
+ if(d&&list.length===1&&/^\d{3,30}$/.test(list[0].id)&&(d.status==="resolved"||(d.resolved===true&&!d.status))){open(list[0]);return}
+ if(d&&list.length&&(d.status==="choose"||d.status==="resolved")){busy(false);feedback("");state.pick={q,kind:"choose",items:list.slice(0,8),message:d.message||""};renderCards();return}
+ const failed=!d||!ok||(d.status!=="not_found"&&(d.status==="lookup_failed"||["LOOKUP_FAILED","PAGE_METADATA_PERMISSION","NO_PAGE_TOKEN","HANDLE_UNRESOLVED","RATE_LIMITED"].includes(d.code)||!!d.message));
+ if(failed){
+  busy(false);feedback("");
+  state.pick={q,kind:"failed",items:[],message:(d&&(d.code==="RATE_LIMITED"?"Please wait a minute, then search again.":d.message))||"The lookup failed before a Page could be identified. This does not mean the advertiser has no ads."};
+  renderCards();return;
  }
- const ranked=list.map(a=>({...a,score:Math.max(nameScore(q,a.name),a.alias?nameScore(q,a.alias)-1:0)})).sort((a,b)=>b.score-a.score||Number(b.verified)-Number(a.verified)||(b.followers||0)-(a.followers||0));
-
- const exact=ranked.filter(a=>a.score>=5);
- const clear=exact.length===1;
- if(clear){
-  const a=exact[0];state.page=a.id;state.brand=a.name;state.choices.clear();
-  for(const c of ranked)state.choices.set(c.id,{id:c.id,name:c.name,count:0});
-  busy(false);void runSearch(q,a.id);return;
- }
- if(ranked.length){
-  busy(false);state.pick={q,kind:"name",items:ranked.slice(0,8)};feedback("");renderCards();return;
- }
- // Nothing found by name: fall back to searching ad text (never auto-loading a mismatch).
- busy(false);void runSearch(q,"");
+ busy(false);feedback("");
+ state.pick={q,kind:"missing",items:mentions,message:(d&&d.message)||"No Facebook Page could be identified from an official website or from a Page name in the Ad Library."};
+ renderCards();
 }
 const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T12:00:00Z":s);return Number.isFinite(d.getTime())?d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}):"Unknown"};
 const reach=n=>typeof n==="number"&&Number.isFinite(n)?n.toLocaleString("en-GB"):"Not available";
@@ -120,14 +121,30 @@ function groupRows(rows){
 }
 // Advertiser logo = the Facebook Page profile picture, with initials underneath
 // so a missing or slow image never leaves an empty circle.
-function logoHTML(id,name,cls){
+function logoHTML(id,name,cls,picture,fallback){
  const ini=String(name||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
- return '<span class="brandlogo '+(cls||"")+'" aria-hidden="true"><b>'+esc(ini)+'</b>'+(id&&/^\d{1,30}$/.test(id)?'<img alt="" loading="lazy" referrerpolicy="no-referrer" src="https://graph.facebook.com/'+encodeURIComponent(id)+'/picture?type=square&width=128&height=128" onerror="this.remove()">':'')+'</span>';
+ const graph=id&&/^\d{1,30}$/.test(id)?"https://graph.facebook.com/"+encodeURIComponent(id)+"/picture?type=square&width=128&height=128":"";
+ const chain=[picture,graph,fallback].filter((u,i,a)=>typeof u==="string"&&/^https:/.test(u)&&a.indexOf(u)===i);
+ const src=chain[0]||"",fb=chain[1]||"";
+ const img=src?'<img alt="" loading="eager" referrerpolicy="no-referrer" src="'+esc(src)+'"'+(fb?' data-fallback="'+esc(fb)+'" onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;delete this.dataset.fallback}else this.remove()"':' onerror="this.remove()"')+'>':"";
+ return '<span class="brandlogo '+(cls||"")+'" aria-hidden="true"><b>'+esc(ini)+'</b>'+img+'</span>';
+}
+function identityLinks(){
+ const id=state.page;if(!/^\d{1,30}$/.test(id||""))return "";
+ const handle=state.identity&&state.identity.handle&&!/-\d{8,}$/.test(state.identity.handle)?state.identity.handle:"";
+ const pageUrl="https://www.facebook.com/"+encodeURIComponent(handle||id);
+ const lib="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=GB&view_all_page_id="+encodeURIComponent(id);
+ let site="";if(state.identity&&state.identity.website){try{const h=new URL(state.identity.website).hostname.replace(/^www\./,"");site=' · <a href="'+esc(state.identity.website)+'" target="_blank" rel="noopener noreferrer">'+esc(h)+'</a>'}catch{}}
+ const cat=state.identity&&state.identity.category?' · '+esc(state.identity.category):"";
+ return '<span style="display:block;margin-top:6px;font-size:13px;font-weight:500"><a href="'+esc(pageUrl)+'" target="_blank" rel="noopener noreferrer">Facebook Page</a> · Page ID '+esc(id)+' · <a href="'+esc(lib)+'" target="_blank" rel="noopener noreferrer">Page Ad Library</a>'+site+cat+'</span>';
 }
 function showHeader(){
- {const title=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="compare"?"You vs your competitors.":state.brand?state.brand+" — Active ads":"The creative library.";
- $("heading").innerHTML=(state.view!=="saved"&&state.view!=="compare"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg"):"")+'<span>'+esc(title)+'</span>';}
- $("subheading").textContent=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.view==="compare"?"Your brand side by side with up to 5 pinned competitors, from their live UK ads.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
+ {const title=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="compare"?"You vs your competitors.":(state.brand?(state.rows.length||state.loading?state.brand+" — Active ads":state.brand+" — No active UK ads"):"The creative library.");
+ $("heading").innerHTML=(state.view!=="saved"&&state.view!=="compare"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg",state.identity&&state.identity.picture,state.identity&&state.identity.logo):"")+'<span>'+esc(title)+'</span>';}
+ {let base=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.view==="compare"?"Your brand side by side with up to 5 pinned competitors, from their live UK ads.":state.adsFailed&&state.page?"The Page was identified, but Meta’s ad lookup failed. This does not mean there are zero ads.":state.loading&&state.brand?"Loading active UK ads…":state.brand&&state.page&&!state.rows.length?"Page found. Meta returned no active ads for this Page in the selected countries.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
+  if(state.view==="discover"&&state.identity&&state.identity.evidence&&!state.loading&&!state.adsFailed)base=state.identity.evidence+(state.page&&!state.rows.length?" Page found, no active UK ads.":"");
+  const links=state.view==="discover"?identityLinks():"";
+  if(links)$("subheading").innerHTML=esc(base)+links;else $("subheading").textContent=base;}
  renderViewTabs();
  {const m=$("metrics"),show=state.view!=="insights"&&state.view!=="compare"&&(state.rows.length>0||state.view==="saved");m.hidden=!show;
  if(show){const shown=shownRows(),live=allRows().length,saved=state.view==="saved";
@@ -184,12 +201,17 @@ function loadPopular(){
 function isStart(){return state.view==="discover"&&!state.brand&&!state.rows.length&&!state.loading&&!state.pick}
 function compactNumber(n){return n>=1e6?(n/1e6).toFixed(n>=1e7?0:1).replace(/\.0$/,"")+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1).replace(/\.0$/,"")+"K":String(n)}
 function pickHTML(){
- const p=state.pick,named=p.kind==="name";
- const head=p.kind==="link"?"Facebook Page lookup":named?"Which advertiser do you mean?":"We couldn’t find an advertiser called “"+p.q+"”";
- const sub=p.message|| (named?"Choose an advertiser below, or paste its Facebook Page link, @handle or Page ID.":p.items.length?"These advertisers have ads that mention “"+p.q+"”. If the brand you want isn’t here, paste its Facebook page link into the search box.":"Try a different spelling, or paste the brand’s Facebook page link into the search box.");
+ const p=state.pick;
+ const head=p.kind==="failed"?"Meta lookup failed":p.kind==="missing"?"Couldn’t identify a Facebook Page for “"+p.q+"”":p.items.length===1&&!/^\d{3,30}$/.test(p.items[0].id||"")?"Facebook Page found":"Which advertiser do you mean?";
+ const sub=p.message||(p.kind==="missing"?"Paste the brand’s website, Facebook Page link, @handle or Page ID.":"Choose the business you mean. A shared owner or a name inside someone else’s ad is not listed as a match.");
  const cards=p.items.map((a,i)=>{
-  const meta=named?[a.followers!=null?compactNumber(a.followers)+" followers":"",a.category||"",a.adCount?Math.min(100,a.adCount)+(a.adCount>=100?"+":"")+" distinct ads seen":""].filter(Boolean).join(" · "):a.mentions+" ad"+(a.mentions===1?"":"s")+" mention it";
-  return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(a.id)+'" data-name="'+esc(a.name)+'">'+logoHTML(a.id,a.name,"lg")+'<span><strong>'+esc(a.name)+(a.verified?' <span class="vtick" title="Verified by Meta">✓</span>':'')+'</strong><br><small>'+esc(meta||"Facebook page")+'</small>'+(a.alias?'<br><small class="alias">@'+esc(a.alias)+'</small>':'')+'</span><span class="go">See their ads →</span></button>';
+  let host="";if(a.website){try{host=new URL(a.website).hostname.replace(/^www\./,"")}catch{}}
+  const ads=a.activeAds===false?"No active UK ads":a.activeAds===true?"Active UK ads":"";
+  const meta=p.kind==="missing"?(a.count||a.mentions||0)+" ads mention the words — not a Page match":[a.category,host,a.handle?"@"+a.handle:"",ads].filter(Boolean).join(" · ");
+  const go=a.activeAds===false?"Open Page":"See their ads →";
+  const body=logoHTML(a.id,a.name,"lg",a.picture,a.logo)+'<span><strong>'+esc(a.name)+'</strong><br><small>'+esc(meta||"Facebook Page")+'</small>'+(p.kind!=="missing"&&a.evidence?'<br><small>'+esc(a.evidence)+'</small>':'')+'</span><span class="go">'+go+'</span>';
+  if(!/^\d{3,30}$/.test(a.id||"")){const href=a.handle?"https://www.facebook.com/"+encodeURIComponent(a.handle):(a.website||"");return href?'<a class="bcard" style="--i:'+i+'" href="'+esc(href)+'" target="_blank" rel="noopener noreferrer">'+body+'</a>':"";}
+  return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(a.id)+'" data-name="'+esc(a.name)+'">'+body+'</button>';
  }).join("");
  return '<div class="start pick"><h3>'+esc(head)+'</h3><p class="pick-sub">'+esc(sub)+'</p>'+(cards?'<div class="start-grid">'+cards+'</div>':'')+'</div>';
 }
@@ -218,7 +240,7 @@ function renderViewTabs(){
  const n=compareBrands().length;
  el.innerHTML=(has?tab("discover","Ads &amp; insights",(distinct||state.rows.length)+" ads")+tab("insights","Messaging",themes?themes+" themes":""):"")+tab("compare","Compare",n?n+" brands":"");
 }
-function empty(title,detail){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p></div>'}
+function empty(title,detail,html){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p>'+(html||"")+'</div>'}
 function card(a){
  const d=daysRunning(a),stage=lifeStage(d),gm=state.groupMeta?.get(a.id);
  const grp=gm&&gm.n>1?(gm.head?'<button class="groupbadge'+(gm.open?' on':'')+'" data-action="group" data-id="'+esc(a.id)+'" title="The brand is running this same copy and headline as '+gm.n+' separate ads, usually for different audiences or budgets">'+(gm.open?'Hide '+(gm.n-1)+' similar':'Running as '+gm.n+' ads')+'</button>':'<span class="groupbadge sub">'+gm.pos+' of '+gm.n+' · same copy</span>'):'';
@@ -236,7 +258,8 @@ function renderCards(){
  const all=state.view==="insights"?[]:shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
  if(state.view==="insights"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();renderPinbar();return}
  if(state.view==="compare"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
- $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():empty(state.view==="saved"?"No saved ads yet.":"No ads to display.",state.view==="saved"?"Save a creative from an advertiser search to find it here.":state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin."));
+ const blank=state.view==="saved"?empty("No saved ads yet.","Save a creative from an advertiser search to find it here."):state.adsFailed&&state.page?empty("Meta lookup failed","The Page was identified, but its ads could not be loaded. Try again in a moment.",identityLinks()):state.page&&/^\d{1,30}$/.test(state.page)?empty("Page found, no active UK ads","Meta has no active ads for this Page in the selected countries. It can still be the right advertiser.",identityLinks()):empty("No ads to display.",state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
+ $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():blank);
  renderPinbar();
  $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
  renderInsights();
@@ -363,11 +386,13 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
   state.variations=variationCounts(state.rows);state.expanded=new Set();
   state.changes=after||appendAds?state.changes:compareWithLastVisit();
   if(state.page&&state.brand&&state.rows.length){rememberAdvertiser(state.page,state.brand,state.rows.length);rememberPageId(state.brand,state.page)}
-  feedback(state.rows.length?"":page?"Meta returned no active ads for this advertiser in the selected countries.":"No matching advertiser pages returned. Try another search.");
+  state.adsFailed=false;
+  feedback(state.rows.length?"":page?"Page found, no active UK ads in the selected countries.":"No matching advertiser pages returned. Try another search.");
   busy(false);
   renderCards();
  }catch(err){
   if(controller.signal.aborted)return;
+  state.adsFailed=!!page;
   const code=err.code||"";
   const guidance=["META_EXPIRED","NOT_CONFIGURED","META_RECONNECT"].includes(code)?" The account owner may need to reconnect Meta on the original website.":code==="RATE_LIMITED"?" Try again in a minute.":"";
   error(String(err.message||"Search failed.")+guidance);
@@ -1129,7 +1154,7 @@ $("sort").addEventListener("change",e=>{state.sort=e.target.value;state.limit=25
 document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest(".viewtab");if(!t||!["ArrowLeft","ArrowRight"].includes(e.key))return;const tabs=[...document.querySelectorAll(".viewtab")];const next=tabs[(tabs.indexOf(t)+(e.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];if(next){e.preventDefault();setView(next.dataset.view);requestAnimationFrame(()=>document.querySelector('.viewtab[aria-selected="true"]')?.focus())}});
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
- b=e.target.closest("[data-page]");if(b){if(state.view==="compare"){state.view="discover";if(b.dataset.page===state.page&&state.rows.length){renderCards();return}}if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){state.choices.clear();for(const it of state.pick.items)state.choices.set(it.id,{id:it.id,name:it.name,count:it.mentions||0})}state.brand=b.dataset.name;state.page=b.dataset.page;runSearch(state.query||state.brand,state.page);}return}
+ b=e.target.closest("[data-page]");if(b){if(state.view==="compare"){state.view="discover";if(b.dataset.page===state.page&&state.rows.length){renderCards();return}}if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){const chosen=state.pick.items.find(x=>x.id===b.dataset.page);if(chosen)state.identity=chosen;state.choices.clear();for(const it of state.pick.items)if(it.id)state.choices.set(it.id,{id:it.id,name:it.name,count:it.adCount||it.mentions||it.count||0})}state.brand=b.dataset.name;state.page=b.dataset.page;state.adsFailed=false;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
  b=e.target.closest("[data-theme]");if(b){const id=b.dataset.theme;state.theme=id;state.msgFilter=messageRules.find(r=>r.id===id)?.category==="actions"?"actions":"messages";state.msgAllExamples="";renderCards();const nb=document.querySelector('.mx-item[data-theme="'+id+'"]');nb?.focus({preventScroll:true});if(nb&&matchMedia("(max-width:820px)").matches){const navh=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--navh"))||64,tabs=$("viewtabs")?.offsetHeight||0;scrollTo({top:nb.getBoundingClientRect().top+scrollY-navh-tabs-16,behavior:"smooth"})}return}
  b=e.target.closest("[data-msgfilter]");if(b){state.msgFilter=b.dataset.msgfilter;state.theme="";renderCards();document.querySelector('[data-msgfilter="'+b.dataset.msgfilter+'"]')?.focus();return}
