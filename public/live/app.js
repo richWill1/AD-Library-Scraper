@@ -1134,6 +1134,11 @@ document.addEventListener("keydown",e=>{if(e.key!=="Enter"&&e.key!==" ")return;c
 $("compareOpen").onclick=compareView;
 $("compareClear").onclick=()=>{state.compare.clear();renderCards()};
 renderCards();health();
+// Deep links from other pages: /?page=PAGE_ID&name=Brand or /?q=brand
+{const p=new URLSearchParams(location.search),pg=p.get("page")||"",nm=(p.get("name")||"").slice(0,120),q=(p.get("q")||"").slice(0,120);
+ if(/^\d{1,30}$/.test(pg)){state.brand=nm;state.page=pg;state.query=nm||pg;state.choices.set(pg,{id:pg,name:nm||"Advertiser",count:0});if(nm)rememberPageId(nm,pg);void runSearch(nm||pg,pg);setTimeout(()=>$("cards")?.scrollIntoView({behavior:"smooth"}),300)}
+ else if(q){const i=$("searchInput");if(i)i.value=q;searchClient(q)}
+ if(pg||q)history.replaceState(null,"",location.pathname);}
 })();
 // ---- Page polish: glass header, tile glow, hover-to-play video ----
 (function(){

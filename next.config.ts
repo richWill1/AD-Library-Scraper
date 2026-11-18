@@ -6,7 +6,12 @@ const backend = "https://ad-library-scraper-94t0.onrender.com";
 const nextConfig: NextConfig = {
   async rewrites() {
     // The AdSnoop research app is the homepage.
-    const home = [{ source: "/", destination: "/live/index.html" }];
+    const home = [
+      { source: "/", destination: "/live/index.html" },
+      { source: "/christmas-ads", destination: "/live/christmas.html" },
+      { source: "/black-friday-ads", destination: "/live/black-friday.html" },
+      { source: "/meta-updates", destination: "/live/meta-updates.html" },
+    ];
     // A service with its own Meta token uses its own API routes; a preview
     // without one forwards public research requests to the main service.
     if (process.env.META_ACCESS_TOKEN?.trim()) return { beforeFiles: home, afterFiles: [], fallback: [] };
