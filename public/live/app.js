@@ -839,15 +839,16 @@ function launchTimeline(t,ads){
  const WINDOW=120,ids=new Set(t.ads.map(a=>a.id));
  const pts=ads.map(a=>({a,d:daysRunning(a),on:ids.has(a.id)})).filter(p=>p.d!=null);
  if(pts.length<2)return "";
- const W=640,H=118,L=112,R=12,rowY={on:42,off:84};
+ const W=640,H=124,L=112,R=16,rowY={on:44,off:88};
  const x=d=>L+(1-Math.min(d,WINDOW)/WINDOW)*(W-L-R);
- const jit=id=>{let h=0;for(const c of id)h=(h*31+c.charCodeAt(0))|0;return ((h>>>0)%13)-6};
  let svg='<svg class="tl-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Launch dates of ads using '+esc(t.label)+' compared with the advertiser’s other loaded ads, last '+WINDOW+' days">';
  svg+='<rect x="'+x(RECENT_DAYS)+'" y="18" width="'+(x(0)-x(RECENT_DAYS))+'" height="'+(H-36)+'" class="tl-band"/><text x="'+((x(RECENT_DAYS)+x(0))/2)+'" y="13" class="tl-bandlab" text-anchor="middle">Last '+RECENT_DAYS+' days</text>';
  for(const d of [0,30,60,90,120]){svg+='<line x1="'+x(d)+'" x2="'+x(d)+'" y1="20" y2="'+(H-20)+'" class="tl-grid"/><text x="'+x(d)+'" y="'+(H-4)+'" class="tl-tick" text-anchor="middle">'+(d===0?'Today':d===120?'120d+':d+'d ago')+'</text>'}
  const onN=pts.filter(p=>p.on).length,offN=pts.length-onN;
  svg+='<text x="0" y="'+(rowY.on+4)+'" class="tl-row">This theme ('+onN+')</text><text x="0" y="'+(rowY.off+4)+'" class="tl-row muted">Other ads ('+offN+')</text>';
- for(const p of pts)svg+='<circle cx="'+x(p.d).toFixed(1)+'" cy="'+((p.on?rowY.on:rowY.off)+jit(p.a.id))+'" r="'+(p.on?4.2:3.4)+'" class="'+(p.on?'tl-on':'tl-off')+'" style="'+(p.on?'fill:'+catColor[t.category]:'')+'"><title>'+esc(formatDate(p.a.start))+(p.on?' · uses this theme':'')+'</title></circle>';
+ // One dot per launch day and row, sized by how many ads launched that day.
+ const days=new Map();for(const p of pts){const k=(p.on?"on":"off")+"|"+Math.min(p.d,WINDOW);const g=days.get(k)||{on:p.on,d:Math.min(p.d,WINDOW),n:0,date:p.a.start};g.n++;days.set(k,g)}
+ for(const g of [...days.values()].sort((a,b)=>b.n-a.n))svg+='<circle cx="'+x(g.d).toFixed(1)+'" cy="'+(g.on?rowY.on:rowY.off)+'" r="'+Math.min(13,3+Math.sqrt(g.n)*1.7).toFixed(1)+'" class="'+(g.on?'tl-on':'tl-off')+'" style="'+(g.on?'fill:'+catColor[t.category]:'')+'"><title>'+esc(g.d>=WINDOW?WINDOW+'+ days ago':formatDate(g.date))+': '+g.n+' ad'+(g.n===1?'':'s')+(g.on?' using this theme':'')+'</title></circle>';
  return svg+'</svg>';
 }
 function messagingView(){
