@@ -38,7 +38,7 @@ async function read(source: typeof SOURCES[number]) {
   return blocks.slice(0, 40).map(b => {
     const title = decode(field(b, ['title'])), url = linkOf(b);
     const date = Date.parse(decode(field(b, ['pubDate', 'published', 'updated', 'dc:date'])));
-    const summary = clip(decode(field(b, ['description', 'summary', 'content:encoded', 'content'])), 220);
+    const summary = clip(decode(field(b, ['description', 'summary', 'content:encoded', 'content'])).replace(/\s*The post .*$/s, '').replace(/\s*(Continue reading|Read more).*$/is, ''), 220);
     const text = `${title} ${summary}`;
     const tags = TAGS.filter(t => t.re.test(text)).map(t => t.tag);
     return {title: clip(title, 160), url, date: Number.isFinite(date) ? new Date(date).toISOString() : null, summary, tags, source: source.name, official: source.official, text};
