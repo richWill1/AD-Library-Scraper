@@ -124,9 +124,9 @@ function groupRows(rows){
 function logoHTML(id,name,cls,picture,fallback){
  const ini=String(name||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
  const graph=id&&/^\d{1,30}$/.test(id)?"https://graph.facebook.com/"+encodeURIComponent(id)+"/picture?type=square&width=128&height=128":"";
- const src=picture||graph;
- const fb=fallback&&/^https:/.test(fallback)&&fallback!==src?fallback:"";
- const img=src?'<img alt="" loading="lazy" referrerpolicy="no-referrer" src="'+esc(src)+'"'+(fb?' data-fallback="'+esc(fb)+'" onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;delete this.dataset.fallback}else this.remove()"':' onerror="this.remove()"')+'>':"";
+ const chain=[picture,graph,fallback].filter((u,i,a)=>typeof u==="string"&&/^https:/.test(u)&&a.indexOf(u)===i);
+ const src=chain[0]||"",fb=chain[1]||"";
+ const img=src?'<img alt="" loading="eager" referrerpolicy="no-referrer" src="'+esc(src)+'"'+(fb?' data-fallback="'+esc(fb)+'" onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;delete this.dataset.fallback}else this.remove()"':' onerror="this.remove()"')+'>':"";
  return '<span class="brandlogo '+(cls||"")+'" aria-hidden="true"><b>'+esc(ini)+'</b>'+img+'</span>';
 }
 function identityLinks(){
