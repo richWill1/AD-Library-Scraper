@@ -1023,7 +1023,7 @@ function createCreativeMix(){
  card.className="intel-card creative-mix";
  card.setAttribute("aria-labelledby","creative-mix-title");
  card.innerHTML='<header class="mix-heading"><h4 id="creative-mix-title">Creative Mix</h4><button type="button" class="mix-clear" data-mix-clear data-filter="all" hidden>Clear filter</button></header>'+
- '<div class="mix-layout"><div class="mix-figure"><svg viewBox="0 0 160 160" aria-hidden="true"><circle class="mix-track" cx="80" cy="80" r="64"/>'+
+ '<div class="mix-layout"><div class="mix-figure"><svg viewBox="0 0 160 160" aria-hidden="true"><defs>'+[["video","#9b7bff","#6a3fd6"],["static","#4aa3ff","#1f62d1"],["carousel","#ffa14a","#c2541a"],["catalogue","#2fd3a4","#0f7a62"]].map(([k,a,b])=>'<linearGradient id="mixg-'+k+'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient>').join("")+'</defs><circle class="mix-track" cx="80" cy="80" r="64"/>'+
  mixKeys.map(key=>'<circle class="mix-arc mix-tone-'+key+'" cx="80" cy="80" r="64" pathLength="100" transform="rotate(-90 80 80)" data-mix-key="'+key+'" data-filter="'+key+'" data-empty="true"/>').join("")+
  '</svg><div class="mix-centre" aria-hidden="true"><strong></strong><span></span><small hidden></small></div></div>'+
  '<div class="mix-legend" role="group" aria-label="Filter ads by creative format" aria-describedby="creative-mix-basis">'+mixKeys.map(key=>'<button type="button" class="mix-row mix-tone-'+key+'" data-mix-key="'+key+'" data-filter="'+key+'" aria-controls="cards" disabled><i aria-hidden="true"></i><span>'+mixFormats[key]+'</span><b></b><small></small></button>').join("")+'</div></div>'+
@@ -1069,6 +1069,7 @@ function updateCreativeMix(card,rows){
   arc.classList.toggle("mix-selected",key===active);
   offset+=share;
   const percent=!classified?"—":share>0&&share<.1?"<0.1%":share>99.9&&share<100?">99.9%":mixPercent.format(share/100);
+  row.style.setProperty("--share",share.toFixed(1)+"%");
   row.disabled=!count;
   row.setAttribute("aria-pressed",String(key===active));
   row.querySelector("b").textContent=mixNumber.format(count);
@@ -1117,7 +1118,7 @@ function renderIntel(){
  // How long their live ads have been running.
  const stageDefs=[["new","New (≤7d)",stages.new,"st-new"],["testing","8–29 days",stages.testing,"st-testing"],["proven","30–89 days",stages.proven,"st-proven"],["long","90+ days",stages.long,"st-long"]];
  const stageTotal=Math.max(1,stageDefs.reduce((n,s)=>n+s[2],0));
- const age='<section class="intel-card age"><p class="intel-k">How long their ads have run</p><div class="age-bar" role="group" aria-label="Filter ads by age">'+stageDefs.filter(s=>s[2]).map(s=>'<button type="button" class="age-seg '+s[3]+(state.filter===s[0]?' on':'')+'" data-filter="'+s[0]+'" style="flex:'+s[2]+'" title="'+esc(s[1])+': '+s[2]+' ads">'+(s[2]/stageTotal>.08?Math.round(s[2]/stageTotal*100)+'%':'')+'</button>').join("")+'</div><ul class="age-legend">'+stageDefs.map(s=>'<li><button type="button" data-filter="'+s[0]+'" class="'+s[3]+(state.filter===s[0]?' on':'')+'"><i></i>'+esc(s[1])+'<b>'+s[2]+'</b></button></li>').join("")+'</ul><p class="intel-sub">Click a segment to filter the ads. Running long shows they keep paying for it, not that it works.</p></section>';
+ const age='<section class="intel-card age"><div class="age-head"><p class="intel-k">How long their ads have run</p>'+(oldest?'<p class="age-oldest">Oldest: <b>'+oldest+' days</b></p>':'')+'</div><div class="age-bar" role="group" aria-label="Ads by age. Click to filter.">'+stageDefs.filter(s=>s[2]).map((s,n)=>'<button type="button" class="age-seg '+s[3]+(state.filter===s[0]?' on':'')+'" data-filter="'+s[0]+'" style="flex:'+s[2]+';--d:'+n*90+'ms" title="'+esc(s[1])+': '+s[2]+' ad'+(s[2]===1?'':'s')+' ('+Math.round(s[2]/stageTotal*100)+'%)"><span>'+(s[2]/stageTotal>=.1?Math.round(s[2]/stageTotal*100)+'%':'')+'</span></button>').join("")+'</div><div class="age-cols">'+stageDefs.map(s=>'<button type="button" class="age-col '+s[3]+(state.filter===s[0]?' on':'')+'" data-filter="'+s[0]+'"'+(s[2]?'':' disabled')+'><b>'+s[2]+'</b><span>'+esc(s[1])+'</span><small>'+Math.round(s[2]/stageTotal*100)+'% of ads</small></button>').join("")+'</div><p class="intel-sub">Click to see those ads. Running long shows they keep paying for an ad, not that it works.</p></section>';
  // Calls to action and landing pages as bars.
  const barList=(items,valueOf,labelOf,max)=>'<ol class="barlist">'+items.map(x=>'<li><span class="bl-label">'+labelOf(x)+'</span><span class="bl-track"><i style="width:'+Math.max(4,Math.round(valueOf(x)/max*100))+'%"></i></span><b>'+valueOf(x)+(x.pct?'%':'')+'</b></li>').join("")+'</ol>';
  const ctaItems=ctas.list.map(c=>({label:c.label,n:Math.round(c.n/ctas.base*100),pct:true}));
