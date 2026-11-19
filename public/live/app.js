@@ -1022,7 +1022,7 @@ function createCreativeMix(){
  const card=document.createElement("section");
  card.className="intel-card creative-mix";
  card.setAttribute("aria-labelledby","creative-mix-title");
- card.innerHTML='<header class="mix-heading"><h4 id="creative-mix-title">Creative Mix</h4><button type="button" class="mix-clear" data-mix-clear data-filter="all" hidden>Clear filter</button></header>'+
+ card.innerHTML='<header class="mix-heading"><h4 id="creative-mix-title">Creative mix</h4><button type="button" class="mix-clear" data-mix-clear data-filter="all" hidden>Clear filter</button></header>'+
  '<div class="mix-layout"><div class="mix-figure"><svg viewBox="0 0 160 160" aria-hidden="true"><defs>'+[["video","#9b7bff","#6a3fd6"],["static","#4aa3ff","#1f62d1"],["carousel","#ffa14a","#c2541a"],["catalogue","#2fd3a4","#0f7a62"]].map(([k,a,b])=>'<linearGradient id="mixg-'+k+'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient>').join("")+'</defs><circle class="mix-track" cx="80" cy="80" r="64"/>'+
  mixKeys.map(key=>'<circle class="mix-arc mix-tone-'+key+'" cx="80" cy="80" r="64" pathLength="100" transform="rotate(-90 80 80)" data-mix-key="'+key+'" data-filter="'+key+'" data-empty="true"/>').join("")+
  '</svg><div class="mix-centre" aria-hidden="true"><strong></strong><span></span><small hidden></small></div></div>'+
