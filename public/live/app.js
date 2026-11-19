@@ -1007,7 +1007,7 @@ function intelligenceOverview(ads){
  const offer=themes.find(t=>t.category==="offers");
  if(offer&&offer!==main)signals.push({tag:"Offer language",title:offer.label,desc:offer.ads.length+" of "+total+" loaded ads match this offer-related text theme.",example:offer.ads[0]});
  const exampleLink=a=>a&&/^\d{1,30}$/.test(String(a.id||""))?'<a class="io-evidence" href="'+esc(metaUrl(a.id))+'" target="_blank" rel="noopener noreferrer">Supporting ad ↗</a>':"";
- const tiles=signals.map(v=>'<article class="io-card"><p class="io-tag">'+esc(v.tag)+'</p><h4>'+esc(v.title)+'</h4><p>'+esc(v.desc)+'</p><div class="io-actions">'+exampleLink(v.example)+(v.filter?'<button type="button" class="io-evidence" data-filter="'+esc(v.filter)+'">Filter recent ads →</button>':"")+'</div></article>').join("");
+ const tiles=signals.map(v=>'<article class="io-card'+(v.example?' has-th':'')+'">'+(v.example?'<button type="button" class="io-thbtn" data-action="detail" data-id="'+esc(v.example.id)+'" aria-label="View supporting ad">'+thumbHTML(v.example.id,"io-th",true)+'</button>':'')+'<div class="io-body"><p class="io-tag">'+esc(v.tag)+'</p><h4>'+esc(v.title)+'</h4><p>'+esc(v.desc)+'</p><div class="io-actions">'+exampleLink(v.example)+(v.filter?'<button type="button" class="io-evidence" data-filter="'+esc(v.filter)+'">Filter recent ads →</button>':"")+'</div></div></article>').join("");
  const partial=!!(state.cursor||state.needsPageStart);
  const checked=state.lastSearchAt?new Date(state.lastSearchAt).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"this session";
  const idea=main?main.test:"Explore recently launched ads and test one new message against your current creative.";
@@ -1095,14 +1095,37 @@ function renderIntel(){
  if(!changes||changes.first)changeHTML='<p class="intel-big">First look</p><p class="intel-sub">We’ll show new and stopped ads when you return.</p>';
  else{const add=changes.added.length,rem=changes.removed;changeHTML='<p class="intel-big"><span class="up">+'+add+'</span>'+(rem?' <span class="down">−'+rem.length+'</span>':'')+'</p><p class="intel-sub">'+(add?add+' new':'No new ads')+(rem?' · '+rem.length+' no longer running':'')+' since '+esc(new Date(changes.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))+'</p>'+(add?'<button class="linkbutton" data-filter="added">Show new ads</button>':'');}
  const chip=(key,label,n,cls)=>'<button class="stagechip '+cls+(state.filter===key?' on':'')+'" data-filter="'+key+'"><b>'+n+'</b>'+esc(label)+'</button>';
+ // Headline numbers.
+ const distinct=new Set(rows.map(groupKey)).size,topReach=Math.max(0,...rows.map(a=>a.reach||0));
+ const add=changes&&!changes.first?changes.added.length:null,rem=changes&&!changes.first?changes.removed.length:0;
+ const sinceTxt=add==null?"First look: changes appear on your next visit":(add?'+'+add+' new':'No new ads')+(rem?' · −'+rem+' stopped':'')+' since '+new Date(changes.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+ const kpi=(label,value,sub,extra)=>'<div class="kpi"><p class="kpi-l">'+label+'</p><p class="kpi-v">'+value+'</p><p class="kpi-s">'+sub+'</p>'+(extra||'')+'</div>';
+ const kpis='<section class="intel-card intel-full kpis" aria-label="Headline numbers">'+
+  kpi("Live ads",'<span class="countup" data-to="'+distinct+'">'+distinct+'</span>',total+" including size variants")+
+  kpi("New this week",'<span class="countup" data-to="'+stages.new+'">'+stages.new+'</span>',esc(sinceTxt),add?'<button class="linkbutton" data-filter="added">Show new ads →</button>':'')+
+  kpi("Biggest UK reach",topReach?compactNumber(topReach):'—',topReach?'Meta’s estimate for their most-seen ad':'Not reported for these ads')+
+  kpi("Oldest live ad",oldest+'<small> days</small>',oldest>=90?'Long-runners are worth studying':'No ad has run 90+ days')+
+ '</section>';
+ // Their most-seen creatives, one per message.
+ const seenKeys=new Set(),topAds=[];
+ for(const a of [...rows].sort((x,y)=>(y.reach||0)-(x.reach||0)||(daysRunning(y)||0)-(daysRunning(x)||0))){const k=groupKey(a);if(seenKeys.has(k))continue;seenKeys.add(k);topAds.push(a);if(topAds.length>=8)break}
+ const film='<section class="intel-card intel-full film" aria-label="Most-seen creatives"><div class="film-head"><p class="intel-k">Most-seen creatives</p><button class="linkbutton" data-view="discover">See all ads →</button></div><div class="film-row">'+topAds.map((a,i)=>{const d=daysRunning(a);return '<button type="button" class="film-item" data-action="detail" data-id="'+esc(a.id)+'" aria-label="View ad '+(i+1)+'">'+thumbHTML(a.id,"film-th",i<4)+'<span class="film-meta"><b>'+(a.reach?compactNumber(a.reach)+' reach':'#'+(i+1))+'</b><small>'+(d!=null?(d<=1?'New':d+' days live'):'')+'</small></span><span class="film-copy">'+esc((a.title&&a.title!=="Ad creative"?a.title:a.copy||"").slice(0,70))+'</span></button>'}).join("")+'</div></section>';
+ // Weekly launches with dated ticks.
+ const weekStart=i=>{const dt=new Date();dt.setDate(dt.getDate()-(weeks.length-1-i)*7);return dt.toLocaleDateString("en-GB",{day:"numeric",month:"short"})};
+ const peak=weeks.indexOf(wMax);
+ const timeline='<section class="intel-card intel-wide tl2"><div class="tl2-head"><p class="intel-k">New ads per week</p><p class="tl2-big"><b>'+stages.new+'</b> this week'+(wMax>0&&peak!==weeks.length-1?' · busiest week <b>'+weekStart(peak)+'</b> ('+wMax+')':'')+'</p></div><div class="tl2-bars" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span class="tl2-col'+(i===weeks.length-1?' now':'')+'" style="--h:'+Math.max(3,Math.round(n/wMax*100))+'%;--i:'+i+'" title="Week of '+weekStart(i)+': '+n+' new ad'+(n===1?'':'s')+'"><i></i>'+(n?'<em>'+n+'</em>':'')+'</span>').join("")+'</div><div class="tl2-axis">'+weeks.map((n,i)=>'<span>'+(i%3===0||i===weeks.length-1?(i===weeks.length-1?'This week':weekStart(i)):'')+'</span>').join("")+'</div><p class="intel-sub">Based on '+(state.cursor?'the newest '+total:'all '+total)+' live ads.</p></section>';
+ // How long their live ads have been running.
+ const stageDefs=[["new","New (≤7d)",stages.new,"st-new"],["testing","8–29 days",stages.testing,"st-testing"],["proven","30–89 days",stages.proven,"st-proven"],["long","90+ days",stages.long,"st-long"]];
+ const stageTotal=Math.max(1,stageDefs.reduce((n,s)=>n+s[2],0));
+ const age='<section class="intel-card age"><p class="intel-k">How long their ads have run</p><div class="age-bar" role="group" aria-label="Filter ads by age">'+stageDefs.filter(s=>s[2]).map(s=>'<button type="button" class="age-seg '+s[3]+(state.filter===s[0]?' on':'')+'" data-filter="'+s[0]+'" style="flex:'+s[2]+'" title="'+esc(s[1])+': '+s[2]+' ads">'+(s[2]/stageTotal>.08?Math.round(s[2]/stageTotal*100)+'%':'')+'</button>').join("")+'</div><ul class="age-legend">'+stageDefs.map(s=>'<li><button type="button" data-filter="'+s[0]+'" class="'+s[3]+(state.filter===s[0]?' on':'')+'"><i></i>'+esc(s[1])+'<b>'+s[2]+'</b></button></li>').join("")+'</ul><p class="intel-sub">Click a segment to filter the ads. Running long shows they keep paying for it, not that it works.</p></section>';
+ // Calls to action and landing pages as bars.
+ const barList=(items,valueOf,labelOf,max)=>'<ol class="barlist">'+items.map(x=>'<li><span class="bl-label">'+labelOf(x)+'</span><span class="bl-track"><i style="width:'+Math.max(4,Math.round(valueOf(x)/max*100))+'%"></i></span><b>'+valueOf(x)+(x.pct?'%':'')+'</b></li>').join("")+'</ol>';
+ const ctaItems=ctas.list.map(c=>({label:c.label,n:Math.round(c.n/ctas.base*100),pct:true}));
+ const ctaCard='<section class="intel-card"><p class="intel-k">'+(ctas.real?'Buttons they use':'Calls to action')+'</p>'+(ctaItems.length?barList(ctaItems,x=>x.n,x=>esc(x.label),100):'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(ctas.real?'From '+ctas.base+' collected ads':'Read from ad text until creatives load')+(scaled.length?' · '+scaled.length+' message'+(scaled.length===1?' runs':'s run')+' as several ads':'')+'</p></section>';
+ const lMax=Math.max(1,...lands.list.map(l=>l.n));
+ const landCard='<section class="intel-card"><p class="intel-k">Where the ads send people</p>'+(lands.list.length?barList(lands.list.map(l=>({...l,pct:false})),x=>x.n,x=>'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer nofollow" title="'+esc(x.url)+'">'+esc(x.path.replace(/^www\./,"").slice(0,46))+'</a>',lMax)+'<p class="intel-sub">From '+lands.base+' collected ads</p>':'<p class="intel-sub">Landing pages appear once creatives have been collected.</p>')+'</section>';
  const template=document.createElement("template");
- template.innerHTML=
- intelligenceOverview(rows)+
- '<div class="intel-card intel-wide mix-timeline"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="--i:'+i+';height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days · based on '+(state.cursor?'the newest '+total:'all '+total)+' live ads</p></div>'+
- '<div data-mix-slot></div>'+
- '<div class="intel-card"><p class="intel-k">Since your last visit</p>'+changeHTML+'</div>'+
- '<div class="intel-card"><p class="intel-k">'+(ctas.real?'Top buttons':'Top calls to action')+'</p>'+(ctas.list.length?'<ol class="ctalist">'+ctas.list.map(c=>'<li><span>'+esc(c.label)+'</span><b>'+Math.round(c.n/ctas.base*100)+'%</b></li>').join("")+'</ol>':'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(ctas.real?'Real buttons from '+ctas.base+' collected ads':'Read from ad text until creatives load')+(scaled.length?' · '+scaled.length+' message'+(scaled.length===1?' runs':'s run')+' as several ads':'')+'</p></div>'+'<div class="intel-card"><p class="intel-k">Top landing pages</p>'+(lands.list.length?'<ol class="ctalist landlist">'+lands.list.map(l=>'<li><a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer nofollow" title="'+esc(l.url)+'">'+esc(l.path.slice(0,40))+'</a><b>'+l.n+'</b></li>').join("")+'</ol><p class="intel-sub">From '+lands.base+' collected ads</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
- '<div class="intel-stages">'+chip("new","New this week",stages.new,"st-new")+chip("testing","Active 8–29d",stages.testing,"st-testing")+chip("proven","Active 30–89d",stages.proven,"st-proven")+chip("long","Long-runners 90d+",stages.long,"st-long")+'</div>';
+ template.innerHTML=kpis+intelligenceOverview(rows)+film+timeline+'<div data-mix-slot></div>'+age+ctaCard+landCard;
  const slot=template.content.querySelector("[data-mix-slot]");
  let mix=box.querySelector(".creative-mix");
  if(!mix){
@@ -1117,6 +1140,7 @@ function renderIntel(){
   mix.after(template.content);
  }
  updateCreativeMix(mix,rows);
+ hydrateThumbs();
 }
 function findAd(id){return state.rows.find(a=>a.id===id)||state.saved.get(id)||state.compare.get(id)}
 function modal(title,content){$("modalTitle").textContent=title;$("modalContent").innerHTML=content;$("modalOverlay").classList.add("open");$("closeModal").focus();}
