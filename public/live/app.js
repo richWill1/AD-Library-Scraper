@@ -616,7 +616,7 @@ function setBar(mode,ready=0,total=0,ids=null){
  const key=state.page+"|"+total;if(barRun.key!==key)barRun={key,start:Date.now(),r0:ready};
  const pct=total?Math.max(6,Math.round(ready/total*100)):0;
  fill.style.width=pct+"%";rider.style.left="calc("+pct+"% - "+(pct>=100?19:0)+"px)";
- // The mini-game only appears when there is a real wait (not for instant loads).
+ // The story animation only appears when there is a real wait (not for instant loads).
  if(game&&game.supported){game.progress(total?ready/total:0);if(mode==="progress"&&!game.running&&!gameTimer)gameTimer=setTimeout(()=>{gameTimer=0;if(!$("loadbar").hidden&&!$("loadbar").classList.contains("complete")){bar.classList.add("game");game.start()}},900)}
  $("loadbarAll").hidden=mode==="done";
  paintStrip(ids);
