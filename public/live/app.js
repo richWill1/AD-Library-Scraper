@@ -990,21 +990,83 @@ function intelligenceOverview(ads){
  const main=themes.find(t=>t.ads.length>=Math.max(2,Math.ceil(total*.1)))||null;
  const fresh=ads.filter(a=>{const d=daysRunning(a);return d!=null&&d<=7});
  const long=ads.filter(a=>{const d=daysRunning(a);return d!=null&&d>=90});
- const known=ads.map(ad=>({ad,format:formatOf(ad.id)})).filter(x=>x.format);
- const ranked=["video","static","carousel","catalogue"].map(f=>({format:f,ads:known.filter(x=>x.format===f)})).sort((a,b)=>b.ads.length-a.ads.length);
- const dominant=ranked[0]&&ranked[0].ads.length?ranked[0]:null;
  const percentage=(n,d)=>d?Math.round(n/d*100):0;
  const signals=[];
  signals.push(main?{tag:"Leading message",title:main.label,desc:main.ads.length+" of "+total+" loaded ads ("+percentage(main.ads.length,total)+"%) match this copy-based theme.",example:main.ads[0]}:{tag:"Messaging",title:"No repeated theme stands out",desc:"Loaded copy has no sufficiently frequent theme yet. Explore individual ads for ideas.",example:null});
  signals.push({tag:"Recent activity",title:fresh.length+" ads launched in 7 days",desc:long.length+" of "+total+" loaded ads have been active for 90+ days. Duration alone does not prove results.",example:fresh[0]||long[0]||null,filter:fresh.length?"new":""});
- if(dominant&&known.length>=3)signals.push({tag:"Creative mix",title:formatLabel[dominant.format]+" appears most often",desc:dominant.ads.length+" of "+known.length+" classified previews ("+percentage(dominant.ads.length,known.length)+"%). Formats fill in as previews load.",example:dominant.ads[0].ad});
- else{const offer=themes.find(t=>t.category==="offers");signals.push(offer?{tag:"Offer language",title:offer.label,desc:offer.ads.length+" of "+total+" loaded ads match this offer-related text theme.",example:offer.ads[0]}:{tag:"Creative mix",title:"Classifying ad previews",desc:known.length+" of "+total+" loaded ads have a recognised format so far.",example:null})}
+ const offer=themes.find(t=>t.category==="offers");
+ if(offer&&offer!==main)signals.push({tag:"Offer language",title:offer.label,desc:offer.ads.length+" of "+total+" loaded ads match this offer-related text theme.",example:offer.ads[0]});
  const exampleLink=a=>a&&/^\d{1,30}$/.test(String(a.id||""))?'<a class="io-evidence" href="'+esc(metaUrl(a.id))+'" target="_blank" rel="noopener noreferrer">Supporting ad ↗</a>':"";
  const tiles=signals.map(v=>'<article class="io-card"><p class="io-tag">'+esc(v.tag)+'</p><h4>'+esc(v.title)+'</h4><p>'+esc(v.desc)+'</p><div class="io-actions">'+exampleLink(v.example)+(v.filter?'<button type="button" class="io-evidence" data-filter="'+esc(v.filter)+'">Filter recent ads →</button>':"")+'</div></article>').join("");
  const partial=!!(state.cursor||state.needsPageStart);
  const checked=state.lastSearchAt?new Date(state.lastSearchAt).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"this session";
  const idea=main?main.test:"Explore recently launched ads and test one new message against your current creative.";
  return '<section class="intel-overview" aria-labelledby="intel-overview-title"><div class="io-heading"><div><p class="io-eyebrow">ADSNOOP INTELLIGENCE</p><h3 id="intel-overview-title">What matters about '+esc(state.brand||"this advertiser")+'</h3><p class="io-intro">The signals worth checking before you scroll through the ads.</p></div><button class="io-button" type="button" data-view="insights">Explore messaging →</button></div><div class="io-grid">'+tiles+'</div><div class="io-direction"><strong>Creative test to consider</strong><p>'+esc(idea)+'</p></div><p class="io-method">'+total+" loaded active ads · "+(state.coverage==="GB"?"UK":"UK + EU")+" coverage · Checked "+esc(checked)+". "+(partial?"Partial sample: more Meta pages may be available. ":"")+"Themes and suggested tests are editorial research signals, not verified ROAS or performance.</p></section>";
+}
+
+const mixFormats={...formatLabel,static:"Static Image"};
+const mixKeys=Object.keys(mixFormats);
+const mixNumber=new Intl.NumberFormat("en-GB");
+const mixPercent=new Intl.NumberFormat("en-GB",{style:"percent",maximumFractionDigits:1});
+function createCreativeMix(){
+ const card=document.createElement("section");
+ card.className="intel-card creative-mix";
+ card.setAttribute("aria-labelledby","creative-mix-title");
+ card.innerHTML='<header class="mix-heading"><h4 id="creative-mix-title">Creative Mix</h4><button type="button" class="mix-clear" data-mix-clear data-filter="all" hidden>Clear filter</button></header>'+
+ '<div class="mix-layout"><div class="mix-figure"><svg viewBox="0 0 160 160" aria-hidden="true"><circle class="mix-track" cx="80" cy="80" r="64"/>'+
+ mixKeys.map(key=>'<circle class="mix-arc mix-tone-'+key+'" cx="80" cy="80" r="64" pathLength="100" transform="rotate(-90 80 80)" data-mix-key="'+key+'" data-filter="'+key+'" data-empty="true"/>').join("")+
+ '</svg><div class="mix-centre" aria-hidden="true"><strong></strong><span></span><small hidden></small></div></div>'+
+ '<div class="mix-legend" role="group" aria-label="Filter ads by creative format" aria-describedby="creative-mix-basis">'+mixKeys.map(key=>'<button type="button" class="mix-row mix-tone-'+key+'" data-mix-key="'+key+'" data-filter="'+key+'" aria-controls="cards" disabled><i aria-hidden="true"></i><span>'+mixFormats[key]+'</span><b></b><small></small></button>').join("")+'</div></div>'+
+ '<footer class="mix-footer"><p id="creative-mix-basis">Share of classified ads</p><p class="mix-coverage"></p></footer>';
+ const highlight=()=>{
+  const hover=card.querySelector("[data-mix-key]:hover:not(:disabled):not([data-empty=true])");
+  const focus=card.querySelector("[data-mix-key]:focus-visible");
+  const key=(hover||focus)?.dataset.mixKey;
+  card.dataset.highlight=key||"";
+  card.querySelectorAll("[data-mix-key]").forEach(el=>el.classList.toggle("mix-highlight",el.dataset.mixKey===key));
+  const row=key&&card.querySelector('.mix-row[data-mix-key="'+key+'"]');
+  card.querySelector(".mix-centre strong").textContent=row?row.querySelector("b").textContent:card.dataset.classified;
+  card.querySelector(".mix-centre span").textContent=row?mixFormats[key]:"Classified creatives";
+  const share=card.querySelector(".mix-centre small");
+  share.hidden=!row;
+  share.textContent=row?row.querySelector("small").textContent:"";
+ };
+ for(const el of card.querySelectorAll("[data-mix-key]")){
+  for(const ev of ["pointerenter","pointerleave","focus","blur"])el.addEventListener(ev,()=>requestAnimationFrame(highlight));
+ }
+ card.updateMixHighlight=highlight;
+ return card;
+}
+function updateCreativeMix(card,rows){
+ const counts={video:0,static:0,carousel:0,catalogue:0};
+ for(const ad of rows){const key=formatOf(ad.id);if(key)counts[key]++}
+ const classified=mixKeys.reduce((sum,key)=>sum+counts[key],0);
+ const active=mixKeys.includes(state.filter)?state.filter:"";
+ const signature=[state.page,rows.length,active,...Object.values(counts)].join("|");
+ if(card.dataset.mixSignature===signature)return;
+ card.dataset.mixSignature=signature;
+ card.dataset.classified=mixNumber.format(classified);
+ card.querySelector(".mix-clear").hidden=!active;
+ let offset=0;
+ for(const key of mixKeys){
+  const count=counts[key],share=classified?count/classified*100:0;
+  const arc=card.querySelector('.mix-arc[data-mix-key="'+key+'"]');
+  const row=card.querySelector('.mix-row[data-mix-key="'+key+'"]');
+  const gap=share===100?0:Math.min(1.4,share*.2);
+  arc.style.setProperty("--mix-dash",share-gap);
+  arc.style.setProperty("--mix-offset",-(offset+gap/2));
+  arc.dataset.empty=String(!count);
+  arc.classList.toggle("mix-selected",key===active);
+  offset+=share;
+  const percent=!classified?"—":share>0&&share<.1?"<0.1%":share>99.9&&share<100?">99.9%":mixPercent.format(share/100);
+  row.disabled=!count;
+  row.setAttribute("aria-pressed",String(key===active));
+  row.querySelector("b").textContent=mixNumber.format(count);
+  row.querySelector("small").textContent=percent;
+  row.setAttribute("aria-label",mixFormats[key]+", "+mixNumber.format(count)+(count===1?" ad":" ads")+(classified?", "+percent+" of classified ads":""));
+ }
+ card.querySelector(".mix-coverage").textContent=mixNumber.format(classified)+" of "+mixNumber.format(rows.length)+" loaded ads classified · "+mixNumber.format(rows.length-classified)+" unclassified";
+ card.updateMixHighlight();
 }
 
 function renderIntel(){
@@ -1015,9 +1077,6 @@ function renderIntel(){
  const rows=state.rows,total=rows.length;
  const stages={new:0,testing:0,proven:0,long:0};let oldest=0;
  for(const a of rows){const d=daysRunning(a),s=lifeStage(d);if(s)stages[s.key]++;if(d>oldest)oldest=d}
- const fmt={video:0,static:0,carousel:0,catalogue:0},collected=rows.filter(a=>mediaCache.has(a.id));
- for(const a of collected){const f=formatOf(a.id);if(f)fmt[f]++}
- const fTotal=Math.max(1,collected.length);
  const weeks=weeklyLaunches(rows),wMax=Math.max(1,...weeks);
  const vc=variationCounts(rows);const scaled=[...vc.values()].filter(n=>n>1);
  const ctas=topCTAs(rows),lands=topLandings(rows);
@@ -1026,13 +1085,28 @@ function renderIntel(){
  if(!changes||changes.first)changeHTML='<p class="intel-big">First look</p><p class="intel-sub">We’ll show new and stopped ads when you return.</p>';
  else{const add=changes.added.length,rem=changes.removed;changeHTML='<p class="intel-big"><span class="up">+'+add+'</span>'+(rem?' <span class="down">−'+rem.length+'</span>':'')+'</p><p class="intel-sub">'+(add?add+' new':'No new ads')+(rem?' · '+rem.length+' no longer running':'')+' since '+esc(new Date(changes.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))+'</p>'+(add?'<button class="linkbutton" data-filter="added">Show new ads</button>':'');}
  const chip=(key,label,n,cls)=>'<button class="stagechip '+cls+(state.filter===key?' on':'')+'" data-filter="'+key+'"><b>'+n+'</b>'+esc(label)+'</button>';
- box.innerHTML=
+ const template=document.createElement("template");
+ template.innerHTML=
  intelligenceOverview(rows)+
- '<div class="intel-card intel-wide"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="--i:'+i+';height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days · based on '+(state.cursor?'the newest '+total:'all '+total)+' live ads</p></div>'+
- '<div class="intel-card"><p class="intel-k">Creative mix</p>'+(collected.length?'<div class="mixbar">'+["video","static","carousel","catalogue"].map(k=>fmt[k]?'<i class="mix-'+k+'" style="width:'+(fmt[k]/fTotal*100)+'%"></i>':'').join("")+'</div><p class="intel-legend">'+["video","static","carousel","catalogue"].map(k=>'<span><i class="dot mix-'+k+'"></i>'+formatLabel[k]+' '+Math.round(fmt[k]/fTotal*100)+'%</span>').join("")+'</p><p class="intel-sub">From '+collected.length+' collected creatives</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
+ '<div class="intel-card intel-wide mix-timeline"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="--i:'+i+';height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days · based on '+(state.cursor?'the newest '+total:'all '+total)+' live ads</p></div>'+
+ '<div data-mix-slot></div>'+
  '<div class="intel-card"><p class="intel-k">Since your last visit</p>'+changeHTML+'</div>'+
  '<div class="intel-card"><p class="intel-k">'+(ctas.real?'Top buttons':'Top calls to action')+'</p>'+(ctas.list.length?'<ol class="ctalist">'+ctas.list.map(c=>'<li><span>'+esc(c.label)+'</span><b>'+Math.round(c.n/ctas.base*100)+'%</b></li>').join("")+'</ol>':'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(ctas.real?'Real buttons from '+ctas.base+' collected ads':'Read from ad text until creatives load')+(scaled.length?' · '+scaled.length+' message'+(scaled.length===1?' runs':'s run')+' as several ads':'')+'</p></div>'+'<div class="intel-card"><p class="intel-k">Top landing pages</p>'+(lands.list.length?'<ol class="ctalist landlist">'+lands.list.map(l=>'<li><a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer nofollow" title="'+esc(l.url)+'">'+esc(l.path.slice(0,40))+'</a><b>'+l.n+'</b></li>').join("")+'</ol><p class="intel-sub">From '+lands.base+' collected ads</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
  '<div class="intel-stages">'+chip("new","New this week",stages.new,"st-new")+chip("testing","Active 8–29d",stages.testing,"st-testing")+chip("proven","Active 30–89d",stages.proven,"st-proven")+chip("long","Long-runners 90d+",stages.long,"st-long")+'</div>';
+ const slot=template.content.querySelector("[data-mix-slot]");
+ let mix=box.querySelector(".creative-mix");
+ if(!mix){
+  slot.replaceWith(createCreativeMix());
+  box.replaceChildren(template.content);
+  mix=box.querySelector(".creative-mix");
+ }else{
+  // Keep the chart mounted across collector updates so arcs and focus stay in place.
+  for(const child of [...box.children])if(child!==mix)child.remove();
+  while(slot.previousSibling)mix.before(template.content.firstChild);
+  slot.remove();
+  mix.after(template.content);
+ }
+ updateCreativeMix(mix,rows);
 }
 function renderInsights(){
  const rows=state.rows,themes=messagingThemes(rows).slice(0,4),total=Math.max(1,rows.length);
@@ -1228,7 +1302,16 @@ document.addEventListener("click",e=>{
  b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
  b=e.target.closest("[data-theme]");if(b){const id=b.dataset.theme;state.theme=id;state.msgFilter=messageRules.find(r=>r.id===id)?.category==="actions"?"actions":"messages";state.msgAllExamples="";renderCards();const nb=document.querySelector('.mx-item[data-theme="'+id+'"]');nb?.focus({preventScroll:true});if(nb&&matchMedia("(max-width:820px)").matches){const navh=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--navh"))||64,tabs=$("viewtabs")?.offsetHeight||0;scrollTo({top:nb.getBoundingClientRect().top+scrollY-navh-tabs-16,behavior:"smooth"})}return}
  b=e.target.closest("[data-msgfilter]");if(b){state.msgFilter=b.dataset.msgfilter;state.theme="";renderCards();document.querySelector('[data-msgfilter="'+b.dataset.msgfilter+'"]')?.focus();return}
- b=e.target.closest("[data-filter]");if(b){state.filter=b.dataset.filter;state.limit=25;renderCards();return}
+ b=e.target.closest("[data-filter]");if(b){
+  const mix=b.closest(".creative-mix"),key=b.dataset.filter;
+  state.filter=mix&&key===state.filter?"all":key;state.limit=25;renderCards();
+  if(mix){
+   if(b.matches("svg *"))mix.querySelector('.mix-row[data-mix-key="'+key+'"]')?.focus({preventScroll:true});
+   if(b.matches("[data-mix-clear]"))mix.querySelector(".mix-row:not(:disabled)")?.focus({preventScroll:true});
+   if(e.detail)$("toolbar").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth",block:"start"});
+  }
+  return;
+ }
  b=e.target.closest("[data-action]");if(!b)return;
  const {action,id}=b.dataset;
  if(action==="detail")adDetails(id);
