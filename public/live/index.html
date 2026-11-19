@@ -602,9 +602,9 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
  .tl2-axis span{font-size:9px}
 }
 /* Creative mix: a donut with depth */
-.creative-mix{background:radial-gradient(120% 90% at 0% 0%,#f6f8ff 0%,#fff 55%)!important}
-.mix-figure{width:min(100%,200px)!important;filter:drop-shadow(0 10px 18px rgba(40,60,140,.12))}
-.mix-figure::before{content:"";position:absolute;inset:23%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#eef2fb);box-shadow:inset 0 2px 6px rgba(255,255,255,.9),0 6px 16px rgba(30,50,120,.12)}
+.creative-mix{background:#fff!important}
+.mix-figure{width:min(100%,180px)!important;filter:drop-shadow(0 6px 12px rgba(40,60,140,.08))}
+.mix-figure::before{content:"";position:absolute;inset:22%;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(20,30,60,.08)}
 .mix-track,.mix-arc{stroke-width:20}
 .mix-track{stroke:#edf0f7}
 .mix-tone-video .mix-arc,.mix-arc.mix-tone-video{stroke:url(#mixg-video)}
@@ -616,14 +616,15 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 .mix-arc.mix-highlight,.mix-arc.mix-selected{stroke-width:27!important;filter:drop-shadow(0 0 6px var(--mix-ink))}
 .creative-mix[data-highlight]:not([data-highlight=""]) .mix-arc:not(.mix-highlight):not([data-empty=true]){opacity:.22!important}
 .mix-centre{z-index:1}
-.mix-centre strong{font-size:clamp(28px,3.4vw,42px)!important;background:linear-gradient(135deg,#182337,#3b4fe0);-webkit-background-clip:text;background-clip:text;color:transparent!important}
+.mix-centre strong{font-size:26px!important;font-weight:650;letter-spacing:-.03em!important;color:#1d1d1f!important;line-height:1.05}
+.mix-centre span,.mix-centre small{font-size:10.5px!important;color:#6e6e73!important;line-height:1.25}
 .mix-row{position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s,background .15s}
 .mix-row::after{content:"";position:absolute;left:26px;right:8px;bottom:3px;height:3px;border-radius:3px;background:#eef1f6;pointer-events:none}
 .mix-row::before{content:"";position:absolute;left:26px;bottom:3px;height:3px;z-index:1;width:calc((100% - 34px) * var(--share-n,0));background:linear-gradient(90deg,var(--mix-ink),color-mix(in srgb,var(--mix-ink) 55%,#fff));border-radius:3px;transform-origin:left;animation:barSlide .9s cubic-bezier(.2,.8,.2,1) both;pointer-events:none}
 .mix-row>*{position:relative}
 .mix-row i{width:10px!important;height:10px!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--mix-ink) 18%,transparent)}
 .mix-row:not(:disabled):hover{transform:translateX(3px)}
-.mix-row b{font-size:14px}
+.mix-row b{font-size:13px}
 /* How long their ads have run */
 .age-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .age-head .intel-k{margin:0}
