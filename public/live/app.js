@@ -158,14 +158,14 @@ function identityLinks(){
  return '<span style="display:block;margin-top:6px;font-size:13px;font-weight:500"><a href="'+esc(pageUrl)+'" target="_blank" rel="noopener noreferrer">Facebook Page</a> · Page ID '+esc(id)+' · <a href="'+esc(lib)+'" target="_blank" rel="noopener noreferrer">Page Ad Library</a>'+site+cat+'</span>';
 }
 function showHeader(){
- {const title=state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="compare"?"You vs your competitors.":(state.brand?(state.rows.length||state.loading?state.brand+" — Active ads":state.brand+" — No active UK ads"):"The creative library.");
+ {const title=state.view==="intel"?state.brand+" — Intelligence":state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="compare"?"You vs your competitors.":(state.brand?(state.rows.length||state.loading?state.brand+" — Active ads":state.brand+" — No active UK ads"):"The creative library.");
  $("heading").innerHTML=(state.view!=="saved"&&state.view!=="compare"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg",state.identity&&state.identity.picture,state.identity&&state.identity.logo):"")+'<span>'+esc(title)+'</span>';}
- {let base=state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.view==="compare"?"Your brand side by side with up to 5 pinned competitors, from their live UK ads.":state.adsFailed&&state.page?"The Page was identified, but Meta’s ad lookup failed. This does not mean there are zero ads.":state.loading&&state.brand?"Loading active UK ads…":state.brand&&state.page&&!state.rows.length?"Page found. Meta returned no active ads for this Page in the selected countries.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
+ {let base=state.view==="intel"?"":state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.view==="compare"?"Your brand side by side with up to 5 pinned competitors, from their live UK ads.":state.adsFailed&&state.page?"The Page was identified, but Meta’s ad lookup failed. This does not mean there are zero ads.":state.loading&&state.brand?"Loading active UK ads…":state.brand&&state.page&&!state.rows.length?"Page found. Meta returned no active ads for this Page in the selected countries.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
   if(state.view==="discover"&&state.identity&&state.identity.evidence&&!state.loading&&!state.adsFailed)base=state.identity.evidence+(state.page&&!state.rows.length?" Page found, no active UK ads.":"");
   const links=state.view==="discover"?identityLinks():"";
   if(links)$("subheading").innerHTML=esc(base)+links;else $("subheading").textContent=base;}
  renderViewTabs();
- {const m=$("metrics"),show=state.view!=="insights"&&state.view!=="compare"&&(state.rows.length>0||state.view==="saved");m.hidden=!show;
+ {const m=$("metrics"),show=(state.view==="discover"&&state.rows.length>0)||state.view==="saved";m.hidden=!show;
  if(show){const shown=shownRows(),live=allRows().length,saved=state.view==="saved";
   const distinct=saved?shown.length:new Set(state.rows.map(groupKey)).size;
   countTo($("metricAds"),distinct);
@@ -178,7 +178,8 @@ function showHeader(){
   const mb=$("mineBtn");if(mb){mb.hidden=saved||!state.page;mb.setAttribute("aria-pressed",String(isMine));mb.querySelector(".bs-label").textContent=isMine?"Your brand ✓":"This is my brand";}
   $("savedBtn").hidden=saved;}
  }
- $("toolbar").style.display=state.rows.length||state.view==="saved"?"flex":"none";
+ $("toolbar").style.display=(state.view==="discover"&&state.rows.length||state.view==="saved")?"flex":"none";
+ $("feature").hidden=state.rows.length>0||state.view!=="discover";
  $("metricSaved").textContent=String(state.saved.size);
  $("savedCount").textContent=state.saved.size?"("+state.saved.size+")":"";
  document.querySelectorAll("[data-view]").forEach(el=>el.classList.toggle("active",el.dataset.view===state.view));
@@ -248,17 +249,22 @@ function startHTML(){
  else html+=POPULAR_FALLBACK.map((n,i)=>'<div class="bcard skel" style="--i:'+i+'"><span class="brandlogo lg" aria-hidden="true"><b>'+esc(n.split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase())+'</b></span><span><strong>'+esc(n)+'</strong><br><small></small></span></div>').join("");
  return html+'</div></div>';
 }
-// One-click switch between the ad grid (with the intelligence panel) and the
-// messaging map for the brand that is loaded.
 function renderViewTabs(){
- const el=$("viewtabs");if(!el)return;
- const has=!!state.brand&&state.rows.length>0,show=state.view==="compare"||(has&&(state.view==="discover"||state.view==="insights"));
- el.hidden=!show;document.body.classList.toggle("has-tabs",show);if(!show){el.innerHTML="";return}
- const distinct=new Set(state.rows.map(groupKey)).size;
- let themes=0;try{themes=messagingThemes(state.rows).length}catch{}
- const tab=(view,label,count)=>'<button class="viewtab" role="tab" data-view="'+view+'" aria-selected="'+(state.view===view)+'" tabindex="'+(state.view===view?0:-1)+'">'+label+(count?'<small>'+count+'</small>':'')+'</button>';
- const n=compareBrands().length;
- el.innerHTML=(has?tab("discover","Ads &amp; insights",(distinct||state.rows.length)+" ads")+tab("insights","Messaging",themes?themes+" themes":""):"")+tab("compare","Compare",n?n+" brands":"");
+ const el=$("viewtabs"),panel=$("research-panel");
+ const has=!!state.brand&&state.rows.length>0;
+ const show=state.view==="compare"||(has&&["discover","intel","insights"].includes(state.view));
+ el.hidden=!show;
+ document.body.classList.toggle("has-tabs",show);
+ if(show){
+  panel.setAttribute("role","tabpanel");
+  panel.setAttribute("aria-labelledby","research-tab-"+state.view);
+ }else{
+  panel.removeAttribute("role");
+  panel.removeAttribute("aria-labelledby");
+ }
+ const tab=(view,label)=>'<button type="button" id="research-tab-'+view+'" class="viewtab" role="tab" aria-controls="research-panel" data-view="'+view+'" aria-selected="'+(state.view===view)+'" tabindex="'+(state.view===view?0:-1)+'">'+label+'</button>';
+ const html=show?(has?tab("discover","Ads")+tab("intel","Intelligence")+tab("insights","Messaging"):"")+tab("compare","Compare"):"";
+ if(el.dataset.markup!==html){el.innerHTML=html;el.dataset.markup=html}
 }
 function empty(title,detail,html){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p>'+(html||"")+'</div>'}
 function card(a){
@@ -275,15 +281,18 @@ function renderCards(){
  if(observer)observer.disconnect();
  showHeader();
  renderBrands();
- const all=state.view==="insights"?[]:shownRows(),rows=all.slice(0,state.limit),hidden=all.length-rows.length;
- if(state.view==="insights"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";renderInsights();renderPinbar();return}
- if(state.view==="compare"){setBar("hide");if($("intel"))$("intel").hidden=true;$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
+ const intel=state.view==="intel";
+ $("cards").hidden=intel;
+ $("pager").hidden=intel;
+ renderIntel();
+ if(intel){setBar("hide");renderPinbar();return}
+ const all=state.view==="discover"||state.view==="saved"?shownRows():[],rows=all.slice(0,state.limit),hidden=all.length-rows.length;
+ if(state.view==="insights"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";renderPinbar();return}
+ if(state.view==="compare"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
  const blank=state.view==="saved"?empty("No saved ads yet.","Save a creative from an advertiser search to find it here."):state.adsFailed&&state.page?empty("Meta lookup failed","The Page was identified, but its ads could not be loaded. Try again in a moment.",identityLinks()):state.page&&/^\d{1,30}$/.test(state.page)?empty("Page found, no active UK ads","Meta has no active ads for this Page in the selected countries. It can still be the right advertiser.",identityLinks()):empty("No ads to display.",state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():blank);
  renderPinbar();
  $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
- renderInsights();
- renderIntel();
  observeMedia();
 }
 function addBrands(rows){
@@ -544,6 +553,7 @@ function tileResolved(id){
 }
 let revealTimer=null;
 function updateReveal(instant=false){
+ if(state.view==="intel"){renderIntel();return}
  const tiles=[...document.querySelectorAll("#cards .adcard")];
  document.querySelectorAll("#cards .tile-skel").forEach(e=>e.remove());
  if(!tiles.length){$("pager").style.display="";if(!state.loading)setBar("hide");return}
@@ -1070,14 +1080,9 @@ function updateCreativeMix(card,rows){
 }
 
 function renderIntel(){
- const panel=$("intel"),box=$("intel-grid");
- if(state.view!=="discover"||!state.rows.length){panel.hidden=true;return}
- if(panel.dataset.page!==state.page){
-  panel.dataset.page=state.page;
-  panel.open=false;
- }
- panel.hidden=false;
- if(!panel.open)return;
+ const box=$("intel");
+ box.hidden=state.view!=="intel"||!state.rows.length;
+ if(box.hidden)return;
  if(box.dataset.k!==state.page){box.dataset.k=state.page;box.classList.add("fresh");clearTimeout(box._t);box._t=setTimeout(()=>box.classList.remove("fresh"),1600)}
  const rows=state.rows,total=rows.length;
  const stages={new:0,testing:0,proven:0,long:0};let oldest=0;
@@ -1113,10 +1118,6 @@ function renderIntel(){
  }
  updateCreativeMix(mix,rows);
 }
-function renderInsights(){
- const rows=state.rows,themes=messagingThemes(rows).slice(0,4),total=Math.max(1,rows.length);
- $("themePanel").innerHTML=rows.length&&themes.length?themes.map(t=>'<div class="themebar"><div class="rowtop"><span>'+esc(t.label)+'</span><span>'+t.ads.length+' / '+rows.length+' ads</span></div><div class="track"><div class="fill" style="width:'+Math.round(t.ads.length/total*100)+'%"></div></div></div>').join("")+'<button class="pill sm" data-view="insights" style="margin-top:22px">Open the messaging map →</button>':'<p>Select an advertiser to see recurring message themes.</p>';
-}
 function findAd(id){return state.rows.find(a=>a.id===id)||state.saved.get(id)||state.compare.get(id)}
 function modal(title,content){$("modalTitle").textContent=title;$("modalContent").innerHTML=content;$("modalOverlay").classList.add("open");$("closeModal").focus();}
 function adDetails(id){
@@ -1131,13 +1132,18 @@ function setView(view){
  state.view=view;
  $("brands").hidden=true;
  if(view==="saved")feedback("Your saved creative records are stored locally in this browser. For an up-to-date ad, open its official Meta link.");
- else if(view==="insights"||view==="compare")feedback("");
+ else if(view==="intel"||view==="insights"||view==="compare")feedback("");
  else feedback(state.brand?"":"Search a brand above to discover active advertisers.");
  renderCards();
  for(const id of ["cards","intel","metrics","toolbar"]){const el=$(id);if(!el)continue;el.classList.remove("viewin");void el.offsetWidth;el.classList.add("viewin")}
  const tabs=$("viewtabs");
- if(tabs&&!tabs.hidden){const prev=tabs.previousElementSibling,r=tabs.getBoundingClientRect();if(r.top<=1&&prev)window.scrollTo({top:Math.max(0,prev.getBoundingClientRect().bottom+scrollY-8),behavior:"smooth"});else if(r.top>innerHeight*.6)tabs.scrollIntoView({behavior:"smooth",block:"start"})}
- else $("research").scrollIntoView({behavior:"smooth"});
+ const behavior=matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth";
+ if(tabs.hidden){$("research").scrollIntoView({behavior});return}
+ const top=parseFloat(getComputedStyle(tabs).top)||0,r=tabs.getBoundingClientRect();
+ if(r.top<=top+1){
+  const panel=$("research-panel").getBoundingClientRect();
+  window.scrollTo({top:Math.max(0,panel.top+scrollY-top-r.height-12),behavior});
+ }else if(r.top>innerHeight*.6)tabs.scrollIntoView({behavior,block:"start"});
 }
 async function health(){
  const status=$("status"),details=$("serviceDetails");
@@ -1304,17 +1310,24 @@ document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.close
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
  b=e.target.closest("[data-page]");if(b){if(state.view==="compare"){state.view="discover";if(b.dataset.page===state.page&&state.rows.length){renderCards();return}}if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){const chosen=state.pick.items.find(x=>x.id===b.dataset.page);if(chosen)state.identity=chosen;state.choices.clear();for(const it of state.pick.items)if(it.id)state.choices.set(it.id,{id:it.id,name:it.name,count:it.adCount||it.mentions||it.count||0})}state.brand=b.dataset.name;state.page=b.dataset.page;state.adsFailed=false;runSearch(state.query||state.brand,state.page);}return}
- b=e.target.closest("[data-view]");if(b){setView(b.dataset.view);return}
+ b=e.target.closest("[data-view]");if(b){
+  const tab=b.matches(".viewtab");
+  setView(b.dataset.view);
+  if(tab)document.querySelector('.viewtab[aria-selected="true"]')?.focus({preventScroll:true});
+  return;
+ }
  b=e.target.closest("[data-theme]");if(b){const id=b.dataset.theme;state.theme=id;state.msgFilter=messageRules.find(r=>r.id===id)?.category==="actions"?"actions":"messages";state.msgAllExamples="";renderCards();const nb=document.querySelector('.mx-item[data-theme="'+id+'"]');nb?.focus({preventScroll:true});if(nb&&matchMedia("(max-width:820px)").matches){const navh=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--navh"))||64,tabs=$("viewtabs")?.offsetHeight||0;scrollTo({top:nb.getBoundingClientRect().top+scrollY-navh-tabs-16,behavior:"smooth"})}return}
  b=e.target.closest("[data-msgfilter]");if(b){state.msgFilter=b.dataset.msgfilter;state.theme="";renderCards();document.querySelector('[data-msgfilter="'+b.dataset.msgfilter+'"]')?.focus();return}
  b=e.target.closest("[data-filter]");if(b){
-  const mix=b.closest(".creative-mix"),key=b.dataset.filter;
-  state.filter=mix&&key===state.filter?"all":key;state.limit=25;renderCards();
-  if(mix){
-   if(b.matches("svg *"))mix.querySelector('.mix-row[data-mix-key="'+key+'"]')?.focus({preventScroll:true});
-   if(b.matches("[data-mix-clear]"))mix.querySelector(".mix-row:not(:disabled)")?.focus({preventScroll:true});
-   if(e.detail)$("toolbar").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth",block:"start"});
-  }
+  const fromIntel=state.view==="intel",key=b.dataset.filter;
+  state.filter=b.closest(".creative-mix")&&key===state.filter?"all":key;
+  state.limit=25;
+  if(fromIntel){
+   setView("discover");
+   const target=$("toolbar").querySelector('.filter[data-filter="'+state.filter+'"]')||$("research-tab-discover");
+   target?.focus({preventScroll:true});
+   $("toolbar").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth",block:"start"});
+  }else renderCards();
   return;
  }
  b=e.target.closest("[data-action]");if(!b)return;
@@ -1343,7 +1356,6 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")$("modalOverlay").cl
 document.addEventListener("keydown",e=>{if(e.key!=="ArrowDown"&&e.key!=="ArrowUp")return;const cur=e.target.closest&&e.target.closest(".mx-item");if(!cur)return;const all=[...document.querySelectorAll(".mx-item")],i=all.indexOf(cur),n=all[i+(e.key==="ArrowDown"?1:-1)];if(n){e.preventDefault();n.focus()}});
 $("compareOpen").onclick=compareView;
 $("compareClear").onclick=()=>{state.compare.clear();renderCards()};
-$("intel").addEventListener("toggle",()=>{if($("intel").open)renderIntel()});
 renderCards();health();
 // Deep links from other pages: /?page=PAGE_ID&name=Brand or /?q=brand
 {const p=new URLSearchParams(location.search),pg=p.get("page")||"",nm=(p.get("name")||"").slice(0,120),q=(p.get("q")||"").slice(0,120);
