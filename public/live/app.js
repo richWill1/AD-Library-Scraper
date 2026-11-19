@@ -1070,9 +1070,14 @@ function updateCreativeMix(card,rows){
 }
 
 function renderIntel(){
- const box=$("intel");if(!box)return;
- if(state.view!=="discover"||!state.rows.length){box.hidden=true;return}
- box.hidden=false;
+ const panel=$("intel"),box=$("intel-grid");
+ if(state.view!=="discover"||!state.rows.length){panel.hidden=true;return}
+ if(panel.dataset.page!==state.page){
+  panel.dataset.page=state.page;
+  panel.open=false;
+ }
+ panel.hidden=false;
+ if(!panel.open)return;
  if(box.dataset.k!==state.page){box.dataset.k=state.page;box.classList.add("fresh");clearTimeout(box._t);box._t=setTimeout(()=>box.classList.remove("fresh"),1600)}
  const rows=state.rows,total=rows.length;
  const stages={new:0,testing:0,proven:0,long:0};let oldest=0;
@@ -1338,6 +1343,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")$("modalOverlay").cl
 document.addEventListener("keydown",e=>{if(e.key!=="ArrowDown"&&e.key!=="ArrowUp")return;const cur=e.target.closest&&e.target.closest(".mx-item");if(!cur)return;const all=[...document.querySelectorAll(".mx-item")],i=all.indexOf(cur),n=all[i+(e.key==="ArrowDown"?1:-1)];if(n){e.preventDefault();n.focus()}});
 $("compareOpen").onclick=compareView;
 $("compareClear").onclick=()=>{state.compare.clear();renderCards()};
+$("intel").addEventListener("toggle",()=>{if($("intel").open)renderIntel()});
 renderCards();health();
 // Deep links from other pages: /?page=PAGE_ID&name=Brand or /?q=brand
 {const p=new URLSearchParams(location.search),pg=p.get("page")||"",nm=(p.get("name")||"").slice(0,120),q=(p.get("q")||"").slice(0,120);
