@@ -636,15 +636,15 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 @keyframes ageGrow{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:1}}
 .st-new{--age:#22c55e;--age2:#15924a}.st-testing{--age:#a3aec2;--age2:#6b7891}.st-proven{--age:#4f8dff;--age2:#2056d9}.st-long{--age:#9d7bff;--age2:#6b3fe0}
 .age-seg{background:linear-gradient(135deg,var(--age),var(--age2))}
-.age-cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:6px}
-.age-col{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:10px 10px 9px;border:1px solid #ececf0;border-top:3px solid var(--age);border-radius:10px;background:#fff;font:inherit;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.age-cols{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.age-col{display:grid;grid-template-columns:auto 1fr;grid-template-areas:'n l' 'n s';align-items:center;column-gap:10px;padding:9px 11px;border:1px solid #ececf0;border-left:4px solid var(--age);border-radius:10px;background:#fff;font:inherit;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s}
 .age-col:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 8px 16px rgba(0,0,0,.07)}
 .age-col:disabled{opacity:.45;cursor:default}
 .age-col.on{background:color-mix(in srgb,var(--age) 10%,#fff)}
-.age-col b{font-size:22px;letter-spacing:-.03em;line-height:1.1;color:#1d1d1f;font-variant-numeric:tabular-nums}
-.age-col span{font-size:12px;font-weight:600;color:#424245}
-.age-col small{font-size:11px;color:#86868b}
-@media(max-width:560px){.age-cols{grid-template-columns:1fr 1fr}}
+.age-col b{grid-area:n;font-size:24px;letter-spacing:-.03em;line-height:1;color:#1d1d1f;font-variant-numeric:tabular-nums;min-width:1.4em}
+.age-col span{grid-area:l;font-size:12px;font-weight:600;color:#424245;white-space:nowrap}
+.age-col small{grid-area:s;font-size:11px;color:#86868b}
+
 @media(prefers-reduced-motion:reduce){.mix-arc,.mix-row::before,.age-seg{animation:none}}
 </style></head>
 <body><a href="#research" class="skip">Skip to research</a>
