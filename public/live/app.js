@@ -402,6 +402,7 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
    else{const full=await collectPageAds(q,page,controller.signal,rows,data.nextCursor||null);if(rid!==requestNumber)return;state.rows=full.rows;state.cursor=full.cursor}
    state.needsPageStart=false;
   }
+  state.lastSearchAt=Date.now();
   state.variations=variationCounts(state.rows);state.expanded=new Set();
   state.changes=after||appendAds?state.changes:compareWithLastVisit();
   if(state.page&&state.brand&&state.rows.length){rememberAdvertiser(state.page,state.brand,state.rows.length);rememberPageId(state.brand,state.page)}
@@ -689,9 +690,9 @@ function compareInsights(cols){
  }
  const full=cols.filter(c=>!c.stats.partial);
  const fresh=[...full].sort((a,b)=>b.stats.new30-a.stats.new30)[0];
- if(fresh&&fresh.stats.new30>=20)out.push({kind:"note",title:name(fresh)+" is testing hardest",text:fresh.stats.new30+"% of their live ads launched in the last 30 days."});
+ if(fresh&&fresh.stats.new30>=20)out.push({kind:"note",title:name(fresh)+" has the highest share of recent ads",text:fresh.stats.new30+"% of their live ads launched in the last 30 days."});
  const durable=[...full].sort((a,b)=>b.stats.long-a.stats.long)[0];
- if(durable&&durable.stats.long>=20)out.push({kind:"note",title:name(durable)+" has the most long-runners",text:durable.stats.long+"% of their ads have run 90+ days. Study these: brands keep paying for what works."});
+ if(durable&&durable.stats.long>=20)out.push({kind:"note",title:name(durable)+" has the most long-runners",text:durable.stats.long+"% of their ads have run 90+ days. Ad longevity alone does not prove results."});
  return out.slice(0,6);
 }
 function compareHTML(){
@@ -706,8 +707,8 @@ function compareHTML(){
  const row=(label,f,hint)=>'<tr><th scope="row">'+esc(label)+(hint?'<small>'+esc(hint)+'</small>':'')+'</th>'+cols.map(c=>'<td class="'+(c.mine?'me':'')+'">'+cell(c,f)+'</td>').join("")+'</tr>';
  const stats='<table class="cmp-table"><thead>'+head+'</thead><tbody>'+
   row("Live ads",s=>'<b>'+s.distinct+'</b>'+(s.distinct<s.total?' <small>('+s.total+' incl. variants)</small>':''),"Newest 100 per brand are analysed")+
-  row("Launched in 30 days",s=>'<b>'+s.new30+'%</b>'+(s.partial?' <small>of newest 100</small>':''),"How hard they’re testing")+
-  row("Long-runners 90d+",s=>'<b>'+s.long+'%</b>'+(s.partial?' <small>of newest 100</small>':''),"Ads they keep paying for")+
+  row("Launched in 30 days",s=>'<b>'+s.new30+'%</b>'+(s.partial?' <small>of newest 100</small>':''),"Share started in the last 30 days")+
+  row("Long-runners 90d+",s=>'<b>'+s.long+'%</b>'+(s.partial?' <small>of newest 100</small>':''),"Share active for 90+ days")+
   row("Median days live",s=>'<b>'+(s.median??"—")+'</b>')+
   row("Ads with an offer",s=>'<b>'+s.offers+'%</b>')+
   row("Lead hook",s=>esc(s.hook))+row("Lead benefit",s=>esc(s.benefit))+row("Lead proof",s=>esc(s.proof))+row("Top call to action",s=>esc(s.cta))+
@@ -918,7 +919,7 @@ function exportMessaging(){
 // paying for ads that work. It is a clue, not proof of performance.
 const DAY=86400000;
 function daysRunning(a){if(!a.start)return null;const t=Date.parse(a.start+"T00:00:00Z");return Number.isFinite(t)?Math.max(0,Math.floor((Date.now()-t)/DAY)):null}
-function lifeStage(d){if(d==null)return null;if(d<=7)return {key:"new",label:"New",hint:"Launched in the last 7 days"};if(d<30)return {key:"testing",label:"Testing",hint:"Live under 30 days"};if(d<90)return {key:"proven",label:"Proven",hint:"Live 30–89 days"};return {key:"long",label:"Long-runner",hint:"Live 90+ days, likely a winner"}}
+function lifeStage(d){if(d==null)return null;if(d<=7)return {key:"new",label:"New",hint:"Launched in the last 7 days"};if(d<30)return {key:"testing",label:"Active 8–29d",hint:"Started 8–29 days ago"};if(d<90)return {key:"proven",label:"Active 30–89d",hint:"Active 30–89 days; outcomes unknown"};return {key:"long",label:"Long-runner",hint:"Active 90+ days; outcomes unknown"}}
 // Meta's display_format is the source of truth. Several images on their own
 // usually mean one creative supplied in feed, story and square sizes, not a carousel.
 function formatOf(id){
@@ -982,6 +983,29 @@ function topLandings(rows){
  for(const a of rows){const c=mediaCache.get(a.id)?.cta;if(!c||!c.url)continue;base++;const k=ctaPath(c.url);const e=m.get(k)||{path:k,url:c.url,n:0};e.n++;m.set(k,e)}
  return {base,list:[...m.values()].sort((a,b)=>b.n-a.n).slice(0,4)};
 }
+// Evidence-first overview drawn from existing ad records and deterministic classifiers.
+function intelligenceOverview(ads){
+ const total=ads.length, themes=messagingThemes(ads).filter(t=>t.category!=="actions");
+ const main=themes.find(t=>t.ads.length>=Math.max(2,Math.ceil(total*.1)))||null;
+ const fresh=ads.filter(a=>{const d=daysRunning(a);return d!=null&&d<=7});
+ const long=ads.filter(a=>{const d=daysRunning(a);return d!=null&&d>=90});
+ const known=ads.map(ad=>({ad,format:formatOf(ad.id)})).filter(x=>x.format);
+ const ranked=["video","static","carousel","catalogue"].map(f=>({format:f,ads:known.filter(x=>x.format===f)})).sort((a,b)=>b.ads.length-a.ads.length);
+ const dominant=ranked[0]&&ranked[0].ads.length?ranked[0]:null;
+ const percentage=(n,d)=>d?Math.round(n/d*100):0;
+ const signals=[];
+ signals.push(main?{tag:"Leading message",title:main.label,desc:main.ads.length+" of "+total+" loaded ads ("+percentage(main.ads.length,total)+"%) match this copy-based theme.",example:main.ads[0]}:{tag:"Messaging",title:"No repeated theme stands out",desc:"Loaded copy has no sufficiently frequent theme yet. Explore individual ads for ideas.",example:null});
+ signals.push({tag:"Recent activity",title:fresh.length+" ads launched in 7 days",desc:long.length+" of "+total+" loaded ads have been active for 90+ days. Duration alone does not prove results.",example:fresh[0]||long[0]||null,filter:fresh.length?"new":""});
+ if(dominant&&known.length>=3)signals.push({tag:"Creative mix",title:formatLabel[dominant.format]+" appears most often",desc:dominant.ads.length+" of "+known.length+" classified previews ("+percentage(dominant.ads.length,known.length)+"%). Formats fill in as previews load.",example:dominant.ads[0].ad});
+ else{const offer=themes.find(t=>t.category==="offers");signals.push(offer?{tag:"Offer language",title:offer.label,desc:offer.ads.length+" of "+total+" loaded ads match this offer-related text theme.",example:offer.ads[0]}:{tag:"Creative mix",title:"Classifying ad previews",desc:known.length+" of "+total+" loaded ads have a recognised format so far.",example:null})}
+ const exampleLink=a=>a&&/^\d{1,30}$/.test(String(a.id||""))?'<a class="io-evidence" href="'+esc(metaUrl(a.id))+'" target="_blank" rel="noopener noreferrer">Supporting ad ↗</a>':"";
+ const tiles=signals.map(v=>'<article class="io-card"><p class="io-tag">'+esc(v.tag)+'</p><h4>'+esc(v.title)+'</h4><p>'+esc(v.desc)+'</p><div class="io-actions">'+exampleLink(v.example)+(v.filter?'<button type="button" class="io-evidence" data-filter="'+esc(v.filter)+'">Filter recent ads →</button>':"")+'</div></article>').join("");
+ const partial=!!(state.cursor||state.needsPageStart);
+ const checked=state.lastSearchAt?new Date(state.lastSearchAt).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"this session";
+ const idea=main?main.test:"Explore recently launched ads and test one new message against your current creative.";
+ return '<section class="intel-overview" aria-labelledby="intel-overview-title"><div class="io-heading"><div><p class="io-eyebrow">ADSNOOP INTELLIGENCE</p><h3 id="intel-overview-title">What matters about '+esc(state.brand||"this advertiser")+'</h3><p class="io-intro">The signals worth checking before you scroll through the ads.</p></div><button class="io-button" type="button" data-view="insights">Explore messaging →</button></div><div class="io-grid">'+tiles+'</div><div class="io-direction"><strong>Creative test to consider</strong><p>'+esc(idea)+'</p></div><p class="io-method">'+total+" loaded active ads · "+(state.coverage==="GB"?"UK":"UK + EU")+" coverage · Checked "+esc(checked)+". "+(partial?"Partial sample: more Meta pages may be available. ":"")+"Themes and suggested tests are editorial research signals, not verified ROAS or performance.</p></section>";
+}
+
 function renderIntel(){
  const box=$("intel");if(!box)return;
  if(state.view!=="discover"||!state.rows.length){box.hidden=true;return}
@@ -1002,11 +1026,12 @@ function renderIntel(){
  else{const add=changes.added.length,rem=changes.removed;changeHTML='<p class="intel-big"><span class="up">+'+add+'</span>'+(rem?' <span class="down">−'+rem.length+'</span>':'')+'</p><p class="intel-sub">'+(add?add+' new':'No new ads')+(rem?' · '+rem.length+' no longer running':'')+' since '+esc(new Date(changes.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))+'</p>'+(add?'<button class="linkbutton" data-filter="added">Show new ads</button>':'');}
  const chip=(key,label,n,cls)=>'<button class="stagechip '+cls+(state.filter===key?' on':'')+'" data-filter="'+key+'"><b>'+n+'</b>'+esc(label)+'</button>';
  box.innerHTML=
+ intelligenceOverview(rows)+
  '<div class="intel-card intel-wide"><p class="intel-k">Launch timeline · new ads per week</p><div class="spark" role="img" aria-label="New ads launched per week over the last 12 weeks">'+weeks.map((n,i)=>'<span title="'+n+' launched '+(weeks.length-1-i?(weeks.length-1-i)+' weeks ago':'this week')+'" style="--i:'+i+';height:'+Math.max(4,Math.round(n/wMax*100))+'%"'+(i===weeks.length-1?' class="now"':'')+'></span>').join("")+'</div><p class="intel-sub">'+stages.new+' launched in the last 7 days · oldest live ad running '+oldest+' days · based on '+(state.cursor?'the newest '+total:'all '+total)+' live ads</p></div>'+
  '<div class="intel-card"><p class="intel-k">Creative mix</p>'+(collected.length?'<div class="mixbar">'+["video","static","carousel","catalogue"].map(k=>fmt[k]?'<i class="mix-'+k+'" style="width:'+(fmt[k]/fTotal*100)+'%"></i>':'').join("")+'</div><p class="intel-legend">'+["video","static","carousel","catalogue"].map(k=>'<span><i class="dot mix-'+k+'"></i>'+formatLabel[k]+' '+Math.round(fmt[k]/fTotal*100)+'%</span>').join("")+'</p><p class="intel-sub">From '+collected.length+' collected creatives</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
  '<div class="intel-card"><p class="intel-k">Since your last visit</p>'+changeHTML+'</div>'+
  '<div class="intel-card"><p class="intel-k">'+(ctas.real?'Top buttons':'Top calls to action')+'</p>'+(ctas.list.length?'<ol class="ctalist">'+ctas.list.map(c=>'<li><span>'+esc(c.label)+'</span><b>'+Math.round(c.n/ctas.base*100)+'%</b></li>').join("")+'</ol>':'<p class="intel-sub">No clear call to action in the ad text.</p>')+'<p class="intel-sub">'+(ctas.real?'Real buttons from '+ctas.base+' collected ads':'Read from ad text until creatives load')+(scaled.length?' · '+scaled.length+' message'+(scaled.length===1?' runs':'s run')+' as several ads':'')+'</p></div>'+'<div class="intel-card"><p class="intel-k">Top landing pages</p>'+(lands.list.length?'<ol class="ctalist landlist">'+lands.list.map(l=>'<li><a href="'+esc(l.url)+'" target="_blank" rel="noopener noreferrer nofollow" title="'+esc(l.url)+'">'+esc(l.path.slice(0,40))+'</a><b>'+l.n+'</b></li>').join("")+'</ol><p class="intel-sub">From '+lands.base+' collected ads</p>':'<p class="intel-sub">Appears as creatives load.</p>')+'</div>'+
- '<div class="intel-stages">'+chip("new","New this week",stages.new,"st-new")+chip("testing","Testing",stages.testing,"st-testing")+chip("proven","Proven 30d+",stages.proven,"st-proven")+chip("long","Long-runners 90d+",stages.long,"st-long")+'</div>';
+ '<div class="intel-stages">'+chip("new","New this week",stages.new,"st-new")+chip("testing","Active 8–29d",stages.testing,"st-testing")+chip("proven","Active 30–89d",stages.proven,"st-proven")+chip("long","Long-runners 90d+",stages.long,"st-long")+'</div>';
 }
 function renderInsights(){
  const rows=state.rows,themes=messagingThemes(rows).slice(0,4),total=Math.max(1,rows.length);
