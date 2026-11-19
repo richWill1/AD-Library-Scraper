@@ -1069,7 +1069,7 @@ function updateCreativeMix(card,rows){
   arc.classList.toggle("mix-selected",key===active);
   offset+=share;
   const percent=!classified?"—":share>0&&share<.1?"<0.1%":share>99.9&&share<100?">99.9%":mixPercent.format(share/100);
-  row.style.setProperty("--share",share.toFixed(1)+"%");
+  row.style.setProperty("--share-n",(share/100).toFixed(3));
   row.disabled=!count;
   row.setAttribute("aria-pressed",String(key===active));
   row.querySelector("b").textContent=mixNumber.format(count);

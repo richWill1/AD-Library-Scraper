@@ -618,7 +618,8 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 .mix-centre{z-index:1}
 .mix-centre strong{font-size:clamp(28px,3.4vw,42px)!important;background:linear-gradient(135deg,#182337,#3b4fe0);-webkit-background-clip:text;background-clip:text;color:transparent!important}
 .mix-row{position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s,background .15s}
-.mix-row::before{content:"";position:absolute;inset:0;width:var(--share,0%);background:linear-gradient(90deg,color-mix(in srgb,var(--mix-ink) 16%,transparent),color-mix(in srgb,var(--mix-ink) 6%,transparent));border-radius:9px;transform-origin:left;animation:barSlide .9s cubic-bezier(.2,.8,.2,1) both;pointer-events:none}
+.mix-row::after{content:"";position:absolute;left:26px;right:8px;bottom:3px;height:3px;border-radius:3px;background:#eef1f6;pointer-events:none}
+.mix-row::before{content:"";position:absolute;left:26px;bottom:3px;height:3px;z-index:1;width:calc((100% - 34px) * var(--share-n,0));background:linear-gradient(90deg,var(--mix-ink),color-mix(in srgb,var(--mix-ink) 55%,#fff));border-radius:3px;transform-origin:left;animation:barSlide .9s cubic-bezier(.2,.8,.2,1) both;pointer-events:none}
 .mix-row>*{position:relative}
 .mix-row i{width:10px!important;height:10px!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--mix-ink) 18%,transparent)}
 .mix-row:not(:disabled):hover{transform:translateX(3px)}
