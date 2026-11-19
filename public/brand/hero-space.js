@@ -4,7 +4,7 @@
   "use strict";
 
   const PHRASES = [
-    "are putting out there.",
+    "are running on Meta.",
     "are testing this week.",
     "are saying to your customers.",
     "are running on Instagram.",

@@ -4,6 +4,15 @@ import type { NextConfig } from "next";
 // research requests to the main service, which keeps credentials private.
 const backend = "https://ad-library-scraper-94t0.onrender.com";
 const nextConfig: NextConfig = {
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "preview\\.adsnoop\\.co\\.uk" }],
+        headers: [{ key: "X-Robots-Tag", value: "noindex" }],
+      },
+    ];
+  },
   async rewrites() {
     // The AdSnoop research app is the homepage.
     const home = [
