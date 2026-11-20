@@ -895,10 +895,7 @@ function overviewHTML(cols){
  const vid=kpiCard("Video share","% of ads with a known format",rankBars(cols,b=>b.classified?fpct(b,"v"):null,b=>fpct(b,"v")+"% video ("+b.fmt.v+" of "+fmtN(b.classified)+" classified)",b=>fpct(b,"v")+"%"),positionLine(cols,b=>b.classified?fpct(b,"v"):null,"%"));
  const fresh=kpiCard("Launched in 30 days","Active ads that started in the last 30 days",rankBars(cols,b=>b.n30,b=>b.n30+" ads ("+pctOf(b.n30,b.total)+"% of active) · "+b.n7+" in the last 7 days",b=>b.n30+' <small>'+pctOf(b.n30,b.total)+'%</small>'),positionLine(cols,b=>b.n30));
  const age=kpiCard("Median ad age","Days since launch, active ads",rankBars(cols,b=>b.median,b=>"Median "+b.median+" days · "+b.long+" ads running 90+ days",b=>b.median+'d'),"Longer isn’t better or worse: long-running ads aren’t proof of performance.");
- const msg=(()=>{const me=cols.find(c=>c.mine&&c.b),r=ready.filter(c=>!c.mine);if(!r.length)return "";
-  const rows=[["Lead hook","hook"],["Lead benefit","benefit"],["Lead proof","proof"],["Ads with an offer","offers"]];
-  return kpiCard("Messaging at a glance","Most common theme per brand",'<div class="mg">'+ready.map(c=>'<div class="mg-c'+(c.mine?' me':'')+'"><b>'+esc(c.name)+'</b>'+rows.map(([l,k])=>'<span><small>'+l+'</small>'+(k==="offers"?c.b.offers+'%':esc(c.b[k]))+'</span>').join("")+'</div>').join("")+'</div>',"<button class=\"linkbutton\" data-action=\"cmptab\" data-tab=\"messaging\">Full messaging comparison →</button>")})();
- return radarHTML(cols)+'<div class="bm-grid">'+vol+vid+fresh+age+'</div>'+msg;
+ return radarHTML(cols)+'<div class="bm-grid">'+vol+vid+fresh+age+'</div>';
 }
 function mixHTML(cols){
  const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';
@@ -931,21 +928,25 @@ function activityHTML(cols){
 }
 function messagingCmpHTML(cols){
  const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';
- const me=ready.find(c=>c.mine);
- const head='<tr><th></th>'+ready.map(c=>'<th class="'+(c.mine?'me':'')+'">'+logoHTML(c.id,c.name,"")+'<span>'+esc(c.name)+'</span><small>'+fmtN(c.b.total)+' ads</small></th>').join("")+'</tr>';
- const body=messageCategories.map(cat=>{
-  const rules=messageRules.filter(r=>r.category===cat.id&&ready.some(c=>c.b.share[r.id]));
-  if(!rules.length)return "";
-  return '<tr class="cmp-cat"><th colspan="'+(ready.length+1)+'"><i style="background:'+catColor[cat.id]+'"></i>'+esc(cat.label)+'</th></tr>'+rules.map(r=>{
-   const rivalUse=ready.filter(c=>!c.mine&&(c.b.share[r.id]||0)>=10).length;
-   return '<tr><th scope="row">'+esc(r.label)+'</th>'+ready.map(c=>{
-    const v=c.b.share[r.id]||0,gap=c.mine&&v<5&&rivalUse>=2,ev=c.b.byRule[r.id],q=ev?Object.values(ev.evidence)[0]:"";
-    return '<td class="heat'+(c.mine?' me':'')+(gap?' gap':'')+'" style="--h:'+Math.min(1,v/50).toFixed(2)+'" title="'+esc(c.name+": "+v+"% ("+(c.b.count[r.id]||0)+" of "+c.b.total+" ads)"+(q?" — e.g. “"+q.slice(0,120)+"”":""))+'">'+(v?v+'%':'·')+(gap?'<em>gap</em>':'')+'</td>';
-   }).join("")+'</tr>';
-  }).join("");
- }).join("");
- const cta='<div class="bm"><div class="bm-h"><h4>Offers and calls to action</h4><small>Share of ads with any offer, and the most common next step</small></div>'+rankBars(cols,b=>b.offers,b=>b.offers+"% of ads ("+b.offerN+") mention an offer · top CTA: "+b.cta,b=>b.offers+'%')+'<div class="mg">'+ready.map(c=>'<div class="mg-c'+(c.mine?' me':'')+'"><b>'+esc(c.name)+'</b><span><small>Top call to action</small>'+esc(c.b.cta)+'</span></div>').join("")+'</div></div>';
- return '<h3 class="cmp-h">Messaging matrix <small>Share of each brand’s ads using the theme. Hover a cell for an example line.'+(me?' <em class="gapkey">gap</em> = two or more competitors use it, you don’t.':'')+'</small></h3><div class="cmp-scroll"><table class="cmp-table cmp-matrix"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+cta+'<p class="cmp-note">Themes come from the same rules as the Messaging tab, applied to every collected ad’s text. Claims aren’t verified.</p>';
+ const me=ready.find(c=>c.mine),rivals=ready.filter(c=>!c.mine&&c.b.total>=10);
+ // 1. What each brand leads with: its most-used theme per category.
+ const cats=[["hooks","Hook"],["benefits","Benefit"],["offers","Offer"],["proof","Proof"]];
+ const lead=c=>cats.map(([cat,l])=>{const t=messageRules.filter(r=>r.category===cat).map(r=>({r,v:c.b.share[r.id]||0})).sort((a,b)=>b.v-a.v)[0];return '<span><small><i style="background:'+catColor[cat]+'"></i>'+l+'</small>'+(t&&t.v>=5?esc(t.r.label)+' <em>'+t.v+'%</em>':'<span class="mg-none">Rarely used</span>')+'</span>'}).join("");
+ const leads='<div class="bm"><div class="bm-h"><h4>What each brand leads with</h4><small>Most-used theme in each category, as a share of that brand’s ads</small></div><div class="mg">'+ready.map(c=>'<div class="mg-c'+(c.mine?' me':'')+'"><b>'+esc(c.name)+'</b>'+lead(c)+'</div>').join("")+'</div></div>';
+ // 2. Biggest differences: only themes several competitors share, so one brand's own phrasing doesn't dominate.
+ let diff="";
+ if(me&&rivals.length){
+  const rows=messageRules.filter(r=>r.category!=="actions").map(r=>{
+   const mine=me.b.share[r.id]||0,vals=rivals.map(c=>c.b.share[r.id]||0),avg=Math.round(vals.reduce((s,x)=>s+x,0)/vals.length),users=vals.filter(v=>v>=10).length;
+   return {r,mine,avg,users,d:mine-avg};
+  }).filter(x=>Math.max(x.mine,x.avg)>=10&&Math.abs(x.d)>=8&&(x.d>0||x.users>=Math.min(2,rivals.length)))
+   .sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)).slice(0,5);
+  const max=Math.max(10,...rows.flatMap(x=>[x.mine,x.avg]));
+  diff='<div class="bm"><div class="bm-h"><h4>Biggest differences</h4><small>Themes where your share of ads differs most from the average of your '+numWord(rivals.length)+' competitors</small></div>'+(rows.length?'<div class="df">'+rows.map(x=>'<div class="df-row"><span class="df-l"><b>'+esc(x.r.label)+'</b><small>'+esc(messageCategories.find(c=>c.id===x.r.category).label)+(x.d<0?' · '+x.users+' of '+rivals.length+' competitors use it':'')+'</small></span><span class="df-bars"><span class="df-b me" title="You: '+x.mine+'%"><i style="--w:'+(x.mine/max*100).toFixed(1)+'%"></i><em>You '+x.mine+'%</em></span><span class="df-b" title="Competitor average: '+x.avg+'%"><i style="--w:'+(x.avg/max*100).toFixed(1)+'%"></i><em>Competitors '+x.avg+'%</em></span></span><span class="df-tag '+(x.d<0?'gap':'edge')+'">'+(x.d<0?'Gap':'Your edge')+'</span></div>').join("")+'</div>':'<p class="intel-sub">Your messaging sits close to your competitors’ on every shared theme.</p>')+'<p class="bm-f">Only themes used in at least 10% of ads are shown. Brand-specific phrasing isn’t compared.</p></div>';
+ }
+ // 3. Offers.
+ const offers='<div class="bm"><div class="bm-h"><h4>How hard each brand pushes offers</h4><small>Share of ads with a price incentive, free first step or payment option</small></div>'+rankBars(cols,b=>b.offers,b=>b.offers+"% of ads ("+b.offerN+")",b=>b.offers+'%')+'</div>';
+ return (diff||"")+leads+offers+'<p class="cmp-note">Themes come from the same rules as the Messaging tab, applied to every collected ad’s text. Claims aren’t verified. For one brand’s full theme breakdown, open it and use the Messaging tab.</p>';
 }
 function compareHTML(){
  const brands=compareBrands(),mine=myBrand();

@@ -819,6 +819,24 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
  .ac-row>span:nth-child(3)::before{content:"7 days"}.ac-row>span:nth-child(4)::before{content:"30 days"}.ac-row>span:nth-child(5)::before{content:"Median age"}.ac-row>span:nth-child(6)::before{content:"90d+"}
  .spk{max-width:none}
 }
+.mg-c>span>small i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:5px;vertical-align:0}
+.mg-c em{font-style:normal;color:#86868b;font-size:12px}
+.mg-none{color:#a1a1a6}
+.df{display:flex;flex-direction:column}
+.df-row{display:grid;grid-template-columns:minmax(150px,1fr) 2fr auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid #f2f2f5}
+.df-row:last-child{border-bottom:0}
+.df-l b{display:block;font-size:14px;font-weight:600;color:#1d1d1f}
+.df-l small{font-size:11.5px;color:#86868b}
+.df-bars{display:flex;flex-direction:column;gap:5px}
+.df-b{position:relative;display:flex;align-items:center;gap:8px;height:16px}
+.df-b i{display:block;height:8px;width:var(--w);min-width:3px;border-radius:99px;background:#c7c7cc;animation:rbgrow .7s cubic-bezier(.2,.8,.2,1)}
+.df-b.me i{background:linear-gradient(90deg,#0071e3,#5e5ce6)}
+.df-b em{font-style:normal;font-size:12px;color:#6e6e73;white-space:nowrap;font-variant-numeric:tabular-nums}
+.df-b.me em{color:#0071e3;font-weight:600}
+.df-tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;border-radius:6px}
+.df-tag.gap{background:#fdecec;color:#b42318}.df-tag.edge{background:#e9f7ef;color:#1a7f43}
+@media (max-width:720px){.df-row{grid-template-columns:1fr auto}.df-bars{grid-column:1/-1;grid-row:2}}
+@media (prefers-reduced-motion:reduce){.df-b i{animation:none}}
 @media (prefers-reduced-motion:reduce){.cmp-pane.in,.op-card,.rb-bar i,.mx-seg{animation:none}}
 </style></head>
 <body><a href="#research" class="skip">Skip to research</a>
