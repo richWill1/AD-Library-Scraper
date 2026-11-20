@@ -1507,6 +1507,17 @@ function createCreativeMix(){
  card.updateMixHighlight=highlight;
  return card;
 }
+function mixPeek(card){
+ let peek=card.querySelector(".mix-peek");
+ const key=mixKeys.includes(state.filter)?state.filter:"";
+ if(!key){peek?.remove();return}
+ const ads=state.rows.filter(a=>formatOf(a.id)===key);
+ if(!peek){peek=document.createElement("div");peek.className="mix-peek";card.querySelector(".mix-footer").before(peek)}
+ peek.innerHTML='<div class="mix-peek-h"><b>'+esc(mixFormats[key])+'</b><span>'+mixNumber.format(ads.length)+' ad'+(ads.length===1?'':'s')+'</span><button type="button" class="mix-peek-x" data-filter="all" aria-label="Clear format filter">×</button></div>'+
+  (ads.length?'<div class="mix-peek-row">'+ads.slice(0,8).map(a=>'<button type="button" class="mix-peek-ad" data-action="detail" data-id="'+esc(a.id)+'" title="'+esc((a.title||a.copy||"").slice(0,90))+'">'+thumbHTML(a.id,"mix-peek-th",true)+'</button>').join("")+'</div>':'')+
+  '<button type="button" class="linkbutton mix-peek-go" data-mix-go data-filter="'+key+'">See all '+mixNumber.format(ads.length)+' in Ads →</button>';
+ hydrateThumbs();
+}
 function updateCreativeMix(card,rows){
  const counts={video:0,static:0,carousel:0,catalogue:0};
  for(const ad of rows){const key=formatOf(ad.id);if(key)counts[key]++}
@@ -1600,7 +1611,7 @@ function renderIntel(){
   slot.remove();
   mix.after(template.content);
  }
- updateCreativeMix(mix,rows);
+ updateCreativeMix(mix,rows);if(state.view==="intel")mixPeek(mix);
  hydrateThumbs();
 }
 function findAd(id){return state.rows.find(a=>a.id===id)||state.saved.get(id)||state.compare.get(id)}
@@ -1807,8 +1818,12 @@ document.addEventListener("click",e=>{
  b=e.target.closest("[data-msgfilter]");if(b){state.msgFilter=b.dataset.msgfilter;state.theme="";renderCards();document.querySelector('[data-msgfilter="'+b.dataset.msgfilter+'"]')?.focus();return}
  b=e.target.closest("[data-filter]");if(b){
   const fromIntel=state.view==="intel",key=b.dataset.filter;
-  state.filter=b.closest(".creative-mix")&&key===state.filter?"all":key;
+  state.filter=b.closest(".creative-mix")&&!b.hasAttribute("data-mix-go")&&key===state.filter?"all":key;
   state.limit=25;
+  // On Intelligence, the donut filters in place: highlight the slice and preview its ads
+  // under the chart, instead of jumping to the Ads tab.
+  const mixCard=b.closest(".creative-mix");
+  if(fromIntel&&mixCard&&!b.hasAttribute("data-mix-go")){updateCreativeMix(mixCard,state.rows);mixPeek(mixCard);return}
   if(fromIntel){
    setView("discover");
    const target=$("toolbar").querySelector('.filter[data-filter="'+state.filter+'"]')||$("research-tab-discover");
