@@ -758,13 +758,13 @@ async function trkSearch(input){
  const valid=a=>a&&/^\d{3,30}$/.test(a.id||""),list=[],seen=new Set(),add=xs=>{for(const a of xs||[])if(valid(a)&&!seen.has(a.id)){seen.add(a.id);list.push(a)}};
  const show=(pending)=>{if(seq!==trk.seq)return;out.innerHTML=list.length?trkResultHTML(list.slice(0,10),kind,kind==="add"?activeBrand():null):pending?'<p class="intel-sub">Checking the Ad Library for “'+esc(q)+'”…</p>':trkResultHTML([],kind,null)};
  // Fast: known advertisers (and, for competitors, advertisers using the word).
- const [named,cat]=await Promise.all([fetchSuggestions(q).catch(()=>[]),kind==="add"?fetchCategorySuggestions(q).catch(()=>[]):Promise.resolve([])]);
+ const [named,cat]=await Promise.all([fetchSuggestions(q).catch(()=>[]),fetchCategorySuggestions(q).catch(()=>[])]);
  add(named);add(cat);
  const exact=list.some(a=>canonicalName(a.name)===canonicalName(q));
  show(!exact);
  // Thorough: the same Page lookup the main search uses (website, Page name, Ad Library).
  if(!exact){
-  try{const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(25000)});const d=await r.json();if(seq!==trk.seq)return;const found=(Array.isArray(d.advertisers)?d.advertisers:[]).map(a=>({...a,count:a.adCount||0}));list.unshift(...found.filter(a=>valid(a)&&!seen.has(a.id)));found.forEach(a=>valid(a)&&seen.add(a.id))}catch{}
+  try{const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(25000)});const d=await r.json();if(seq!==trk.seq)return;const found=(Array.isArray(d.advertisers)?d.advertisers:[]).map(a=>({...a,count:a.adCount||0}));list.unshift(...found.filter(a=>valid(a)&&!seen.has(a.id)));found.forEach(a=>valid(a)&&seen.add(a.id));add((Array.isArray(d.mentions)?d.mentions:[]).map(a=>({id:a.id,name:a.name,count:a.count||0,source:"category"})))}catch{}
   show(false);
  }
  if(seq===trk.seq)spin.hidden=true;
