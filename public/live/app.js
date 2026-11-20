@@ -7,7 +7,16 @@ const state={view:"discover",query:"",page:"",brand:"",identity:null,adsFailed:f
 // /tracker is the signed-in-style competitor area; the rest of the site is the public research desk.
 const TRACKER=/^\/tracker\/?$/.test(location.pathname);
 if(TRACKER){state.view="tracker";document.body.classList.add("tracker-mode");
- const w=document.querySelector(".hero .wrap");if(w){const h=document.createElement("div");h.className="trk-hero";h.innerHTML='<p class="eyebrow">My competitors</p><h1>Your brands vs. <span>your competitors.</span></h1><p class="hero-desc">Every live UK ad from your brand and up to five competitors, turned into creative opportunities you can test.</p>';w.appendChild(h)}
+ const w=document.querySelector(".hero .wrap");if(w){
+  const blips=[[22,-38],[64,-18],[118,-44],[168,-26],[214,-40],[262,-16],[306,-34]];
+  const radar='<div class="trk-radar" aria-hidden="true"><i class="r1"></i><i class="r2"></i><i class="r3"></i><i class="sweep"></i>'+blips.map(([a,d],i)=>'<b style="--a:'+a+'deg;--d:'+(140+d*2)+'px;--t:'+(a/360*6).toFixed(2)+'s"></b>').join("")+'</div>';
+  const h=document.createElement("div");h.className="trk-hero";
+  h.innerHTML=radar+'<p class="eyebrow">My competitors</p><h1>Your brand vs. <span class="trk-rot" aria-live="off">every ad they run.</span></h1><p class="hero-desc">Your brand and up to five competitors, every live UK ad, turned into creative tests worth running.</p>';
+  w.appendChild(h);
+  // Rotating endings, paused for reduced motion.
+  const words=["every ad they run.","their newest launches.","their video strategy.","their sharpest offers.","the whole category."];
+  if(!matchMedia("(prefers-reduced-motion: reduce)").matches){let i=0;const el=h.querySelector(".trk-rot");setInterval(()=>{if(document.hidden)return;el.classList.add("out");setTimeout(()=>{i=(i+1)%words.length;el.textContent=words[i];el.classList.remove("out")},380)},2800)}
+ }
  document.title="My competitors | AdSnoop";document.querySelectorAll(".nav-trk").forEach(a=>{a.classList.add("active");a.setAttribute("aria-current","page")});document.querySelectorAll('.nav-btn[data-view="discover"]').forEach(a=>a.classList.remove("active"));}
 const mediaCache=new Map(),mediaState=new Map(),mediaQueue=[];
 // Collected creatives are remembered in this browser until Meta's signed links
