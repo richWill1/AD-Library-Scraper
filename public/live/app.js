@@ -4,6 +4,11 @@ const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g
 const homeUrl="";
 const storeKey="adsnoop-live-preview-saved-v1";
 const state={view:"discover",query:"",page:"",brand:"",identity:null,adsFailed:false,coverage:"GB",rows:[],choices:new Map(),cursor:null,discoveryCursor:null,canFindAlternates:false,needsPageStart:false,filter:"all",sort:"reach",limit:25,theme:"",revealAll:false,loading:false,saved:new Map(),compare:new Map(),health:null};
+// /tracker is the signed-in-style competitor area; the rest of the site is the public research desk.
+const TRACKER=/^\/tracker\/?$/.test(location.pathname);
+if(TRACKER){state.view="tracker";document.body.classList.add("tracker-mode");
+ const w=document.querySelector(".hero .wrap");if(w){const h=document.createElement("div");h.className="trk-hero";h.innerHTML='<p class="eyebrow">My competitors</p><h1>Your brands vs. <span>your competitors.</span></h1><p class="hero-desc">Every live UK ad from your brand and up to five competitors, turned into creative opportunities you can test.</p>';w.appendChild(h)}
+ document.title="My competitors | AdSnoop";document.querySelectorAll(".nav-trk").forEach(a=>{a.classList.add("active");a.setAttribute("aria-current","page")});document.querySelectorAll('.nav-btn[data-view="discover"]').forEach(a=>a.classList.remove("active"));}
 const mediaCache=new Map(),mediaState=new Map(),mediaQueue=[];
 // Collected creatives are remembered in this browser until Meta's signed links
 // expire, so returning to a brand shows its ads instantly.
@@ -158,9 +163,9 @@ function identityLinks(){
  return '<span style="display:block;margin-top:6px;font-size:13px;font-weight:500"><a href="'+esc(pageUrl)+'" target="_blank" rel="noopener noreferrer">Facebook Page</a> · Page ID '+esc(id)+' · <a href="'+esc(lib)+'" target="_blank" rel="noopener noreferrer">Page Ad Library</a>'+site+cat+'</span>';
 }
 function showHeader(){
- {const title=state.view==="intel"?state.brand+" — Intelligence":state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="compare"?"You vs your competitors.":(state.brand?(state.rows.length||state.loading?state.brand+" — Active ads":state.brand+" — No active UK ads"):"The creative library.");
- $("heading").innerHTML=(state.view!=="saved"&&state.view!=="compare"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg",state.identity&&state.identity.picture,state.identity&&state.identity.logo):"")+'<span>'+esc(title)+'</span>';}
- {let base=state.view==="intel"?"":state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.view==="compare"?"Your brand side by side with up to 5 pinned competitors, from their live UK ads.":state.adsFailed&&state.page?"The Page was identified, but Meta’s ad lookup failed. This does not mean there are zero ads.":state.loading&&state.brand?"Loading active UK ads…":state.brand&&state.page&&!state.rows.length?"Page found. Meta returned no active ads for this Page in the selected countries.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
+ {const title=state.view==="intel"?state.brand+" — Intelligence":state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="tracker"?(activeBrand()&&!trk.mode?activeBrand().name+" vs competitors.":"My competitors."):state.view==="compare"?"You vs your competitors.":(state.brand?(state.rows.length||state.loading?state.brand+" — Active ads":state.brand+" — No active UK ads"):"The creative library.");
+ $("heading").innerHTML=(state.view!=="saved"&&state.view!=="compare"&&state.view!=="tracker"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg",state.identity&&state.identity.picture,state.identity&&state.identity.logo):"")+'<span>'+esc(title)+'</span>';}
+ {let base=state.view==="intel"?"":state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.view==="tracker"?(activeBrand()&&!trk.mode?"All of their live UK ads, side by side: opportunities, creative mix, launch activity and messaging.":"Track your brand against up to "+COMP_MAX+" competitors, from their live UK ads."):state.view==="compare"?"Your brand side by side with up to 5 pinned competitors, from their live UK ads.":state.adsFailed&&state.page?"The Page was identified, but Meta’s ad lookup failed. This does not mean there are zero ads.":state.loading&&state.brand?"Loading active UK ads…":state.brand&&state.page&&!state.rows.length?"Page found. Meta returned no active ads for this Page in the selected countries.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
   if(state.view==="discover"&&state.identity&&state.identity.evidence&&!state.loading&&!state.adsFailed)base=state.identity.evidence+(state.page&&!state.rows.length?" Page found, no active UK ads.":"");
   const links=state.view==="discover"?identityLinks():"";
   if(links)$("subheading").innerHTML=esc(base)+links;else $("subheading").textContent=base;}
@@ -174,8 +179,8 @@ function showHeader(){
   $("bsSince").hidden=saved||!starts.length;$("metricSince").textContent=starts.length?formatDate(starts[0]):"—";
   const week=state.rows.filter(a=>{const d=daysRunning(a);return d!=null&&d<=7}).length;
   $("bsNew").hidden=saved;countTo($("metricNew"),week);
-  const f=$("followBtn"),on=isFollowed(state.page);f.hidden=saved||!state.page;f.setAttribute("aria-pressed",String(on));const isMine=myBrand()?.id===state.page;f.hidden=f.hidden||isMine;f.querySelector(".bs-star").textContent=on?"★":"☆";f.querySelector(".bs-label").textContent=on?"Pinned":"Pin competitor";
-  const mb=$("mineBtn");if(mb){mb.hidden=saved||!state.page;mb.setAttribute("aria-pressed",String(isMine));mb.querySelector(".bs-label").textContent=isMine?"Your brand ✓":"This is my brand";}
+  const f=$("followBtn"),on=isFollowed(state.page);f.hidden=saved||!state.page;f.setAttribute("aria-pressed",String(on));const isMine=tracker().brands.some(b=>b.id===state.page);f.hidden=f.hidden||isMine;f.querySelector(".bs-star").textContent=on?"★":"☆";{const n=brandsTracking(state.page).length,multi=tracker().brands.length>1;f.querySelector(".bs-label").textContent=multi?(n?"Competitor of "+n+" brand"+(n===1?"":"s")+" ▾":"Add to my competitors ▾"):on?"In my competitors":"Add to my competitors";f.setAttribute("aria-pressed",String(multi?n>0:on));}
+  const mb=$("mineBtn");if(mb){mb.hidden=saved||!state.page;mb.setAttribute("aria-pressed",String(isMine));mb.querySelector(".bs-label").textContent=tracker().brands.some(b=>b.id===state.page)?"Your brand ✓ Open tracker":"Track as my brand";}
   $("savedBtn").hidden=saved;}
  }
  $("toolbar").style.display=(state.view==="discover"&&state.rows.length||state.view==="saved")?"flex":"none";
@@ -204,18 +209,76 @@ function countTo(el,to){
 const prefStore={adapter:{get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch{}}},
  read(k,fb){const v=this.adapter.get(k);if(v==null)return fb;try{return JSON.parse(v)}catch{return fb}},
  write(k,v){this.adapter.set(k,v==null?null:JSON.stringify(v))}};
-// The comparison set in one account-ready shape: {mine, competitors[]}.
-function comparisonSet(){const mine=myBrand();return {mine,competitors:followed().filter(b=>!mine||b.id!==mine.id).slice(0,PIN_MAX)}}
-const followKey="adsnoop-follow-v1";
-function followed(){try{const v=prefStore.read(followKey,[]);return Array.isArray(v)?v.filter(b=>b&&/^\d{1,30}$/.test(b.id)&&typeof b.name==="string").slice(0,PIN_MAX):[]}catch{return []}}
-function isFollowed(id){return !!id&&followed().some(b=>b.id===id)}
-function toggleFollow(){
- if(!state.page)return;let list=followed();const on=list.some(b=>b.id===state.page);
- if(!on&&list.length>=PIN_MAX){toast("You can pin up to "+PIN_MAX+" competitors. Unpin one first.");return}
- list=on?list.filter(b=>b.id!==state.page):[...list,{id:state.page,name:state.brand||"Advertiser"}];
- prefStore.write(followKey,list.slice(0,PIN_MAX))
- toast(on?"Unpinned "+(state.brand||"brand"):"Pinned "+(state.brand||"brand")+" ("+list.length+"/"+PIN_MAX+"). Compare it any time.");cmp.data.delete(state.page);showHeader();renderPinbar();
+// ---- My competitors: brands you track, each with up to five competitors ----
+// One account-ready store. Until sign-in is connected it lives on this device
+// (account.mode "device"); with accounts it will sync to the user's profile.
+const account={mode:"device",user:null};
+const TRACK_KEY="adsnoop-tracker-v1",followKey="adsnoop-follow-v1",MINE_KEY="adsnoop-mybrand-v1";
+const COMP_MAX=5;
+// Plan limits in one place. The free plan tracks one brand; ?plan=pro previews more.
+const PLAN=(()=>{let pro=false;try{if(/[?&]plan=pro\b/.test(location.search))sessionStorage.setItem("adsnoop-plan","pro");pro=sessionStorage.getItem("adsnoop-plan")==="pro"}catch{}return pro?{name:"Pro preview",brands:10,competitors:COMP_MAX}:{name:"Free",brands:1,competitors:COMP_MAX}})();
+const validB=b=>b&&/^\d{1,30}$/.test(b.id)&&typeof b.name==="string";
+function tracker(){
+ let t=prefStore.read(TRACK_KEY,null);
+ if(!t||!Array.isArray(t.brands)){
+  // First visit since multi-brand: turn "my brand" + pins into the first brand.
+  t={v:1,active:"",brands:[],pending:[]};
+  const mine=prefStore.read(MINE_KEY,null),pins=(prefStore.read(followKey,[])||[]).filter(validB);
+  if(validB(mine)){t.brands.push({id:mine.id,name:mine.name,competitors:pins.filter(b=>b.id!==mine.id).slice(0,COMP_MAX).map(b=>({id:b.id,name:b.name}))});t.active=mine.id}
+  else t.pending=pins.slice(0,COMP_MAX).map(b=>({id:b.id,name:b.name}));
+  prefStore.write(TRACK_KEY,t);
+ }
+ t.brands=t.brands.filter(validB).map(b=>({...b,competitors:(Array.isArray(b.competitors)?b.competitors:[]).filter(validB).slice(0,COMP_MAX)}));
+ t.pending=(Array.isArray(t.pending)?t.pending:[]).filter(validB).slice(0,COMP_MAX);
+ if(!t.brands.some(b=>b.id===t.active))t.active=t.brands[0]?.id||"";
+ return t;
 }
+function saveTracker(t){prefStore.write(TRACK_KEY,t)}
+function activeBrand(){const t=tracker();return t.brands.find(b=>b.id===t.active)||null}
+function myBrand(){const b=activeBrand();return b?{id:b.id,name:b.name}:null}
+// Competitors of the active brand (or ones added before any brand was set up).
+function followed(){const t=tracker(),b=t.brands.find(x=>x.id===t.active);return (b?b.competitors:t.pending).slice(0,COMP_MAX)}
+function comparisonSet(){const b=activeBrand();return {mine:b?{id:b.id,name:b.name}:null,competitors:b?b.competitors.slice(0,COMP_MAX):[]}}
+function isFollowed(id){return !!id&&followed().some(b=>b.id===id)}
+function brandsTracking(id){return tracker().brands.filter(b=>b.competitors.some(c=>c.id===id))}
+function setCompetitor(brandId,comp,on){
+ const t=tracker(),list=brandId?t.brands.find(b=>b.id===brandId)?.competitors:t.pending;if(!list)return "missing";
+ const has=list.some(c=>c.id===comp.id);
+ if(on&&!has){if(brandId===comp.id)return "self";if(list.length>=COMP_MAX)return "full";list.push({id:comp.id,name:comp.name})}
+ if(!on&&has)list.splice(list.findIndex(c=>c.id===comp.id),1);
+ saveTracker(t);return "ok";
+}
+function addBrand(b){
+ const t=tracker();if(t.brands.some(x=>x.id===b.id)){t.active=b.id;saveTracker(t);return "exists"}
+ if(t.brands.length>=PLAN.brands)return "limit";
+ t.brands.push({id:b.id,name:b.name,competitors:(t.brands.length?[]:t.pending).filter(c=>c.id!==b.id).slice(0,COMP_MAX)});
+ if(t.brands.length===1)t.pending=[];
+ t.active=b.id;saveTracker(t);return "ok";
+}
+function removeBrand(id){const t=tracker();t.brands=t.brands.filter(b=>b.id!==id);if(t.active===id)t.active=t.brands[0]?.id||"";saveTracker(t)}
+function switchBrand(id){const t=tracker();if(t.brands.some(b=>b.id===id)){t.active=id;saveTracker(t)}}
+// Research desk: "Add to my competitors". With several brands, choose which ones.
+function toggleFollow(){
+ if(!state.page)return;const comp={id:state.page,name:state.brand||"Advertiser"},t=tracker();
+ if(t.brands.length>1){openBrandPicker(comp);return}
+ const target=t.brands[0]?.id||"",on=isFollowed(comp.id);
+ const r=setCompetitor(target,comp,!on);
+ if(r==="full"){toast("Each brand can track up to "+COMP_MAX+" competitors. Remove one in My competitors.");return}
+ if(r==="self"){toast("That’s the brand you’re tracking.");return}
+ toast(on?"Removed "+comp.name:"Added "+comp.name+(t.brands[0]?" to "+t.brands[0].name+"’s competitors":". Set your brand in My competitors to compare."));
+ cmp.data.delete(comp.id);showHeader();renderPinbar();
+}
+function openBrandPicker(comp){
+ closeBrandPicker();const t=tracker(),btn=$("followBtn");if(!btn)return;
+ const pop=document.createElement("div");pop.className="bpick";pop.id="brandPicker";pop.setAttribute("role","dialog");pop.setAttribute("aria-label","Choose which brands track "+comp.name);
+ pop.innerHTML='<p>Add <b>'+esc(comp.name)+'</b> as a competitor of:</p>'+t.brands.map(b=>{const on=b.competitors.some(c=>c.id===comp.id),full=!on&&b.competitors.length>=COMP_MAX,self=b.id===comp.id;return '<label class="'+(full||self?'off':'')+'"><input type="checkbox" data-bpick="'+esc(b.id)+'"'+(on?' checked':'')+(full||self?' disabled':'')+'>'+logoHTML(b.id,b.name,"")+'<span>'+esc(b.name)+'<small>'+(self?'This brand':full?'Full ('+COMP_MAX+'/'+COMP_MAX+')':b.competitors.length+'/'+COMP_MAX+' competitors')+'</small></span></label>'}).join("")+'<button type="button" class="pill" data-bpick-done>Done</button>';
+ btn.parentElement.style.position="relative";btn.parentElement.appendChild(pop);
+ pop.addEventListener("change",e=>{const i=e.target.closest("[data-bpick]");if(!i)return;setCompetitor(i.dataset.bpick,comp,i.checked);cmp.data.delete(comp.id)});
+ pop.querySelector("[data-bpick-done]").onclick=()=>{closeBrandPicker();showHeader();renderPinbar();const n=brandsTracking(comp.id).length;toast(n?comp.name+" is tracked for "+n+" brand"+(n===1?"":"s")+".":"Not tracking "+comp.name+".")};
+ setTimeout(()=>document.addEventListener("click",outsidePicker,true),0);
+}
+function outsidePicker(e){const p=$("brandPicker");if(p&&!p.contains(e.target)&&!e.target.closest("#followBtn"))closeBrandPicker()}
+function closeBrandPicker(){$("brandPicker")?.remove();document.removeEventListener("click",outsidePicker,true)}
 let toastTimer=0;
 function toast(msg){const t=$("toast");if(!t)return;t.textContent=msg;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2400)}
 // Start page before any search: brands you follow plus popular UK advertisers.
@@ -248,8 +311,8 @@ function startHTML(){
  loadPopular();
  const mine=followed();
  let html='<div class="start">';
- {const me=myBrand();html+='<button class="cmp-cta" data-view="compare"><b>Compare'+(me?' '+esc(me.name):' your brand')+' with up to '+PIN_MAX+' pinned competitors</b><span>See gaps in messaging, offers and testing pace →</span></button>'}
- if(mine.length)html+='<h3>Pinned competitors ('+mine.length+'/'+PIN_MAX+')</h3><div class="start-grid">'+mine.map((b,i)=>brandCard(b,i,"Pinned competitor")).join("")+'</div>';
+ {const me=myBrand();html+='<a class="cmp-cta" href="/tracker"><b>'+(me?'Track '+esc(me.name)+' against':'Track your brand against')+' up to '+COMP_MAX+' competitors</b><span>My competitors: opportunities, creative mix and launch activity →</span></a>'}
+ if(mine.length)html+='<h3>Your competitors ('+mine.length+'/'+COMP_MAX+')</h3><div class="start-grid">'+mine.map((b,i)=>brandCard(b,i,"Your competitor")).join("")+'</div>';
  html+='<h3>Popular in the UK right now</h3><div class="start-grid">';
  if(popular&&popular.length)html+=popular.map((b,i)=>brandCard({id:b.pageId,name:b.name},i,(b.more?b.count+"+":b.count)+" live UK ads")).join("");
  else if(popular)html+='<p class="intel-sub" style="grid-column:1/-1">Search any brand above to see its live ads.</p>';
@@ -259,7 +322,7 @@ function startHTML(){
 function renderViewTabs(){
  const el=$("viewtabs"),panel=$("research-panel");
  const has=!!state.brand&&state.rows.length>0;
- const show=state.view==="compare"||(has&&["discover","intel","insights"].includes(state.view));
+ const show=has&&["discover","intel","insights"].includes(state.view);
  el.hidden=!show;
  document.body.classList.toggle("has-tabs",show);
  if(show){
@@ -270,7 +333,7 @@ function renderViewTabs(){
   panel.removeAttribute("aria-labelledby");
  }
  const tab=(view,label)=>'<button type="button" id="research-tab-'+view+'" class="viewtab" role="tab" aria-controls="research-panel" data-view="'+view+'" aria-selected="'+(state.view===view)+'" tabindex="'+(state.view===view?0:-1)+'">'+label+'</button>';
- const html=show?(has?tab("discover","Ads")+tab("intel","Intelligence")+tab("insights","Messaging"):"")+tab("compare","Compare"):"";
+ const html=show?tab("discover","Ads")+tab("intel","Intelligence")+tab("insights","Messaging"):"";
  if(el.dataset.markup!==html){el.innerHTML=html;el.dataset.markup=html}
 }
 function empty(title,detail,html){return '<div class="empty"><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p>'+(html||"")+'</div>'}
@@ -295,6 +358,7 @@ function renderCards(){
  if(intel){setBar("hide");renderPinbar();return}
  const all=state.view==="discover"||state.view==="saved"?shownRows():[],rows=all.slice(0,state.limit),hidden=all.length-rows.length;
  if(state.view==="insights"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";renderPinbar();return}
+ if(state.view==="tracker"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+trackerHTML()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
  if(state.view==="compare"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
  const blank=state.view==="saved"?empty("No saved ads yet.","Save a creative from an advertiser search to find it here."):state.adsFailed&&state.page?empty("Meta lookup failed","The Page was identified, but its ads could not be loaded. Try again in a moment.",identityLinks()):state.page&&/^\d{1,30}$/.test(state.page)?empty("Page found, no active UK ads","Meta has no active ads for this Page in the selected countries. It can still be the right advertiser.",identityLinks()):empty("No ads to display.",state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():blank);
@@ -638,23 +702,87 @@ function setBar(mode,ready=0,total=0,ids=null){
  hint.textContent=ready<total&&(Date.now()-barRun.start>2500)?"A first look at a brand takes a moment: each creative is collected from Meta once, then saved so it’s instant for everyone.":"";
 }
 // ---- Pinned competitors, your brand and the comparison view ----
-const PIN_MAX=5,MINE_KEY="adsnoop-mybrand-v1";
-function myBrand(){try{const v=prefStore.read(MINE_KEY,null);return v&&/^\d{1,30}$/.test(v.id)&&typeof v.name==="string"?v:null}catch{return null}}
+const PIN_MAX=COMP_MAX;
+// Research desk: "Track as my brand" adds the open advertiser as one of your brands.
 function toggleMine(){
- if(!state.page)return;const cur=myBrand();
- if(cur&&cur.id===state.page){prefStore.write(MINE_KEY,null);toast("Cleared your brand.")}
- else{prefStore.write(MINE_KEY,{id:state.page,name:state.brand||"My brand"})
-  if(isFollowed(state.page))prefStore.write(followKey,followed().filter(b=>b.id!==state.page))
-  toast("Saved "+(state.brand||"this brand")+" as your brand. Open Compare to see it against your pins.")}
- cmp.data.delete(state.page);showHeader();renderPinbar();
+ if(!state.page)return;const b={id:state.page,name:state.brand||"My brand"},r=addBrand(b);
+ if(r==="limit"){toast("The "+PLAN.name+" plan tracks "+PLAN.brands+" brand"+(PLAN.brands===1?"":"s")+". More brands are coming with paid plans.");return}
+ if(r==="exists"){location.href="/tracker";return}
+ toast("Tracking "+b.name+". Open My competitors to pick up to "+COMP_MAX+" competitors.");cmp.data.delete(b.id);showHeader();renderPinbar();
 }
-function unpin(id){prefStore.write(followKey,followed().filter(b=>b.id!==id));renderPinbar();if(state.view==="compare")renderCards();else showHeader()}
+function unpin(id){setCompetitor(activeBrand()?.id||"",{id,name:""},false);renderPinbar();if(state.view==="compare")renderCards();else showHeader()}
 function renderPinbar(){
- const el=$("pinbar");if(!el)return;const list=followed(),mine=myBrand();
- const show=(list.length||mine)&&!isStart();el.hidden=!show;if(!show){el.innerHTML="";return}
- const chip=(b,cls,label)=>'<span class="pinchip'+(b.id===state.page&&state.view!=="compare"?' on':'')+(cls?' '+cls:'')+'"><button data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'" title="Open '+esc(b.name)+'">'+logoHTML(b.id,b.name,"")+'<span>'+esc(label||b.name)+'</span></button>'+(cls?'':'<button class="unpin" data-action="unpin" data-id="'+esc(b.id)+'" aria-label="Unpin '+esc(b.name)+'">×</button>')+'</span>';
- el.innerHTML='<span class="pin-k">Pinned '+list.length+'/'+PIN_MAX+'</span>'+(mine?chip(mine,"mine",mine.name+" · you"):'')+list.map(b=>chip(b)).join("")+'<button class="pin-cmp'+(state.view==="compare"?' on':'')+'" data-view="compare">Compare →</button>';
+ const el=$("pinbar");if(!el)return;const list=followed(),mine=myBrand(),t=tracker();
+ const show=(list.length||mine)&&!isStart()&&state.view!=="tracker";el.hidden=!show;if(!show){el.innerHTML="";return}
+ const chip=(b,cls,label)=>'<span class="pinchip'+(b.id===state.page?' on':'')+(cls?' '+cls:'')+'"><button data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'" title="Open '+esc(b.name)+'">'+logoHTML(b.id,b.name,"")+'<span>'+esc(label||b.name)+'</span></button>'+(cls?'':'<button class="unpin" data-action="unpin" data-id="'+esc(b.id)+'" aria-label="Stop tracking '+esc(b.name)+'">×</button>')+'</span>';
+ el.innerHTML='<span class="pin-k">'+(mine?'Tracking for '+esc(mine.name)+(t.brands.length>1?' (+'+(t.brands.length-1)+')':''):'Competitors')+' · '+list.length+'/'+COMP_MAX+'</span>'+(mine?chip(mine,"mine",mine.name+" · you"):'')+list.map(b=>chip(b)).join("")+'<a class="pin-cmp" href="/tracker">My competitors →</a>';
 }
+// ---- Tracker page (/tracker): brand switcher, onboarding and the dashboard ----
+const trk={mode:null,timer:0,seq:0};
+function trackerHTML(){
+ const t=tracker(),active=activeBrand();
+ const note='<div class="trk-note"><span aria-hidden="true">🔒</span><span><b>Preview:</b> your brands are saved on this device. Sign-in with email or Google is on the way, and this setup will move into your account.</span></div>';
+ if(!t.brands.length||trk.mode==="add")return '<div class="trk">'+(t.brands.length?switcherHTML(t):'')+onboardBrandHTML(t)+note+'</div>';
+ const body=trk.mode==="edit"||!active.competitors.length?editorHTML(active):compareHTML();
+ return '<div class="trk">'+switcherHTML(t)+body+note+'</div>';
+}
+function switcherHTML(t){
+ const atLimit=t.brands.length>=PLAN.brands;
+ return '<div class="trk-bar"><div class="trk-brands" role="tablist" aria-label="Your brands">'+t.brands.map(b=>'<button role="tab" aria-selected="'+(b.id===t.active)+'" class="trk-b'+(b.id===t.active?' on':'')+'" data-tk="switch" data-id="'+esc(b.id)+'">'+logoHTML(b.id,b.name,"")+'<span>'+esc(b.name)+'<small>'+b.competitors.length+'/'+COMP_MAX+' competitors</small></span></button>').join("")+
+  '<button class="trk-add'+(atLimit?' locked':'')+'" data-tk="newbrand" title="'+(atLimit?esc("The "+PLAN.name+" plan tracks "+PLAN.brands+" brand"+(PLAN.brands===1?"":"s")):"Track another brand")+'">'+(atLimit?'<span aria-hidden="true">🔒</span> ':'+ ')+'Add brand</button></div>'+
+  (trk.mode!=="add"&&t.brands.length?'<div class="trk-acts"><button class="ghost" data-tk="'+(trk.mode==="edit"?'done':'edit')+'">'+(trk.mode==="edit"?'Done':'Edit competitors')+'</button></div>':'')+'</div>';
+}
+function onboardBrandHTML(t){
+ const first=!t.brands.length;
+ return '<section class="trk-on"><p class="trk-step">'+(first?'Step 1 of 2':'New brand')+'</p><h3>Which brand do you advertise for?</h3><p class="intel-sub">Search the advertiser’s name or website. You can track '+(PLAN.brands===1?'one brand':'up to '+PLAN.brands+' brands')+' on the '+esc(PLAN.name)+' plan'+(first&&t.pending.length?'; the '+t.pending.length+' competitor'+(t.pending.length===1?'':'s')+' you already added will carry over':'')+'.</p><div class="trk-search"><input id="trkBrandQ" type="search" placeholder="e.g. 247 Blinds or 247blinds.co.uk" autocomplete="off" aria-label="Search your brand"><span class="trk-spin" hidden></span></div><div class="trk-results" id="trkResults" aria-live="polite"></div>'+(first?'':'<button class="ghost" data-tk="cancel">Cancel</button>')+'</section>';
+}
+function editorHTML(b){
+ const n=b.competitors.length;
+ return '<section class="trk-on"><p class="trk-step">'+(n?'Edit competitors':'Step 2 of 2')+'</p><h3>Who are '+esc(b.name)+'’s competitors?</h3><p class="intel-sub">Pick up to '+COMP_MAX+'. Search a brand, or a product or service you both sell (e.g. “blinds”) to see the advertisers with the most UK reach.</p>'+
+  '<div class="trk-chosen">'+b.competitors.map(c=>'<span class="trk-chip">'+logoHTML(c.id,c.name,"")+esc(c.name)+'<button data-tk="rm" data-id="'+esc(c.id)+'" aria-label="Remove '+esc(c.name)+'">×</button></span>').join("")+Array.from({length:COMP_MAX-n},()=>'<span class="trk-chip empty">Empty slot</span>').join("")+'</div>'+
+  (n<COMP_MAX?'<div class="trk-search"><input id="trkCompQ" type="search" placeholder="Competitor name, website or product (e.g. blinds)" autocomplete="off" aria-label="Search competitors"><span class="trk-spin" hidden></span></div><div class="trk-results" id="trkResults" aria-live="polite"></div>':'<p class="intel-sub">All '+COMP_MAX+' slots are full. Remove one to swap it out.</p>')+
+  '<div class="trk-foot">'+(n?'<button class="pill" data-tk="done">See the comparison →</button>':'')+(tracker().brands.length>1?'<button class="ghost danger" data-tk="delbrand" data-id="'+esc(b.id)+'">Stop tracking '+esc(b.name)+'</button>':'')+'</div></section>';
+}
+function trkResultHTML(list,kind,b){
+ if(!list.length)return '<p class="intel-sub">No advertisers found. Try the brand’s website or a different word.</p>';
+ return list.map((a,i)=>{
+  const taken=b&&(b.competitors.some(c=>c.id===a.id)||b.id===a.id);
+  const meta=a.source==="category"?a.count+" ads mention it"+(a.reach?" · UK reach "+compactNumber(a.reach):""):[a.category,a.count?a.count+" ads":""].filter(Boolean).join(" · ")||"Facebook Page";
+  return '<button class="trk-r" style="--i:'+i+'" data-tk="'+kind+'" data-id="'+esc(a.id)+'" data-name="'+esc(a.name)+'"'+(taken?' disabled':'')+'>'+logoHTML(a.id,a.name,"",a.picture,a.logo)+'<span><b>'+esc(a.name)+'</b><small>'+esc(meta)+'</small></span><em>'+(taken?(b.id===a.id?'Your brand':'Added'):kind==="pick"?'This is mine':'+ Add')+'</em></button>';
+ }).join("");
+}
+async function trkSearch(input){
+ const q=input.value.trim(),out=$("trkResults"),spin=input.parentElement.querySelector(".trk-spin"),kind=input.id==="trkBrandQ"?"pick":"add",seq=++trk.seq;
+ if(q.length<2){out.innerHTML="";return}
+ spin.hidden=false;
+ const valid=a=>a&&/^\d{3,30}$/.test(a.id||"");
+ let list=[];
+ try{
+  const [named,cat]=await Promise.all([fetchSuggestions(q).catch(()=>[]),kind==="add"?fetchCategorySuggestions(q).catch(()=>[]):Promise.resolve([])]);
+  const seen=new Set();for(const a of [...named,...cat])if(valid(a)&&!seen.has(a.id)){seen.add(a.id);list.push(a)}
+ }catch{}
+ if(seq!==trk.seq)return;spin.hidden=true;
+ out.innerHTML=trkResultHTML(list.slice(0,10),kind,kind==="add"?activeBrand():null);
+}
+function trkInput(e){const i=e.target;if(!i||(i.id!=="trkBrandQ"&&i.id!=="trkCompQ"))return;clearTimeout(trk.timer);trk.timer=setTimeout(()=>trkSearch(i),350)}
+function trkFocus(){setTimeout(()=>{const i=$("trkCompQ")||$("trkBrandQ");if(i&&!("ontouchstart" in window))i.focus({preventScroll:true})},50)}
+function trkClick(e){
+ const b=e.target.closest("[data-tk]");if(!b||b.disabled)return;
+ const k=b.dataset.tk,id=b.dataset.id,name=b.dataset.name;
+ if(k==="switch"){switchBrand(id);trk.mode=null;cmp.anim=true}
+ else if(k==="newbrand"){if(tracker().brands.length>=PLAN.brands){toast("The "+PLAN.name+" plan tracks "+PLAN.brands+" brand"+(PLAN.brands===1?"":"s")+". Multi-brand tracking is coming with paid plans.");return}trk.mode="add"}
+ else if(k==="cancel")trk.mode=null;
+ else if(k==="pick"){const r=addBrand({id,name});if(r==="limit"){toast("The "+PLAN.name+" plan tracks "+PLAN.brands+" brand"+(PLAN.brands===1?"":"s")+".");return}trk.mode=activeBrand()?.competitors.length?null:"edit"}
+ else if(k==="add"){const ab=activeBrand();const r=setCompetitor(ab.id,{id,name},true);if(r==="full"){toast("Up to "+COMP_MAX+" competitors per brand.");return}if(r==="self"){toast("That’s your brand.");return}toast("Added "+name)}
+ else if(k==="rm"){setCompetitor(activeBrand().id,{id,name:""},false)}
+ else if(k==="edit")trk.mode="edit";
+ else if(k==="done"){trk.mode=null;cmp.anim=true}
+ else if(k==="delbrand"){if(!confirmStop(b))return;removeBrand(id);trk.mode=null}
+ else return;
+ renderCards();if(trk.mode)trkFocus();
+}
+// Two-step confirm without a browser dialog.
+function confirmStop(b){if(b.dataset.armed){return true}b.dataset.armed="1";b.textContent="Click again to stop tracking";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed}},4000);return false}
 // ---- Compare: your brand against up to five competitors ----
 // Data: /api/compare collects every accessible active ad per advertiser (no media),
 // cached on the server. Messaging reuses messagingThemes(); nothing here invents
@@ -871,8 +999,8 @@ function radarHTML(cols){
  const loading=cols.some(c=>!c.b&&!(c.d&&c.d.status==="error"));
  const op=opportunities(cols);
  const head='<div class="op-head"><div><p class="eyebrow">Creative Opportunity Radar</p><h3>Where your brand could test next</h3></div><span class="op-sub">The strongest differences between your ads and your competitors’, ranked. Signals of competitor activity, not proof of performance.</span></div>';
- if(op.why==="mine")return '<section class="op">'+head+'<div class="op-empty">Search your own brand and press <b>This is my brand</b> to see opportunities against your competitors.</div></section>';
- if(op.why==="rivals"||op.why==="small")return '<section class="op">'+head+'<div class="op-empty">'+(loading?'<span class="cmp-wait"></span> Collecting ads…':op.why==="small"?'Your brand has fewer than five active ads, too few to compare fairly.':'Pin competitors with at least ten active ads to compare against.')+'</div></section>';
+ if(op.why==="mine")return '<section class="op">'+head+'<div class="op-empty">Add your brand in <a href="/tracker">My competitors</a> to see opportunities against your competitors.</div></section>';
+ if(op.why==="rivals"||op.why==="small")return '<section class="op">'+head+'<div class="op-empty">'+(loading?'<span class="cmp-wait"></span> Collecting ads…':op.why==="small"?'Your brand has fewer than five active ads, too few to compare fairly.':'Add competitors with at least ten active ads to compare against.')+'</div></section>';
  if(!op.list.length)return '<section class="op">'+head+'<div class="op-empty">'+(loading?'<span class="cmp-wait"></span> Still collecting, opportunities appear when all brands are in.':'No strong gaps: your formats, launch activity and messaging sit close to your competitors.')+'</div></section>';
  return '<section class="op">'+head+'<div class="op-grid">'+op.list.map((o,i)=>'<article class="op-card op-'+o.kind+'" style="--i:'+i+'"><span class="op-tag">'+esc(o.tag)+'</span><h4>'+esc(o.title)+'</h4><p class="op-data">'+esc(o.data)+'</p><p class="op-why"><b>Why it could matter.</b> '+esc(o.why)+'</p><div class="op-test"><span>Test</span>'+esc(o.test)+'</div>'+evidenceHTML(o.ev)+'<p class="op-note">'+esc(o.note)+'</p></article>').join("")+'</div>'+(loading?'<p class="op-foot"><span class="cmp-wait"></span> Some brands are still loading; this may change.</p>':'')+'</section>';
 }
@@ -950,11 +1078,11 @@ function messagingCmpHTML(cols){
 }
 function compareHTML(){
  const brands=compareBrands(),mine=myBrand();
- if(!brands.length)return '<div class="cmp-empty"><h3>Compare your brand with your competitors</h3><ol><li>Search your own brand and press <b>This is my brand</b>.</li><li>Search up to 5 competitors and press <b>Pin competitor</b> on each.</li><li>Come back here to see the gaps.</li></ol></div>';
+ if(!brands.length)return '<div class="cmp-empty"><h3>Compare your brand with your competitors</h3><p><a href="/tracker">Set up My competitors →</a></p></div>';
  const need=brands.some(b=>{const d=cmp.data.get(b.id);return !d||d.status==="running"||d.status==="queued"});
  if(need&&!cmp.running)setTimeout(()=>loadCompare(false),0);
  const cols=brands.map(b=>{const c={...b,d:cmp.data.get(b.id)};c.b=bench(c);return c});
- const hint=!mine?'<p class="cmp-hint">Tip: search your own brand and press <b>This is my brand</b> to unlock the Opportunity Radar.</p>':brands.length<2?'<p class="cmp-hint">Pin up to five competitors to compare against.</p>':'';
+ const hint=!mine?'<p class="cmp-hint">Add your brand in <a href="/tracker">My competitors</a> to unlock the Opportunity Radar.</p>':'';
  const pane=cmp.tab==="mix"?mixHTML(cols):cmp.tab==="activity"?activityHTML(cols):cmp.tab==="messaging"?messagingCmpHTML(cols):overviewHTML(cols);
  const when=cols.map(c=>c.b&&c.b.generatedAt).filter(Boolean).sort()[0];
  const anim=cmp.anim;cmp.anim=false;
@@ -1372,6 +1500,8 @@ function compareView(){
  modal("Creative comparison",'<p>Review ad messaging side by side. No conversion or spend data is implied.</p><div class="cmpcols">'+items.map(a=>'<div class="cmpcol"><h4>'+esc(a.pageName||"Advertiser")+'</h4><p><strong>'+esc(a.title||"Ad creative")+'</strong></p><p class="adtext">'+esc(a.copy||"")+'</p><p>Since '+esc(formatDate(a.start))+'</p></div>').join("")+'</div>');
 }
 function setView(view){
+ if(view==="compare"&&!TRACKER){location.href="/tracker";return}
+ if(TRACKER&&view!=="tracker"){location.href=view==="discover"?"/":"/?view="+encodeURIComponent(view);return}
  state.view=view;
  $("brands").hidden=true;
  if(view==="saved")feedback("Your saved creative records are stored locally in this browser. For an up-to-date ad, open its official Meta link.");
@@ -1552,7 +1682,7 @@ $("sort").addEventListener("change",e=>{state.sort=e.target.value;state.limit=25
 document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest(".viewtab");if(!t||!["ArrowLeft","ArrowRight"].includes(e.key))return;const tabs=[...document.querySelectorAll(".viewtab")];const next=tabs[(tabs.indexOf(t)+(e.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];if(next){e.preventDefault();setView(next.dataset.view);requestAnimationFrame(()=>document.querySelector('.viewtab[aria-selected="true"]')?.focus())}});
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}
- b=e.target.closest("[data-page]");if(b){if(state.view==="compare"){state.view="discover";if(b.dataset.page===state.page&&state.rows.length){renderCards();return}}if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){const chosen=state.pick.items.find(x=>x.id===b.dataset.page);if(chosen)state.identity=chosen;state.choices.clear();for(const it of state.pick.items)if(it.id)state.choices.set(it.id,{id:it.id,name:it.name,count:it.adCount||it.mentions||it.count||0})}state.brand=b.dataset.name;state.page=b.dataset.page;state.adsFailed=false;runSearch(state.query||state.brand,state.page);}return}
+ b=e.target.closest("[data-page]");if(b&&TRACKER){location.href="/?"+new URLSearchParams({page:b.dataset.page,name:b.dataset.name||""});return}if(b){if(state.view==="compare"){state.view="discover";if(b.dataset.page===state.page&&state.rows.length){renderCards();return}}if(b.dataset.page!==state.page||(!state.rows.length&&!state.loading)){if(state.pick){const chosen=state.pick.items.find(x=>x.id===b.dataset.page);if(chosen)state.identity=chosen;state.choices.clear();for(const it of state.pick.items)if(it.id)state.choices.set(it.id,{id:it.id,name:it.name,count:it.adCount||it.mentions||it.count||0})}state.brand=b.dataset.name;state.page=b.dataset.page;state.adsFailed=false;runSearch(state.query||state.brand,state.page);}return}
  b=e.target.closest("[data-view]");if(b){
   const tab=b.matches(".viewtab");
   setView(b.dataset.view);
@@ -1602,7 +1732,8 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")$("modalOverlay").cl
 document.addEventListener("keydown",e=>{if(e.key!=="ArrowDown"&&e.key!=="ArrowUp")return;const cur=e.target.closest&&e.target.closest(".mx-item");if(!cur)return;const all=[...document.querySelectorAll(".mx-item")],i=all.indexOf(cur),n=all[i+(e.key==="ArrowDown"?1:-1)];if(n){e.preventDefault();n.focus()}});
 $("compareOpen").onclick=compareView;
 $("compareClear").onclick=()=>{state.compare.clear();renderCards()};
-renderCards();health();
+document.addEventListener("click",trkClick);document.addEventListener("input",trkInput);
+renderCards();if(TRACKER&&(!tracker().brands.length||!activeBrand()?.competitors.length))trkFocus();if(!TRACKER)health();
 // Deep links from other pages: /?page=PAGE_ID&name=Brand or /?q=brand
 {const p=new URLSearchParams(location.search),pg=p.get("page")||"",nm=(p.get("name")||"").slice(0,120),q=(p.get("q")||"").slice(0,120);
  if(/^\d{1,30}$/.test(pg)){state.brand=nm;state.page=pg;state.query=nm||pg;state.choices.set(pg,{id:pg,name:nm||"Advertiser",count:0});if(nm)rememberPageId(nm,pg);void runSearch(nm||pg,pg);setTimeout(()=>$("cards")?.scrollIntoView({behavior:"smooth"}),300)}

@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
       { source: "/christmas-ads", destination: "/live/christmas.html" },
       { source: "/black-friday-ads", destination: "/live/black-friday.html" },
       { source: "/meta-updates", destination: "/live/meta-updates.html" },
+      { source: "/tracker", destination: "/live/index.html" },
       { source: "/privacy", destination: "/live/privacy.html" },
       { source: "/terms", destination: "/live/terms.html" },
       { source: "/data-deletion", destination: "/live/data-deletion.html" },
