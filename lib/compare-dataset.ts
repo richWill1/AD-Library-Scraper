@@ -19,7 +19,7 @@ export type CompareDataset={
  complete:boolean;            // every accessible active ad was retrieved
  limitReason:string|null;     // why not, in plain English
  cap:number;
- formats:{complete:boolean;basis:{mediaType:number;template:number;cards:number;none:number;stored?:number};note:string};
+ formats:{complete:boolean;basis:{mediaType:number;template:number;cards:number;none:number;inferred?:number;stored?:number};note:string};
 };
 type Job={status:'running';fetched:number;phase:string;started:number;promise:Promise<void>};
 
@@ -51,13 +51,17 @@ export function recentFailure(page:string,coverage:string){const f=failures.get(
 export function runningJobs(){return jobs.size;}
 
 // Classify a format from the evidence available without downloading media.
-function classify(id:string,text:string,titles:number,bodies:number,video:Set<string>,image:Set<string>,basis:CompareDataset['formats']['basis']):FormatCode{
+// Meta's IMAGE media-type filter misses most image ads, while its VIDEO list is
+// reliable. So when the video list is complete, a non-video ad is image-led: we
+// count it as a static image and record that it was inferred.
+function classify(id:string,text:string,titles:number,bodies:number,video:Set<string>,image:Set<string>,basis:CompareDataset['formats']['basis'],inferStatic:boolean):FormatCode{
  if(TEMPLATE.test(text)){basis.template++;return 'd';}
  const v=video.has(id),i=image.has(id);
  // One shared body with several distinct headlines is how carousel cards appear in the Ad Library.
  if((v||i)&&titles>=2&&bodies<=1){basis.cards++;return 'c';}
  if(v){basis.mediaType++;return 'v';}
  if(i){basis.mediaType++;return 's';}
+ if(inferStatic){basis.inferred=(basis.inferred||0)+1;return 's';}
  basis.none++;return 'u';
 }
 
@@ -98,7 +102,7 @@ async function buildDirect(token:string,page:string,coverage:string,job:Job):Pro
   const titles=[...new Set<string>((a.ad_creative_link_titles||[]).map((s:string)=>String(s).trim()).filter(Boolean))];
   const text=bodies.join('\n\n')+'\n'+titles.join('\n');
   const reach=a.total_reach_by_location?.find((r:any)=>(r.key??r.location)==='GB')?.value??null;
-  return {id:String(a.id),s:String(a.ad_delivery_start_time||'').slice(0,10),e:a.ad_delivery_stop_time?String(a.ad_delivery_stop_time).slice(0,10):null,f:classify(String(a.id),text,titles.length,bodies.length,video.found,image.found,basis),t:clip(titles[0]||'',160),b:clip(bodies.join('\n\n'),900),r:typeof reach==='number'?reach:null} as CompareAd;
+  return {id:String(a.id),s:String(a.ad_delivery_start_time||'').slice(0,10),e:a.ad_delivery_stop_time?String(a.ad_delivery_stop_time).slice(0,10):null,f:classify(String(a.id),text,titles.length,bodies.length,video.found,image.found,basis,video.complete),t:clip(titles[0]||'',160),b:clip(bodies.join('\n\n'),900),r:typeof reach==='number'?reach:null} as CompareAd;
  });
  // Meta's own display format, for ads AdSnoop has already collected. Reads small stored
  // records only; nothing new is downloaded. Fills unknowns and confirms carousels.
@@ -106,11 +110,11 @@ async function buildDirect(token:string,page:string,coverage:string,job:Job):Pro
   job.phase='refining';
   const todo=ads.filter(a=>a.f==='u'||a.f==='s').slice(0,800);let i=0;basis.stored=0;
   const map:Record<string,FormatCode>={VIDEO:'v',IMAGE:'s',CAROUSEL:'c',MULTI_IMAGES:'c',MULTI_VIDEOS:'c',DPA:'d',DCO:'d'};
-  await Promise.all(Array.from({length:12},async()=>{while(i<todo.length){const a=todo[i++];try{const st=await readStored(a.id);const f=st?.displayFormat&&map[String(st.displayFormat).toUpperCase()];if(f&&f!==a.f){if(a.f==='u'){basis.none--;}else{basis.mediaType--;}a.f=f;basis.stored!++;}}catch{}}}));
+  await Promise.all(Array.from({length:12},async()=>{while(i<todo.length){const a=todo[i++];try{const st=await readStored(a.id);const f=st?.displayFormat&&map[String(st.displayFormat).toUpperCase()];if(f&&f!==a.f){a.f=f;basis.stored!++;}}catch{}}}));
  }
- const fmtComplete=video.complete&&image.complete;
+ const fmtComplete=video.complete;
  return {page,coverage,generatedAt:new Date().toISOString(),source:'direct',ads,complete:main.complete,limitReason:main.reason,cap:DIRECT_CAP,
-  formats:{complete:fmtComplete,basis,note:fmtComplete?'Video and image from Meta’s media-type filter, refined with Meta’s own display format where AdSnoop has collected the ad; carousels from card headlines; catalogue ads from product templates.':'Meta’s media-type lists were cut short, so some ads are unclassified.'}};
+  formats:{complete:fmtComplete,basis,note:fmtNote(basis,fmtComplete,true)}};
 }
 
 // ---- relay source (credential-free preview) ----
@@ -148,18 +152,27 @@ async function buildRelay(page:string,coverage:string,job:Job):Promise<CompareDa
   for(const [id,f] of Object.entries(body.formats as Record<string,string>)){if(f==='Video'||f==='Mixed')video.add(id);if(f==='Image'||f==='Mixed')image.add(id);}
   await sleep(1500);
  }
+ // The production lookup reads at most 200 video ads per advertiser; beyond that the list may be incomplete.
+ const videoComplete=fmtComplete&&video.size<200;
  const basis={mediaType:0,template:0,cards:0,none:0};
  const ads=raw.map(a=>{
   const copy=a.copy==='No ad copy provided by Meta.'?'':String(a.copy||'');const title=a.title==='Ad creative'?'':String(a.title||'');
   const bodies=copy?copy.split(/\n\n+/).length:0;
-  return {id:String(a.id),s:String(a.start||''),e:a.stop||null,f:classify(String(a.id),copy+'\n'+title,1,bodies,video,image,basis),t:clip(title,160),b:clip(copy,900),r:typeof a.reach==='number'?a.reach:null} as CompareAd;
+  return {id:String(a.id),s:String(a.start||''),e:a.stop||null,f:classify(String(a.id),copy+'\n'+title,1,bodies,video,image,basis,videoComplete),t:clip(title,160),b:clip(copy,900),r:typeof a.reach==='number'?a.reach:null} as CompareAd;
  });
- // The production format lookup reads at most 200 video and 200 image ads per advertiser.
- const capped=raw.length>200;
  return {page,coverage,generatedAt:new Date().toISOString(),source:'relay',ads,complete,limitReason:reason,cap:RELAY_CAP,
-  formats:{complete:fmtComplete&&!capped,basis,note:'Preview data: video and image from Meta’s media-type filter (up to 200 of each per advertiser); carousels can’t be told apart from images here; catalogue ads from product templates.'}};
+  formats:{complete:videoComplete,basis,note:fmtNote(basis,videoComplete,false)}};
 }
 
+function fmtNote(b:CompareDataset['formats']['basis'],videoComplete:boolean,direct:boolean){
+ const parts=['Video from Meta’s video media-type list.'];
+ if(b.inferred)parts.push(`${b.inferred} ad${b.inferred===1?'':'s'} Meta doesn’t list as video counted as static image${direct?'; some may be carousels not yet confirmed':'; carousels can’t be separated from images in preview data'}.`);
+ if(b.stored)parts.push(`${b.stored} refined with Meta’s own display format.`);
+ if(b.cards)parts.push(`${b.cards} carousel${b.cards===1?'':'s'} identified from multiple card headlines.`);
+ if(b.template)parts.push(`${b.template} catalogue ad${b.template===1?'':'s'} identified from product templates.`);
+ if(!videoComplete)parts.push('The video list was cut short, so ads outside it are left as Unknown.');
+ return parts.join(' ');
+}
 export function startDataset(page:string,coverage:string,token:string){
  const key=datasetKey(page,coverage);if(jobs.has(key))return;
  if(!COUNTRIES[coverage])throw Error('coverage');

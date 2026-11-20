@@ -760,11 +760,11 @@ const cap1=t=>t.charAt(0).toUpperCase()+t.slice(1);
 const ofYour=(k,n)=>k===n?(n===1?"Your competitor":"All "+numWord(n)+" competitors"):cap1(numWord(k))+" of your "+numWord(n)+" competitors";
 function evidenceFor(cols,pick,limit=4){
  const out=[],used=new Set();
- // One ad per competitor first, then fill.
+ // One ad per competitor first, then fill; never the same creative twice.
  for(let round=0;round<2&&out.length<limit;round++)for(const c of cols){
-  const ads=pick(c).filter(a=>!used.has(a.id));if(!ads.length)continue;
-  const take=round?ads.slice(0,limit-out.length):ads.slice(0,1);
-  for(const a of take){if(out.length>=limit)break;used.add(a.id);out.push({a,c})}
+  const ads=pick(c).filter(a=>!used.has(groupKey(a)));if(!ads.length)continue;
+  const take=round?ads:ads.slice(0,1);
+  for(const a of take){if(out.length>=limit)break;if(used.has(groupKey(a)))continue;used.add(groupKey(a));out.push({a,c})}
  }
  return out;
 }
@@ -912,12 +912,12 @@ function mixHTML(cols){
   return '<div class="mx-row'+(c.mine?' me':'')+'"><span class="mx-n">'+esc(c.name)+'<small>'+fmtN(b.classified)+' of '+fmtN(b.total)+' classified'+(b.fmt.u?' · '+fmtN(b.fmt.u)+' unknown':'')+'</small></span><span class="mx-bar">'+(segs||'<span class="mx-none">No classified ads</span>')+'</span></div>';
  }).join("");
  const shift='<div class="bm"><div class="bm-h"><h4>Video in recent launches</h4><small>Video share of ads launched in the last 30 days vs older active ads</small></div><div class="sh">'+ready.map(c=>{const b=c.b;if(b.recentVideo==null||b.olderVideo==null)return '<div class="sh-row'+(c.mine?' me':'')+'"><span>'+esc(c.name)+'</span><small>Too few dated ads to compare</small></div>';const dlt=b.recentVideo-b.olderVideo;return '<div class="sh-row'+(c.mine?' me':'')+'" title="'+esc(b.recentN+" recent and "+b.olderN+" older classified ads")+'"><span>'+esc(c.name)+'</span><span class="sh-v">'+b.olderVideo+'% <i>→</i> <b>'+b.recentVideo+'%</b></span><span class="sh-d '+(dlt>=10?'up':dlt<=-10?'down':'')+'">'+(dlt>0?'+':'')+dlt+' pts</span></div>'}).join("")+'</div><p class="bm-f">Compares ads still active today by launch date. It describes the current mix, not ads that were replaced.</p></div>';
- const note=ready.some(c=>!c.b.carouselKnown)?'<p class="cmp-note">'+esc(ready.find(c=>!c.b.carouselKnown).b.fmtNote)+'</p>':'<p class="cmp-note">Video and image come from Meta’s media-type filter, carousels from ads with several card headlines, catalogue ads from product templates. Ads Meta doesn’t tag are shown as Unknown and left out of shares.</p>';
+ const note='<details class="cmp-how"><summary>How formats are classified</summary>'+ready.map(c=>'<p><b>'+esc(c.name)+':</b> '+esc(c.b.fmtNote||"No format data.")+'</p>').join("")+'<p>Unknown ads are left out of shares. Format choices show where competitors put effort, not what performs.</p></details>';
  return '<div class="mx"><div class="mx-top"><div><h3 class="cmp-h">Creative format mix</h3><small class="intel-sub">'+(mode==="share"?'Share of each brand’s classified ads (unknown formats left out)':'Number of active ads, on one scale, including unknown')+'. Click a format to sort.</small></div>'+toggle+'</div>'+legend+'<div class="mx-bars">'+bars+'</div>'+note+'</div>'+shift;
 }
 function sparkWeeks(w,max){
  const W=168,H=40,bw=W/w.length;
- return '<svg class="spk" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Weekly launches, last 12 weeks: '+w.join(", ")+'">'+w.map((n,i)=>{const h=max?Math.max(n?2:0,n/max*(H-4)):0;return '<rect x="'+(i*bw+1).toFixed(1)+'" y="'+(H-h).toFixed(1)+'" width="'+(bw-2).toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2"><title>'+(12-i===1?"This week":(12-i-1)+" weeks ago")+': '+n+' launched</title></rect>'}).join("")+'</svg>';
+ return '<svg class="spk" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="Weekly launches, last 12 weeks: '+w.join(", ")+'">'+w.map((n,i)=>{const h=max?Math.max(n?2:0,n/max*(H-4)):0;return '<rect x="'+(i*bw+1).toFixed(1)+'" y="'+(H-h).toFixed(1)+'" width="'+(bw-2).toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2"><title>'+(12-i===1?"This week":(12-i-1)+" weeks ago")+': '+n+' launched</title></rect>'}).join("")+'</svg>';
 }
 function activityHTML(cols){
  const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';
