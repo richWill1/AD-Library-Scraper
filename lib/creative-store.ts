@@ -42,6 +42,17 @@ export const readDirectoryObject = () => r2('GET', directoryKey);
 export const writeDirectoryObject = (json:string, etag:string|null) =>
  r2('PUT', directoryKey, Buffer.from(json), 'application/json', etag ? {'if-match':etag} : {'if-none-match':'*'});
 
+// Small JSON snapshots (e.g. seasonal trackers) that survive restarts. Kept under
+// directory/ so they are never cached by the public media host.
+export async function readSnapshot(name:string):Promise<string|null>{
+ if(!storeReady||!/^[a-z0-9-]{1,40}$/.test(name))return null;
+ try{const r=await r2('GET',`directory/snapshots/${name}.json`);return r.ok?await r.text():null;}catch{return null;}
+}
+export async function writeSnapshot(name:string,json:string){
+ if(!storeReady||!/^[a-z0-9-]{1,40}$/.test(name)||json.length>2_000_000)return;
+ try{await r2('PUT',`directory/snapshots/${name}.json`,Buffer.from(json),'application/json');}catch{}
+}
+
 const publicUrl=(key:string)=>`${PUBLIC}/${encodeKey(key)}`;
 const isPublic=(u:unknown):u is string=>typeof u==='string'&&u.startsWith(PUBLIC+'/');
 

@@ -1,5 +1,8 @@
 import {NextRequest, NextResponse} from 'next/server';
 import {directorySearch} from '@/lib/advertiser-directory';
+import {metaFetch} from '@/lib/meta-api';
+import {getMetaCredential} from '@/lib/meta-token-store';
+import {readSnapshot,writeSnapshot} from '@/lib/creative-store';
 export const runtime = 'nodejs';
 
 // Seasonal ad trackers (Christmas, Black Friday). Built from the same live UK
@@ -43,7 +46,31 @@ const cache = new Map<string, {at: number; data: unknown}>();
 const inflight = new Map<string, Promise<unknown>>();
 const days = (start: string) => { const t = Date.parse(start + 'T00:00:00Z'); return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : null; };
 
+// On the live site, ask Meta directly: no internal rate limit to pace around, so
+// searches run a few at a time and a full build takes seconds rather than minutes.
+let directToken = '';
+async function directSearch(term: string, page = '', maxPages = 3) {
+  const out: Ad[] = []; let after = '';
+  for (let i = 0; i < maxPages; i++) {
+    const p = new URLSearchParams({ad_reached_countries: '["GB"]', ad_type: 'ALL', ad_active_status: 'ACTIVE', limit: '100', fields: 'id,page_id,page_name,ad_creative_bodies,ad_creative_link_titles,ad_delivery_start_time,total_reach_by_location,publisher_platforms'});
+    if (page) p.set('search_page_ids', JSON.stringify([page])); else p.set('search_terms', term);
+    if (after) p.set('after', after);
+    let body: any;
+    try { const res = await metaFetch(`https://graph.facebook.com/v26.0/ads_archive?${p}`, {headers: {Authorization: `Bearer ${directToken}`}, signal: AbortSignal.timeout(25000), cache: 'no-store'}); body = await res.json(); } catch { failures++; break; }
+    if (body?.error || !Array.isArray(body?.data)) { failures++; break; }
+    for (const a of body.data) {
+      const bodies = [...new Set<string>((a.ad_creative_bodies || []).map((x: string) => String(x).trim()).filter(Boolean))];
+      const reach = a.total_reach_by_location?.find((r: any) => (r.key ?? r.location) === 'GB')?.value;
+      out.push({id: String(a.id), pageId: String(a.page_id || ''), pageName: String(a.page_name || ''), title: String((a.ad_creative_link_titles || [])[0] || ''), copy: bodies.join('\n\n'), start: String(a.ad_delivery_start_time || '').slice(0, 10), reach: typeof reach === 'number' ? reach : null, platforms: a.publisher_platforms || []});
+    }
+    after = body.paging?.next ? body.paging?.cursors?.after || '' : ''; if (!after) break;
+  }
+  return out;
+}
+async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) { let i = 0; await Promise.all(Array.from({length: n}, async () => { while (i < items.length) { const x = items[i++]; try { await fn(x); } catch {} } })); }
+
 async function search(term: string, page = '', maxPages = 3) {
+  if (directToken) return directSearch(term, page, maxPages);
   const out: Ad[] = []; let after = '';
   for (let i = 0; i < maxPages; i++) {
     await paced();
@@ -63,8 +90,10 @@ async function build(key: string) {
   failures = 0;
   const seen = new Map<string, Ad>();
   const add = (list: Ad[]) => { for (const a of list) if (a && /^\d{1,30}$/.test(String(a.id)) && !seen.has(a.id)) seen.set(a.id, a); };
-  for (const id of await majorPages()) { try { add(await search(id, id, 2)); } catch {} }
-  for (const term of ev.terms) { try { add(await search(term)); } catch {} }
+  try { directToken = (await getMetaCredential()).token || ''; } catch { directToken = ''; }
+  const jobs: [string, string, number][] = [...(await majorPages()).map(id => [id, id, 2] as [string, string, number]), ...ev.terms.map(t => [t, '', 3] as [string, string, number])];
+  // Direct: four at a time. Through the shared ads endpoint: one at a time, paced.
+  await pool(jobs, directToken ? 4 : 1, async ([term, page, n]) => { add(await search(term, page, n)); });
   const ads = [...seen.values()].filter(a => ev.match.test(`${a.title || ''}\n${a.copy || ''}`) && /^\d{1,30}$/.test(String(a.pageId)));
   // Advertisers
   const byPage = new Map<string, {id: string; name: string; ads: number; reach: number; first: string}>();
@@ -93,10 +122,27 @@ async function build(key: string) {
   };
 }
 
+function refresh(key: string) {
+  let work = inflight.get(key);
+  if (!work) {
+    work = build(key).then(d => { if ((d as {stats: {ads: number}}).stats.ads) { cache.set(key, {at: Date.now(), data: d}); if (!(d as {partial?: boolean}).partial) writeSnapshot('seasonal-' + key, JSON.stringify(d)); } return d; }).finally(() => inflight.delete(key));
+    inflight.set(key, work);
+  }
+  return work;
+}
+// Keep both trackers fresh in the background on the live site, so nobody waits for a build.
+let scheduled = false;
+function scheduleRefresh() {
+  if (scheduled || process.env.RENDER_SERVICE_ID !== 'srv-db3ufoad0e5s73f5dudg') return;
+  scheduled = true;
+  const tick = async () => { for (const k of Object.keys(EVENTS)) { const h = cache.get(k); if (!h || Date.now() - h.at > TTL - 15 * 60000) { try { await refresh(k); } catch {} } } };
+  setTimeout(tick, 5000); setInterval(tick, 20 * 60000).unref?.();
+}
+
 export async function GET(req: NextRequest) {
   const key = req.nextUrl.searchParams.get('event') || '';
   if (!EVENTS[key]) return NextResponse.json({error: 'Unknown event.'}, {status: 400});
-  const hit = cache.get(key);
+  let hit = cache.get(key);
   // A preview without its own Meta access reuses the live site's shared result.
   if (!process.env.META_ACCESS_TOKEN?.trim() && process.env.RENDER_SERVICE_ID !== 'srv-db3ufoad0e5s73f5dudg') {
     try {
@@ -104,10 +150,13 @@ export async function GET(req: NextRequest) {
       if (res.ok) return NextResponse.json(await res.json(), {headers: {'Cache-Control': 'public, max-age=600'}});
     } catch {}
   }
+  // After a restart, start from the last saved result instead of making visitors wait.
+  if (!hit) { const saved = await readSnapshot('seasonal-' + key); if (saved) { try { const d = JSON.parse(saved); cache.set(key, {at: Date.parse(d.updatedAt) || 0, data: d}); hit = cache.get(key); } catch {} } }
+  scheduleRefresh();
   const ttl = (hit?.data as {partial?: boolean} | undefined)?.partial ? 10 * 60000 : TTL;
   if (hit && Date.now() - hit.at < ttl) return NextResponse.json(hit.data, {headers: {'Cache-Control': 'public, max-age=600'}});
   let work = inflight.get(key);
-  if (!work) { work = build(key).then(d => { if ((d as {stats: {ads: number}}).stats.ads) cache.set(key, {at: Date.now(), data: d}); return d; }).finally(() => inflight.delete(key)); inflight.set(key, work); }
+  if (!work) work = refresh(key);
   try {
     // Serve stale data straight away while a refresh runs.
     const data = hit ? hit.data : await work;
