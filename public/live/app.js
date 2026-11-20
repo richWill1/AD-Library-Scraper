@@ -755,14 +755,19 @@ async function trkSearch(input){
  const q=input.value.trim(),out=$("trkResults"),spin=input.parentElement.querySelector(".trk-spin"),kind=input.id==="trkBrandQ"?"pick":"add",seq=++trk.seq;
  if(q.length<2){out.innerHTML="";return}
  spin.hidden=false;
- const valid=a=>a&&/^\d{3,30}$/.test(a.id||"");
- let list=[];
- try{
-  const [named,cat]=await Promise.all([fetchSuggestions(q).catch(()=>[]),kind==="add"?fetchCategorySuggestions(q).catch(()=>[]):Promise.resolve([])]);
-  const seen=new Set();for(const a of [...named,...cat])if(valid(a)&&!seen.has(a.id)){seen.add(a.id);list.push(a)}
- }catch{}
- if(seq!==trk.seq)return;spin.hidden=true;
- out.innerHTML=trkResultHTML(list.slice(0,10),kind,kind==="add"?activeBrand():null);
+ const valid=a=>a&&/^\d{3,30}$/.test(a.id||""),list=[],seen=new Set(),add=xs=>{for(const a of xs||[])if(valid(a)&&!seen.has(a.id)){seen.add(a.id);list.push(a)}};
+ const show=(pending)=>{if(seq!==trk.seq)return;out.innerHTML=list.length?trkResultHTML(list.slice(0,10),kind,kind==="add"?activeBrand():null):pending?'<p class="intel-sub">Checking the Ad Library for “'+esc(q)+'”…</p>':trkResultHTML([],kind,null)};
+ // Fast: known advertisers (and, for competitors, advertisers using the word).
+ const [named,cat]=await Promise.all([fetchSuggestions(q).catch(()=>[]),kind==="add"?fetchCategorySuggestions(q).catch(()=>[]):Promise.resolve([])]);
+ add(named);add(cat);
+ const exact=list.some(a=>canonicalName(a.name)===canonicalName(q));
+ show(!exact);
+ // Thorough: the same Page lookup the main search uses (website, Page name, Ad Library).
+ if(!exact){
+  try{const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(25000)});const d=await r.json();if(seq!==trk.seq)return;const found=(Array.isArray(d.advertisers)?d.advertisers:[]).map(a=>({...a,count:a.adCount||0}));list.unshift(...found.filter(a=>valid(a)&&!seen.has(a.id)));found.forEach(a=>valid(a)&&seen.add(a.id))}catch{}
+  show(false);
+ }
+ if(seq===trk.seq)spin.hidden=true;
 }
 function trkInput(e){const i=e.target;if(!i||(i.id!=="trkBrandQ"&&i.id!=="trkCompQ"))return;clearTimeout(trk.timer);trk.timer=setTimeout(()=>trkSearch(i),350)}
 function trkFocus(){setTimeout(()=>{const i=$("trkCompQ")||$("trkBrandQ");if(i&&!("ontouchstart" in window))i.focus({preventScroll:true})},50)}
@@ -901,7 +906,9 @@ const byReach=(x,y)=>(y.reach??-1)-(x.reach??-1)||String(x.start||"9").localeCom
 // strongest two or three, one per kind, each with denominators and caveats.
 function opportunities(cols){
  const me=cols.find(c=>c.mine&&c.b),rivals=cols.filter(c=>!c.mine&&c.b&&c.b.total>=10);
- if(!me||!rivals.length||me.b.total<5)return {list:[],why:!me?"mine":rivals.length?"small":"rivals"};
+ if(!cols.some(c=>c.mine))return {list:[],why:"mine"};
+ if(!me)return {list:[],why:"wait"};
+ if(!rivals.length||me.b.total<5)return {list:[],why:rivals.length?"small":"rivals"};
  const R=rivals.length,partial=[me,...rivals].filter(c=>c.b.partial).map(c=>c.name);
  const small=cols.filter(c=>!c.mine&&c.b&&c.b.total<10).map(c=>c.name+" ("+c.b.total+")");
  const pnote=(partial.length?" Partial data for "+listNames(partial)+": counts cover the ads collected.":"")+(small.length?" Left out with fewer than ten active ads: "+listNames(small)+".":"");
@@ -1000,6 +1007,7 @@ function radarHTML(cols){
  const op=opportunities(cols);
  const head='<div class="op-head"><div><p class="eyebrow">Creative Opportunity Radar</p><h3>Where your brand could test next</h3></div><span class="op-sub">The strongest differences between your ads and your competitors’, ranked. Signals of competitor activity, not proof of performance.</span></div>';
  if(op.why==="mine")return '<section class="op">'+head+'<div class="op-empty">Add your brand in <a href="/tracker">My competitors</a> to see opportunities against your competitors.</div></section>';
+ if(op.why==="wait")return '<section class="op">'+head+'<div class="op-empty"><span class="cmp-wait"></span> Collecting your ads and your competitors’ ads. Opportunities appear as soon as they’re in.</div></section>';
  if(op.why==="rivals"||op.why==="small")return '<section class="op">'+head+'<div class="op-empty">'+(loading?'<span class="cmp-wait"></span> Collecting ads…':op.why==="small"?'Your brand has fewer than five active ads, too few to compare fairly.':'Add competitors with at least ten active ads to compare against.')+'</div></section>';
  if(!op.list.length)return '<section class="op">'+head+'<div class="op-empty">'+(loading?'<span class="cmp-wait"></span> Still collecting, opportunities appear when all brands are in.':'No strong gaps: your formats, launch activity and messaging sit close to your competitors.')+'</div></section>';
  return '<section class="op">'+head+'<div class="op-grid">'+op.list.map((o,i)=>'<article class="op-card op-'+o.kind+'" style="--i:'+i+'"><span class="op-tag">'+esc(o.tag)+'</span><h4>'+esc(o.title)+'</h4><p class="op-data">'+esc(o.data)+'</p><p class="op-why"><b>Why it could matter.</b> '+esc(o.why)+'</p><div class="op-test"><span>Test</span>'+esc(o.test)+'</div>'+evidenceHTML(o.ev)+'<p class="op-note">'+esc(o.note)+'</p></article>').join("")+'</div>'+(loading?'<p class="op-foot"><span class="cmp-wait"></span> Some brands are still loading; this may change.</p>':'')+'</section>';
@@ -1007,6 +1015,7 @@ function radarHTML(cols){
 // A ranked bar list with your brand highlighted.
 function rankBars(cols,val,label,fmtv){
  const r=cols.filter(c=>c.b).map(c=>({c,v:val(c.b)})).filter(x=>x.v!=null).sort((a,b)=>b.v-a.v);
+ if(!r.length)return '<div class="rb-wait"><span class="cmp-wait"></span> Collecting…</div>';
  const max=Math.max(1,...r.map(x=>x.v));
  return '<div class="rb">'+r.map(x=>'<div class="rb-row'+(x.c.mine?' me':'')+'" title="'+esc(x.c.name+": "+label(x.c.b))+'"><span class="rb-n">'+esc(x.c.name)+'</span><span class="rb-bar"><i style="--w:'+(x.v/max*100).toFixed(1)+'%"></i></span><span class="rb-v">'+(fmtv?fmtv(x.c.b):fmtN(x.v))+'</span></div>').join("")+'</div>';
 }
