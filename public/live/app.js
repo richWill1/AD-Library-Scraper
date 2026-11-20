@@ -1112,13 +1112,16 @@ function radarHTML(cols){
  return '<section class="op">'+head+'<div class="op-grid">'+op.list.map((o,i)=>'<article class="op-card op-'+o.kind+'" style="--i:'+i+'"><span class="op-tag">'+esc(o.tag)+'</span><h4>'+esc(o.title)+'</h4><p class="op-data">'+esc(o.data)+'</p><p class="op-why"><b>Why it could matter.</b> '+esc(o.why)+'</p><div class="op-test"><span>Test</span>'+esc(o.test)+'</div>'+evidenceHTML(o.ev)+'<p class="op-note">'+esc(o.note)+'</p></article>').join("")+'</div>'+(loading?'<p class="op-foot"><span class="cmp-wait"></span> Some brands are still loading; this may change.</p>':'')+'</section>';
 }
 // A ranked bar list with your brand highlighted.
+const BRAND_PAL=["#ff6b4a","#14b8a6","#a855f7","#f59e0b","#ec4899"];
+const brandColor=id=>(cmp.colors&&cmp.colors.get(id))||"#8e8e93";
 function rankBars(cols,val,label,fmtv){
  const r=cols.filter(c=>c.b).map(c=>({c,v:val(c.b)})).filter(x=>x.v!=null).sort((a,b)=>b.v-a.v);
  if(!r.length)return '<div class="rb-wait"><span class="cmp-wait"></span> Collecting…</div>';
  const max=Math.max(1,...r.map(x=>x.v));
- return '<div class="rb">'+r.map(x=>'<div class="rb-row'+(x.c.mine?' me':'')+'" title="'+esc(x.c.name+": "+label(x.c.b))+'"><span class="rb-n">'+esc(x.c.name)+'</span><span class="rb-bar"><i style="--w:'+(x.v/max*100).toFixed(1)+'%"></i></span><span class="rb-v">'+(fmtv?fmtv(x.c.b):fmtN(x.v))+'</span></div>').join("")+'</div>';
+ return '<div class="rb">'+r.map(x=>'<div class="rb-row'+(x.c.mine?' me':'')+'" style="--bc:'+brandColor(x.c.id)+'" title="'+esc(x.c.name+": "+label(x.c.b))+'"><span class="rb-n">'+esc(x.c.name)+'</span><span class="rb-bar"><i style="--w:'+(x.v/max*100).toFixed(1)+'%"></i></span><span class="rb-v">'+(fmtv?fmtv(x.c.b):fmtN(x.v))+'</span></div>').join("")+'</div>';
 }
-function kpiCard(title,sub,body,foot){return '<div class="bm"><div class="bm-h"><h4>'+esc(title)+'</h4>'+(sub?'<small>'+sub+'</small>':'')+'</div>'+body+(foot?'<p class="bm-f">'+foot+'</p>':'')+'</div>'}
+const KPI_ACCENT={"Active ad volume":"vol","Video share":"vid","Launched in 30 days":"new","Median ad age":"age","How hard each brand pushes offers":"off"};
+function kpiCard(title,sub,body,foot){return '<div class="bm k-'+(KPI_ACCENT[title]||"x")+'"><div class="bm-h"><h4>'+esc(title)+'</h4>'+(sub?'<small>'+sub+'</small>':'')+'</div>'+body+(foot?'<p class="bm-f">'+foot+'</p>':'')+'</div>'}
 function positionLine(cols,val,unit){unit=unit||"";
  const me=cols.find(c=>c.mine&&c.b);const r=cols.filter(c=>c.b&&val(c.b)!=null);if(!me||r.length<2)return "";
  const sorted=[...r].sort((a,b)=>val(b.b)-val(a.b));const pos=sorted.indexOf(me)+1;
@@ -1181,7 +1184,7 @@ function messagingCmpHTML(cols){
   diff='<div class="bm"><div class="bm-h"><h4>Biggest differences</h4><small>Themes where your share of ads differs most from the average of your '+numWord(rivals.length)+' competitors</small></div>'+(rows.length?'<div class="df">'+rows.map(x=>'<div class="df-row"><span class="df-l"><b>'+esc(x.r.label)+'</b><small>'+esc(messageCategories.find(c=>c.id===x.r.category).label)+(x.d<0?' · '+x.users+' of '+rivals.length+' competitors use it':'')+'</small></span><span class="df-bars"><span class="df-b me" title="You: '+x.mine+'%"><i style="--w:'+(x.mine/max*100).toFixed(1)+'%"></i><em>You '+x.mine+'%</em></span><span class="df-b" title="Competitor average: '+x.avg+'%"><i style="--w:'+(x.avg/max*100).toFixed(1)+'%"></i><em>Competitors '+x.avg+'%</em></span></span><span class="df-tag '+(x.d<0?'gap':'edge')+'">'+(x.d<0?'Gap':'Your edge')+'</span></div>').join("")+'</div>':'<p class="intel-sub">Your messaging sits close to your competitors’ on every shared theme.</p>')+'<p class="bm-f">Only themes used in at least 10% of ads are shown. Brand-specific phrasing isn’t compared.</p></div>';
  }
  // 3. Offers.
- const offers='<div class="bm"><div class="bm-h"><h4>How hard each brand pushes offers</h4><small>Share of ads with a price incentive, free first step or payment option</small></div>'+rankBars(cols,b=>b.offers,b=>b.offers+"% of ads ("+b.offerN+")",b=>b.offers+'%')+'</div>';
+ const offers='<div class="bm k-off"><div class="bm-h"><h4>How hard each brand pushes offers</h4><small>Share of ads with a price incentive, free first step or payment option</small></div>'+rankBars(cols,b=>b.offers,b=>b.offers+"% of ads ("+b.offerN+")",b=>b.offers+'%')+'</div>';
  return (diff||"")+leads+offers+'<p class="cmp-note">Themes come from the same rules as the Messaging tab, applied to every collected ad’s text. Claims aren’t verified. For one brand’s full theme breakdown, open it and use the Messaging tab.</p>';
 }
 function compareHTML(){
@@ -1190,6 +1193,7 @@ function compareHTML(){
  const need=brands.some(b=>{const d=cmp.data.get(b.id);return !d||d.status==="running"||d.status==="queued"});
  if(need&&!cmp.running)setTimeout(()=>loadCompare(false),0);
  const cols=brands.map(b=>{const c={...b,d:cmp.data.get(b.id)};c.b=bench(c);return c});
+ {let k=0;cmp.colors=new Map(cols.map(c=>[c.id,c.mine?"#0071e3":BRAND_PAL[k++%BRAND_PAL.length]]))}
  const hint=!mine?'<p class="cmp-hint">Add your brand in <a href="/tracker">My competitors</a> to unlock the Opportunity Radar.</p>':'';
  const pane=cmp.tab==="mix"?mixHTML(cols):cmp.tab==="activity"?activityHTML(cols):cmp.tab==="messaging"?messagingCmpHTML(cols):overviewHTML(cols);
  const when=cols.map(c=>c.b&&c.b.generatedAt).filter(Boolean).sort()[0];
