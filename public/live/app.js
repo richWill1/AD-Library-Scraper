@@ -718,7 +718,7 @@ function renderPinbar(){
  el.innerHTML='<span class="pin-k">'+(mine?'Tracking for '+esc(mine.name)+(t.brands.length>1?' (+'+(t.brands.length-1)+')':''):'Competitors')+' · '+list.length+'/'+COMP_MAX+'</span>'+(mine?chip(mine,"mine",mine.name+" · you"):'')+list.map(b=>chip(b)).join("")+'<a class="pin-cmp" href="/tracker">My competitors →</a>';
 }
 // ---- Tracker page (/tracker): brand switcher, onboarding and the dashboard ----
-const trk={mode:null,timer:0,seq:0};
+const trk={mode:null,timer:0,seq:0,lookups:new Map()};
 function trackerHTML(){
  const t=tracker(),active=activeBrand();
  const note='<div class="trk-note"><span aria-hidden="true">🔒</span><span><b>Preview:</b> your brands are saved on this device. Sign-in with email or Google is on the way, and this setup will move into your account.</span></div>';
@@ -764,7 +764,7 @@ async function trkSearch(input){
  show(!exact);
  // Thorough: the same Page lookup the main search uses (website, Page name, Ad Library).
  if(!exact){
-  try{const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(25000)});const d=await r.json();if(seq!==trk.seq)return;const found=(Array.isArray(d.advertisers)?d.advertisers:[]).map(a=>({...a,count:a.adCount||0}));list.unshift(...found.filter(a=>valid(a)&&!seen.has(a.id)));found.forEach(a=>valid(a)&&seen.add(a.id));add((Array.isArray(d.mentions)?d.mentions:[]).map(a=>({id:a.id,name:a.name,count:a.count||0,source:"category"})))}catch{}
+  try{const ck=canonicalName(q);let d=trk.lookups.get(ck);if(!d){const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(25000)});d=await r.json();if(trk.lookups.size>50)trk.lookups.clear();trk.lookups.set(ck,d)}if(seq!==trk.seq)return;const found=(Array.isArray(d.advertisers)?d.advertisers:[]).map(a=>({...a,count:a.adCount||0}));list.unshift(...found.filter(a=>valid(a)&&!seen.has(a.id)));found.forEach(a=>valid(a)&&seen.add(a.id));add((Array.isArray(d.mentions)?d.mentions:[]).map(a=>({id:a.id,name:a.name,count:a.count||0,source:"category"})))}catch{}
   show(false);
  }
  if(seq===trk.seq)spin.hidden=true;
@@ -784,7 +784,10 @@ function trkClick(e){
  else if(k==="done"){trk.mode=null;cmp.anim=true}
  else if(k==="delbrand"){if(!confirmStop(b))return;removeBrand(id);trk.mode=null}
  else return;
- renderCards();if(trk.mode)trkFocus();
+ const keep=(k==="add"||k==="rm")&&$("trkCompQ")?$("trkCompQ").value:"";
+ renderCards();
+ if(keep){const i=$("trkCompQ");if(i){i.value=keep;trkSearch(i);i.focus({preventScroll:true})}}
+ else if(trk.mode)trkFocus();
 }
 // Two-step confirm without a browser dialog.
 function confirmStop(b){if(b.dataset.armed){return true}b.dataset.armed="1";b.textContent="Click again to stop tracking";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed}},4000);return false}
