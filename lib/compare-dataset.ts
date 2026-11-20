@@ -11,7 +11,7 @@ import {metaFetch} from '@/lib/meta-api';
 import {observeAds} from '@/lib/advertiser-directory';
 import {readStored,storeReady} from '@/lib/creative-store';
 
-export type FormatCode='v'|'s'|'c'|'d'|'u'; // video, static image, carousel, catalogue/dynamic, unknown
+export type FormatCode='v'|'s'|'c'|'d'|'i'|'u'; // video, static image, carousel, catalogue/dynamic, image-based (type unconfirmed), unknown
 export type CompareAd={id:string;s:string;e:string|null;f:FormatCode;t:string;b:string;r:number|null};
 export type CompareDataset={
  page:string;coverage:string;generatedAt:string;source:'direct'|'relay';
@@ -52,8 +52,9 @@ export function runningJobs(){return jobs.size;}
 
 // Classify a format from the evidence available without downloading media.
 // Meta's IMAGE media-type filter misses most image ads, while its VIDEO list is
-// reliable. So when the video list is complete, a non-video ad is image-led: we
-// count it as a static image and record that it was inferred.
+// reliable. So when the video list is complete, a non-video ad is image-based. Its
+// exact type (single image, carousel or catalogue) isn't in the API data: catalogue
+// ads arrive with product names already filled in. It stays 'i' unless confirmed.
 function classify(id:string,text:string,titles:number,bodies:number,video:Set<string>,image:Set<string>,basis:CompareDataset['formats']['basis'],inferStatic:boolean):FormatCode{
  if(TEMPLATE.test(text)){basis.template++;return 'd';}
  const v=video.has(id),i=image.has(id);
@@ -61,7 +62,7 @@ function classify(id:string,text:string,titles:number,bodies:number,video:Set<st
  if((v||i)&&titles>=2&&bodies<=1){basis.cards++;return 'c';}
  if(v){basis.mediaType++;return 'v';}
  if(i){basis.mediaType++;return 's';}
- if(inferStatic){basis.inferred=(basis.inferred||0)+1;return 's';}
+ if(inferStatic){basis.inferred=(basis.inferred||0)+1;return 'i';}
  basis.none++;return 'u';
 }
 
@@ -108,7 +109,7 @@ async function buildDirect(token:string,page:string,coverage:string,job:Job):Pro
  // records only; nothing new is downloaded. Fills unknowns and confirms carousels.
  if(storeReady){
   job.phase='refining';
-  const todo=ads.filter(a=>a.f==='u'||a.f==='s').slice(0,800);let i=0;basis.stored=0;
+  const todo=ads.filter(a=>a.f==='u'||a.f==='s'||a.f==='i').slice(0,800);let i=0;basis.stored=0;
   const map:Record<string,FormatCode>={VIDEO:'v',IMAGE:'s',CAROUSEL:'c',MULTI_IMAGES:'c',MULTI_VIDEOS:'c',DPA:'d',DCO:'d'};
   await Promise.all(Array.from({length:12},async()=>{while(i<todo.length){const a=todo[i++];try{const st=await readStored(a.id);const f=st?.displayFormat&&map[String(st.displayFormat).toUpperCase()];if(f&&f!==a.f){a.f=f;basis.stored!++;}}catch{}}}));
  }
@@ -166,7 +167,7 @@ async function buildRelay(page:string,coverage:string,job:Job):Promise<CompareDa
 
 function fmtNote(b:CompareDataset['formats']['basis'],videoComplete:boolean,direct:boolean){
  const parts=['Video from Meta’s video media-type list.'];
- if(b.inferred)parts.push(`${b.inferred} ad${b.inferred===1?'':'s'} Meta doesn’t list as video counted as static image${direct?'; some may be carousels not yet confirmed':'; carousels can’t be separated from images in preview data'}.`);
+ if(b.inferred)parts.push(`${b.inferred} non-video ad${b.inferred===1?' is':'s are'} image-based; Meta’s API doesn’t say whether ${b.inferred===1?'it is a':'they are'} single image${b.inferred===1?'':'s'}, carousel${b.inferred===1?'':'s'} or catalogue ad${b.inferred===1?'':'s'}${direct?', so only those AdSnoop has collected are confirmed':''}.`);
  if(b.stored)parts.push(`${b.stored} refined with Meta’s own display format.`);
  if(b.cards)parts.push(`${b.cards} carousel${b.cards===1?'':'s'} identified from multiple card headlines.`);
  if(b.template)parts.push(`${b.template} catalogue ad${b.template===1?'':'s'} identified from product templates.`);

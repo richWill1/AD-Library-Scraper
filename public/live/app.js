@@ -665,7 +665,7 @@ function compareBrands(){const set=comparisonSet();return (set.mine?[{...set.min
 const median=xs=>{const s=xs.filter(x=>x!=null).sort((a,b)=>a-b);if(!s.length)return null;const m=Math.floor(s.length/2);return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2)};
 const pctOf=(n,t)=>t?Math.round(n/t*100):0;
 const fmtN=n=>Number(n||0).toLocaleString("en-GB");
-const FMT=[{k:"v",label:"Video",c:"#6e56cf"},{k:"s",label:"Static image",c:"#2f80ed"},{k:"c",label:"Carousel",c:"#f5a524"},{k:"d",label:"Catalogue / dynamic",c:"#14a3a3"},{k:"u",label:"Unknown",c:"#d9dbe3"}];
+const FMT=[{k:"v",label:"Video",c:"#6e56cf"},{k:"s",label:"Static image",c:"#2f80ed"},{k:"c",label:"Carousel",c:"#f5a524"},{k:"d",label:"Catalogue / dynamic",c:"#14a3a3"},{k:"i",label:"Image-based, type unconfirmed",c:"#a9c8ef"},{k:"u",label:"Unknown",c:"#d9dbe3"}];
 const fmtName=k=>FMT.find(f=>f.k===k).label;
 // Older single-page loader, used only if the comparison service can't be reached.
 async function loadBrandRowsFallback(b){
@@ -734,8 +734,8 @@ function bench(c){
  const d=c.d;if(!d||d.status!=="ready")return null;
  const hit=cmp.memo.get(d);if(hit)return hit;
  const rows=d.rows,total=new Set(rows.map(a=>a.id)).size,days=rows.map(daysRunning);
- const fmt={v:0,s:0,c:0,d:0,u:0};for(const a of rows)fmt[a.fmt in fmt?a.fmt:"u"]++;
- const classified=total-fmt.u;
+ const fmt={v:0,s:0,c:0,d:0,i:0,u:0};for(const a of rows)fmt[a.fmt in fmt?a.fmt:"u"]++;
+ const classified=total-fmt.u,imageBased=fmt.s+fmt.c+fmt.d+fmt.i;
  const n7=days.filter(x=>x!=null&&x<=7).length,n30=days.filter(x=>x!=null&&x<=30).length,long=days.filter(x=>x!=null&&x>=90).length;
  const age={a:days.filter(x=>x!=null&&x<=7).length,b:days.filter(x=>x!=null&&x>7&&x<30).length,c:days.filter(x=>x!=null&&x>=30&&x<90).length,d:long};
  const recent=rows.filter(a=>{const x=daysRunning(a);return x!=null&&x<=30&&a.fmt!=="u"}),older=rows.filter(a=>{const x=daysRunning(a);return x!=null&&x>30&&a.fmt!=="u"});
@@ -744,7 +744,7 @@ function bench(c){
  const offerIds=new Set(themes.filter(t=>t.category==="offers").flatMap(t=>t.ads.map(a=>a.id)));
  const top=cat=>themes.find(t=>t.category===cat)?.label||"—";
  const meta=d.meta||{};
- const out={total,creatives:new Set(rows.map(groupKey)).size,fmt,classified,n7,n30,long,age,median:median(days),weekly:weeklyLaunches(rows,12),
+ const out={total,creatives:new Set(rows.map(groupKey)).size,fmt,classified,confirmed:imageBased?(fmt.s+fmt.c+fmt.d)/imageBased:1,n7,n30,long,age,median:median(days),weekly:weeklyLaunches(rows,12),
   recentVideo:recent.length>=5?pctOf(recent.filter(a=>a.fmt==="v").length,recent.length):null,olderVideo:older.length>=5?pctOf(older.filter(a=>a.fmt==="v").length,older.length):null,recentN:recent.length,olderN:older.length,
   share,count,byRule,offers:pctOf(offerIds.size,total),offerN:offerIds.size,hook:top("hooks"),benefit:top("benefits"),proof:top("proof"),cta:topCTAs(rows).list[0]?.label||"—",
   partial:!meta.complete,limitReason:meta.limitReason||null,fmtComplete:!!(meta.formats&&meta.formats.complete),fmtNote:meta.formats?.note||"",source:meta.source||"",carouselKnown:meta.source==="direct",generatedAt:meta.generatedAt,
@@ -782,7 +782,8 @@ function opportunities(cols){
  const fmtTest={v:"Turn your strongest current static concept into a 6–15 second video with the same offer, audience and landing page, and run it against the static version.",c:"Build a 3–5 card carousel from one existing concept (one product, benefit or step per card) and test it against your best single image.",d:"If you sell products online, test a catalogue ad set from your product feed against your best static product ad, with the same budget and audience."};
  for(const k of ["v","c","d"]){
   if(k==="c"&&!me.b.carouselKnown)continue;
-  const rv=rivals.filter(c=>c.b.classified>=10);if(rv.length<1||me.b.classified<5)continue;
+  // Carousel and catalogue counts are only trusted when most image-based ads have a confirmed type.
+  const rv=rivals.filter(c=>c.b.classified>=10&&(k==="v"||c.b.confirmed>=.6));if(rv.length<1||me.b.classified<5||(k!=="v"&&me.b.confirmed<.6))continue;
   const mine=fpct(me.b,k),vals=rv.map(c=>fpct(c.b,k)),avg=Math.round(vals.reduce((s,x)=>s+x,0)/vals.length),users=rv.filter(c=>fpct(c.b,k)>=20);
   if(avg-mine>=15&&users.length>=Math.min(2,rv.length)){
    const lo=Math.min(...vals),hi=Math.max(...vals);
@@ -891,7 +892,7 @@ function positionLine(cols,val,unit){unit=unit||"";
 function overviewHTML(cols){
  const ready=cols.filter(c=>c.b);
  const vol=kpiCard("Active ad volume","Unique Meta ad IDs live now",rankBars(cols,b=>b.total,b=>fmtN(b.total)+" active ads · "+fmtN(b.creatives)+" distinct creatives (identical copy and headline grouped)"),positionLine(cols,b=>b.total));
- const vid=kpiCard("Video share","% of classified ads",rankBars(cols,b=>b.classified?fpct(b,"v"):null,b=>fpct(b,"v")+"% video ("+b.fmt.v+" of "+fmtN(b.classified)+" classified)",b=>fpct(b,"v")+"%"),positionLine(cols,b=>b.classified?fpct(b,"v"):null,"%"));
+ const vid=kpiCard("Video share","% of ads with a known format",rankBars(cols,b=>b.classified?fpct(b,"v"):null,b=>fpct(b,"v")+"% video ("+b.fmt.v+" of "+fmtN(b.classified)+" classified)",b=>fpct(b,"v")+"%"),positionLine(cols,b=>b.classified?fpct(b,"v"):null,"%"));
  const fresh=kpiCard("Launched in 30 days","Active ads that started in the last 30 days",rankBars(cols,b=>b.n30,b=>b.n30+" ads ("+pctOf(b.n30,b.total)+"% of active) · "+b.n7+" in the last 7 days",b=>b.n30+' <small>'+pctOf(b.n30,b.total)+'%</small>'),positionLine(cols,b=>b.n30));
  const age=kpiCard("Median ad age","Days since launch, active ads",rankBars(cols,b=>b.median,b=>"Median "+b.median+" days · "+b.long+" ads running 90+ days",b=>b.median+'d'),"Longer isn’t better or worse: long-running ads aren’t proof of performance.");
  const msg=(()=>{const me=cols.find(c=>c.mine&&c.b),r=ready.filter(c=>!c.mine);if(!r.length)return "";
