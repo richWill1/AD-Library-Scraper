@@ -723,7 +723,7 @@ function toggleMine(){
  if(r==="exists"){location.href="/tracker";return}
  toast("Tracking "+b.name+". Open My competitors to pick up to "+COMP_MAX+" competitors.");cmp.data.delete(b.id);showHeader();renderPinbar();
 }
-function unpin(id){setCompetitor(activeBrand()?.id||"",{id,name:""},false);renderPinbar();if(state.view==="compare")renderCards();else showHeader()}
+function unpin(id){setCompetitor(activeBrand()?.id||"",{id,name:""},false);renderPinbar();if(state.view==="compare"||state.view==="tracker")renderCards();else showHeader()}
 function renderPinbar(){
  const el=$("pinbar");if(!el)return;const list=followed(),mine=myBrand(),t=tracker();
  const show=(list.length||mine)&&!isStart()&&state.view!=="tracker";el.hidden=!show;if(!show){el.innerHTML="";return}
@@ -925,8 +925,8 @@ async function loadCompare(force){
    catch(e){
     // Service unavailable: fall back to the older sample so the page still works.
     for(const b of need){cmp.data.set(b.id,{status:"running",fetched:0,phase:"fallback"});}
-    if(state.view==="compare")renderCards();
-    for(const b of need){try{cmp.data.set(b.id,await loadBrandRowsFallback(b))}catch(err){cmp.data.set(b.id,{status:"error",error:err.message||"Couldn’t load"})}if(state.view==="compare")renderCards()}
+    if(state.view==="compare"||state.view==="tracker")renderCards();
+    for(const b of need){try{cmp.data.set(b.id,await loadBrandRowsFallback(b))}catch(err){cmp.data.set(b.id,{status:"error",error:err.message||"Couldn’t load"})}if(state.view==="compare"||state.view==="tracker")renderCards()}
     break;
    }
    for(const b of need){
@@ -938,11 +938,11 @@ async function loadCompare(force){
     }else if(it.status==="error")cmp.data.set(b.id,{status:"error",error:it.error||"Couldn’t load"});
     else cmp.data.set(b.id,{status:it.status==="running"?"running":"queued",fetched:it.fetched||0,phase:it.phase||"queued"});
    }
-   if(state.view==="compare")renderCards();
+   if(state.view==="compare"||state.view==="tracker")renderCards();
    if(Date.now()-started>8*60000)break;
    await sleep(2500);
   }
- }finally{cmp.running=false;if(state.view==="compare")renderCards()}
+ }finally{cmp.running=false;if(state.view==="compare"||state.view==="tracker")renderCards()}
 }
 // Observed history, kept per browser: which ad IDs were active at each complete check.
 // Lets us say "newly observed" or "no longer active" only when we really saw both states.

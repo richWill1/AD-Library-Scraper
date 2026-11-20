@@ -956,8 +956,8 @@ body.tracker-mode main#research{padding-top:8px!important}
 .bm.k-age{--ka:linear-gradient(90deg,#14b8a6,#0ea5e9);--kt:rgba(20,184,166,.09)}
 .bm.k-off{--ka:linear-gradient(90deg,#f59e0b,#ec4899);--kt:rgba(245,158,11,.09)}
 .rb-row{--bc:#8e8e93}
-.rb-n{display:flex;align-items:center;gap:8px}
-.rb-n::before{content:"";flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--bc);box-shadow:0 0 0 3px color-mix(in srgb,var(--bc) 18%,transparent)}
+.rb-n{display:block;position:relative;padding-left:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rb-n::before{content:"";position:absolute;left:1px;top:50%;margin-top:-4px;width:8px;height:8px;border-radius:50%;background:var(--bc);box-shadow:0 0 0 3px color-mix(in srgb,var(--bc) 18%,transparent)}
 .rb-bar{height:12px;background:color-mix(in srgb,var(--bc) 10%,#f4f4f7)}
 .rb-bar i{background:linear-gradient(90deg,color-mix(in srgb,var(--bc) 55%,#fff),var(--bc))}
 .rb-row.me .rb-bar i{background:linear-gradient(90deg,#0071e3,#5e5ce6,#a855f7);box-shadow:0 0 14px rgba(94,92,230,.45)}
