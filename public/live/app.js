@@ -1317,20 +1317,29 @@ function hydrateThumbs(){
 }
 // ---- Launch timeline: when this theme's ads went live vs the advertiser's other ads ----
 function launchTimeline(t,ads){
- const WINDOW=120,ids=new Set(t.ads.map(a=>a.id));
- const pts=ads.map(a=>({a,d:daysRunning(a),on:ids.has(a.id)})).filter(p=>p.d!=null);
+ // Weekly bars: how many ads launched each week, with this theme's share coloured.
+ // The range fits the data, so a burst of recent launches is not squeezed into a corner.
+ const ids=new Set(t.ads.map(a=>a.id)),pts=ads.map(a=>({d:daysRunning(a),on:ids.has(a.id)})).filter(p=>p.d!=null);
  if(pts.length<2)return "";
- const W=640,H=124,L=112,R=16,rowY={on:44,off:88};
- const x=d=>L+(1-Math.min(d,WINDOW)/WINDOW)*(W-L-R);
- let svg='<svg class="tl-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Launch dates of ads using '+esc(t.label)+' compared with the advertiser’s other loaded ads, last '+WINDOW+' days">';
- svg+='<rect x="'+x(RECENT_DAYS)+'" y="18" width="'+(x(0)-x(RECENT_DAYS))+'" height="'+(H-36)+'" class="tl-band"/><text x="'+((x(RECENT_DAYS)+x(0))/2)+'" y="13" class="tl-bandlab" text-anchor="middle">Last '+RECENT_DAYS+' days</text>';
- for(const d of [0,30,60,90,120]){svg+='<line x1="'+x(d)+'" x2="'+x(d)+'" y1="20" y2="'+(H-20)+'" class="tl-grid"/><text x="'+x(d)+'" y="'+(H-4)+'" class="tl-tick" text-anchor="middle">'+(d===0?'Today':d===120?'120d+':d+'d ago')+'</text>'}
- const onN=pts.filter(p=>p.on).length,offN=pts.length-onN;
- svg+='<text x="0" y="'+(rowY.on+4)+'" class="tl-row">This theme ('+onN+')</text><text x="0" y="'+(rowY.off+4)+'" class="tl-row muted">Other ads ('+offN+')</text>';
- // One dot per launch day and row, sized by how many ads launched that day.
- const days=new Map();for(const p of pts){const k=(p.on?"on":"off")+"|"+Math.min(p.d,WINDOW);const g=days.get(k)||{on:p.on,d:Math.min(p.d,WINDOW),n:0,date:p.a.start};g.n++;days.set(k,g)}
- for(const g of [...days.values()].sort((a,b)=>b.n-a.n))svg+='<circle cx="'+x(g.d).toFixed(1)+'" cy="'+(g.on?rowY.on:rowY.off)+'" r="'+Math.min(13,3+Math.sqrt(g.n)*1.7).toFixed(1)+'" class="'+(g.on?'tl-on':'tl-off')+'" style="'+(g.on?'fill:'+catColor[t.category]:'')+'"><title>'+esc(g.d>=WINDOW?WINDOW+'+ days ago':formatDate(g.date))+': '+g.n+' ad'+(g.n===1?'':'s')+(g.on?' using this theme':'')+'</title></circle>';
- return svg+'</svg>';
+ const span=Math.max(...pts.map(p=>p.d)),weeks=Math.max(4,Math.min(12,Math.ceil((span+1)/7))),older=span>=weeks*7;
+ const n=weeks+(older?1:0),bins=Array.from({length:n},()=>({on:0,all:0}));
+ for(const p of pts){const i=Math.min(n-1,Math.floor(p.d/7));bins[i].all++;if(p.on)bins[i].on++}
+ const W=640,H=168,L=8,R=8,T=26,B=40,ch=H-T-B,gap=6,bw=(W-L-R-gap*(n-1))/n,max=Math.max(...bins.map(b=>b.all)),col=catColor[t.category];
+ const now=Date.now(),lab=i=>{if(older&&i===n-1)return "Older";if(i===0)return "This week";const d=new Date(now-(i*7+6)*DAY);return d.getUTCDate()+" "+d.toLocaleString("en-GB",{month:"short",timeZone:"UTC"})};
+ const every=n>8?2:1,y=v=>T+ch-(v/max)*ch;
+ let svg='<svg class="tl-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ads launched each week, with ads using '+esc(t.label)+' highlighted">';
+ svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+(T+ch)+'" y2="'+(T+ch)+'" class="tl-grid"/>';
+ // Oldest on the left, this week on the right.
+ for(let k=0;k<n;k++){const i=n-1-k,b=bins[i],x=L+k*(bw+gap),cx=x+bw/2;
+  const tip=lab(i)+(i===0||(older&&i===n-1)?'':' week')+': '+b.on+' of '+b.all+' ad'+(b.all===1?'':'s')+' use this theme';
+  svg+='<g class="tl-col"><title>'+esc(tip)+'</title><rect x="'+x.toFixed(1)+'" y="'+T+'" width="'+bw.toFixed(1)+'" height="'+ch+'" class="tl-hit"/>';
+  if(b.all){svg+='<rect x="'+x.toFixed(1)+'" y="'+y(b.all).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(ch*b.all/max).toFixed(1)+'" rx="4" class="tl-all"/>';
+   if(b.on)svg+='<rect x="'+x.toFixed(1)+'" y="'+y(b.on).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(ch*b.on/max).toFixed(1)+'" rx="4" style="fill:'+col+'"/>';
+   svg+='<text x="'+cx.toFixed(1)+'" y="'+(y(b.all)-6).toFixed(1)+'" class="tl-val" text-anchor="middle">'+(b.on?'<tspan style="fill:'+col+'">'+b.on+'</tspan><tspan class="tl-of">/'+b.all+'</tspan>':'<tspan class="tl-of">'+b.all+'</tspan>')+'</text>'}
+  if(k%every===(n-1)%every)svg+='<text x="'+cx.toFixed(1)+'" y="'+(H-B+18)+'" class="tl-tick" text-anchor="middle">'+lab(i)+'</text>';
+  svg+='</g>'}
+ const onN=pts.filter(p=>p.on).length;
+ return '<div class="tl-legend"><span><i style="background:'+col+'"></i>This theme · '+onN+'</span><span><i class="tl-key-all"></i>All dated ads · '+pts.length+'</span><span class="tl-hint">By launch week</span></div>'+svg+'</svg>';
 }
 function messagingView(){
  const ads=state.rows,total=ads.length;
@@ -1371,7 +1380,7 @@ function detailPanel(t,ads,rows){
  const ex=shown.map(g=>{const a=repAd(g),when=g.first?(g.first===g.last||!g.last?formatDate(g.first):formatDate(g.first)+" – "+formatDate(g.last)):"Launch date not available";
   return '<li class="ev"><button type="button" class="ev-media" data-action="detail" data-id="'+esc(a.id)+'" aria-label="View ad">'+thumbHTML(a.id,"big",true)+(g.ads.length>1?'<span class="ev-count">×'+g.ads.length+'</span>':'')+'</button><div class="ev-body"><blockquote>“'+highlight(g.sentence,t.match)+'”</blockquote><p class="ev-meta">'+esc(when)+(g.ads.length>1?' · used in '+g.ads.length+' ads':'')+'</p><p class="ev-links"><button type="button" class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad</button><a href="'+esc(metaUrl(a.id))+'" target="_blank" rel="noopener">Ad Library ↗</a></p></div></li>'}).join("");
  let timing;
- if(!pc.enough)timing='Not enough dated ads to compare periods: '+pc.recent+' launched in the last '+RECENT_DAYS+' days and '+pc.earlier+' earlier (at least '+MIN_PERIOD+' in each and '+MIN_MATCHES+' matching ads are needed).';
+ if(!pc.enough)timing=(pc.r+pc.e?'<b>'+pc.r+' of '+(pc.r+pc.e)+'</b> dated ads with this theme launched in the last '+RECENT_DAYS+' days. ':'')+(pc.earlier<MIN_PERIOD?'Almost everything live started recently ('+pc.recent+' of '+(pc.recent+pc.earlier)+'), so there is no older baseline to say whether this theme is growing.':'Too few ads use this theme to say whether it is growing.');
  else timing='Last '+RECENT_DAYS+' days: <b>'+pc.r+' of '+pc.recent+'</b> ads ('+pctOf(pc.r,pc.recent)+'%) · Earlier: <b>'+pc.e+' of '+pc.earlier+'</b> ('+pctOf(pc.e,pc.earlier)+'%). '+(pc.claim?'<strong class="mx-claim mx-claim-'+pc.claim+'">'+(pc.claim==="more"?'↑ More':'↓ Less')+' common in newer ads</strong>':'No clear difference between the periods.');
  if(pc.undated)timing+=' '+pc.undated+' undated ad'+(pc.undated===1?'':'s')+' excluded.';
   return '<section class="mx-detail" id="mxDetail" aria-live="polite" style="grid-row:1 / span '+(rows+1)+';--c:'+catColor[t.category]+'">'+
