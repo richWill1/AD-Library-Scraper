@@ -310,9 +310,11 @@ function pickHTML(){
 function brandCard(b,i,extra){return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'">'+logoHTML(b.id,b.name,"lg")+'<span><strong>'+esc(b.name)+'</strong><br><small'+(extra?' class="live"':'')+'>'+esc(extra||"Followed brand")+'</small></span><span class="go">Explore ads →</span></button>'}
 function startHTML(){
  loadPopular();
- const mine=followed();
+ const out=typeof auth!=="undefined"&&auth.enabled&&!auth.signedIn;
+ const mine=out?[]:followed();
  let html='<div class="start">';
- {const me=myBrand();html+='<a class="cmp-cta" href="/tracker"><b>'+(me?'Track '+esc(me.name)+' against':'Track your brand against')+' up to '+COMP_MAX+' competitors</b><span>My competitors: opportunities, creative mix and launch activity →</span></a>'}
+ if(out)html+='<button type="button" class="cmp-cta" data-acct="signup"><b>Track your brand against up to '+COMP_MAX+' competitors</b><span>Free account: opportunities, creative mix and launch activity →</span></button>';
+ else{const me=myBrand();html+='<a class="cmp-cta" href="/tracker"><b>'+(me?'Track '+esc(me.name)+' against':'Track your brand against')+' up to '+COMP_MAX+' competitors</b><span>My competitors: opportunities, creative mix and launch activity →</span></a>'}
  if(mine.length)html+='<h3>Your competitors ('+mine.length+'/'+COMP_MAX+')</h3><div class="start-grid">'+mine.map((b,i)=>brandCard(b,i,"Your competitor")).join("")+'</div>';
  html+='<h3>Popular in the UK right now</h3><div class="start-grid">';
  if(popular&&popular.length)html+=popular.map((b,i)=>brandCard({id:b.pageId,name:b.name},i,(b.more?b.count+"+":b.count)+" live UK ads")).join("");
@@ -737,7 +739,7 @@ async function initAuth(){
   auth.clerk.addListener(({user})=>{onAuthChange(user||null)});
   await onAuthChange(auth.clerk.user||null);
  }catch{auth.enabled=false;account.mode="device";toast("Sign-in is unavailable right now. Your brands stay on this device.")}
- auth.checking=false;renderAccountUI();if(TRACKER)renderCards();
+ auth.checking=false;renderAccountUI();if(TRACKER||isStart())renderCards();
 }
 async function authToken(){try{return auth.clerk&&auth.clerk.session?await auth.clerk.session.getToken():null}catch{return null}}
 async function onAuthChange(user){
