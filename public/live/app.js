@@ -725,7 +725,9 @@ function toggleMine(){
 }
 function unpin(id){setCompetitor(activeBrand()?.id||"",{id,name:""},false);renderPinbar();if(state.view==="compare"||state.view==="tracker")renderCards();else showHeader()}
 function renderPinbar(){
- const el=$("pinbar");if(!el)return;const list=followed(),mine=myBrand(),t=tracker();
+ // The research desk no longer repeats your competitor list: My competitors has its own page,
+ // and the brand's "Add to my competitors" button shows whether it's tracked.
+ const el=$("pinbar");if(!el)return;el.hidden=true;el.innerHTML="";return;const list=followed(),mine=myBrand(),t=tracker();
  const show=(list.length||mine)&&!isStart()&&state.view!=="tracker";el.hidden=!show;if(!show){el.innerHTML="";return}
  const chip=(b,cls,label)=>'<span class="pinchip'+(b.id===state.page?' on':'')+(cls?' '+cls:'')+'"><button data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'" title="Open '+esc(b.name)+'">'+logoHTML(b.id,b.name,"")+'<span>'+esc(label||b.name)+'</span></button>'+(cls?'':'<button class="unpin" data-action="unpin" data-id="'+esc(b.id)+'" aria-label="Stop tracking '+esc(b.name)+'">×</button>')+'</span>';
  el.innerHTML='<span class="pin-k">'+(mine?'Tracking for '+esc(mine.name)+(t.brands.length>1?' (+'+(t.brands.length-1)+')':''):'Competitors')+' · '+list.length+'/'+COMP_MAX+'</span>'+(mine?chip(mine,"mine",mine.name+" · you"):'')+list.map(b=>chip(b)).join("")+'<a class="pin-cmp" href="/tracker">My competitors →</a>';
