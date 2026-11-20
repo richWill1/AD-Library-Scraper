@@ -1327,14 +1327,18 @@ function launchTimeline(t,ads){
  const W=640,H=168,L=8,R=8,T=26,B=40,ch=H-T-B,gap=6,bw=(W-L-R-gap*(n-1))/n,max=Math.max(...bins.map(b=>b.all)),col=catColor[t.category];
  const now=Date.now(),lab=i=>{if(older&&i===n-1)return "Older";if(i===0)return "This week";const d=new Date(now-(i*7+6)*DAY);return d.getUTCDate()+" "+d.toLocaleString("en-GB",{month:"short",timeZone:"UTC"})};
  const every=n>8?2:1,y=v=>T+ch-(v/max)*ch;
- let svg='<svg class="tl-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ads launched each week, with ads using '+esc(t.label)+' highlighted">';
+ const gid='tlg'+Math.random().toString(36).slice(2,8);
+ let svg='<svg class="tl-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ads launched each week, with ads using '+esc(t.label)+' highlighted" style="--tc:'+col+'">';
+ svg+='<defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+col+'" stop-opacity="1"/><stop offset="1" stop-color="'+col+'" stop-opacity=".55"/></linearGradient><linearGradient id="'+gid+'a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ececf1"/><stop offset="1" stop-color="#f6f6f9"/></linearGradient></defs>';
+ for(const f of [.5,1])svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(max*f).toFixed(1)+'" y2="'+y(max*f).toFixed(1)+'" class="tl-guide"/>';
  svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+(T+ch)+'" y2="'+(T+ch)+'" class="tl-grid"/>';
  // Oldest on the left, this week on the right.
  for(let k=0;k<n;k++){const i=n-1-k,b=bins[i],x=L+k*(bw+gap),cx=x+bw/2;
   const tip=lab(i)+(i===0||(older&&i===n-1)?'':' week')+': '+b.on+' of '+b.all+' ad'+(b.all===1?'':'s')+' use this theme';
-  svg+='<g class="tl-col"><title>'+esc(tip)+'</title><rect x="'+x.toFixed(1)+'" y="'+T+'" width="'+bw.toFixed(1)+'" height="'+ch+'" class="tl-hit"/>';
-  if(b.all){svg+='<rect x="'+x.toFixed(1)+'" y="'+y(b.all).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(ch*b.all/max).toFixed(1)+'" rx="4" class="tl-all"/>';
-   if(b.on)svg+='<rect x="'+x.toFixed(1)+'" y="'+y(b.on).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(ch*b.on/max).toFixed(1)+'" rx="4" style="fill:'+col+'"/>';
+  svg+='<g class="tl-col'+(i===0?' tl-now':'')+'" style="--k:'+k+'"><title>'+esc(tip)+'</title><rect x="'+x.toFixed(1)+'" y="'+T+'" width="'+bw.toFixed(1)+'" height="'+ch+'" class="tl-hit"/>';
+  if(b.all){svg+='<rect x="'+x.toFixed(1)+'" y="'+y(b.all).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(ch*b.all/max).toFixed(1)+'" rx="5" class="tl-all tl-grow" fill="url(#'+gid+'a)"/>';
+   if(b.on)svg+='<rect x="'+x.toFixed(1)+'" y="'+y(b.on).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(ch*b.on/max).toFixed(1)+'" rx="5" class="tl-on2 tl-grow" fill="url(#'+gid+')"/>';
+   if(i===0&&b.on)svg+='<circle cx="'+cx.toFixed(1)+'" cy="'+(H-12)+'" r="2.5" class="tl-pulse"/>';
    svg+='<text x="'+cx.toFixed(1)+'" y="'+(y(b.all)-6).toFixed(1)+'" class="tl-val" text-anchor="middle">'+(b.on?'<tspan style="fill:'+col+'">'+b.on+'</tspan><tspan class="tl-of">/'+b.all+'</tspan>':'<tspan class="tl-of">'+b.all+'</tspan>')+'</text>'}
   if(k%every===(n-1)%every)svg+='<text x="'+cx.toFixed(1)+'" y="'+(H-B+18)+'" class="tl-tick" text-anchor="middle">'+lab(i)+'</text>';
   svg+='</g>'}
