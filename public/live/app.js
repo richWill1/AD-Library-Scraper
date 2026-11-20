@@ -186,7 +186,7 @@ function showHeader(){
  $("toolbar").style.display=(state.view==="discover"&&state.rows.length||state.view==="saved")?"flex":"none";
  $("feature").hidden=state.rows.length>0||state.view!=="discover";
  $("metricSaved").textContent=String(state.saved.size);
- $("savedCount").textContent=state.saved.size?"("+state.saved.size+")":"";
+ {const sc=$("savedCount");if(sc)sc.textContent=state.saved.size?"("+state.saved.size+")":"";}
  document.querySelectorAll("[data-view]").forEach(el=>el.classList.toggle("active",el.dataset.view===state.view));
  document.querySelectorAll("[data-filter]").forEach(el=>el.classList.toggle("active",el.dataset.filter===state.filter));
  $("comparisonBar").classList.toggle("show",state.compare.size>0);
