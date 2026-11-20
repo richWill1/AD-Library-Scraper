@@ -216,7 +216,7 @@ const account={mode:"device",user:null};
 const TRACK_KEY="adsnoop-tracker-v1",followKey="adsnoop-follow-v1",MINE_KEY="adsnoop-mybrand-v1";
 const COMP_MAX=5;
 // Plan limits in one place. The free plan tracks one brand; ?plan=pro previews more.
-const PLAN=(()=>{let pro=false;try{if(/[?&]plan=pro\b/.test(location.search))sessionStorage.setItem("adsnoop-plan","pro");pro=sessionStorage.getItem("adsnoop-plan")==="pro"}catch{}return pro?{name:"Pro preview",brands:10,competitors:COMP_MAX}:{name:"Free",brands:1,competitors:COMP_MAX}})();
+let PLAN=(()=>{let pro=false;try{if(/[?&]plan=pro\b/.test(location.search))sessionStorage.setItem("adsnoop-plan","pro");pro=sessionStorage.getItem("adsnoop-plan")==="pro"}catch{}return pro?{name:"Pro preview",brands:10,competitors:COMP_MAX}:{name:"Free",brands:1,competitors:COMP_MAX}})();
 const validB=b=>b&&/^\d{1,30}$/.test(b.id)&&typeof b.name==="string";
 function tracker(){
  let t=prefStore.read(TRACK_KEY,null);
@@ -233,7 +233,7 @@ function tracker(){
  if(!t.brands.some(b=>b.id===t.active))t.active=t.brands[0]?.id||"";
  return t;
 }
-function saveTracker(t){prefStore.write(TRACK_KEY,t)}
+function saveTracker(t){prefStore.write(TRACK_KEY,t);if(typeof auth!=="undefined"&&auth.signedIn)pushAccount()}
 function activeBrand(){const t=tracker();return t.brands.find(b=>b.id===t.active)||null}
 function myBrand(){const b=activeBrand();return b?{id:b.id,name:b.name}:null}
 // Competitors of the active brand (or ones added before any brand was set up).
@@ -260,6 +260,7 @@ function switchBrand(id){const t=tracker();if(t.brands.some(b=>b.id===id)){t.act
 // Research desk: "Add to my competitors". With several brands, choose which ones.
 function toggleFollow(){
  if(!state.page)return;const comp={id:state.page,name:state.brand||"Advertiser"},t=tracker();
+ if(needAccount({kind:"comp",id:comp.id,name:comp.name}))return;
  if(t.brands.length>1){openBrandPicker(comp);return}
  const target=t.brands[0]?.id||"",on=isFollowed(comp.id);
  const r=setCompetitor(target,comp,!on);
@@ -705,7 +706,8 @@ function setBar(mode,ready=0,total=0,ids=null){
 const PIN_MAX=COMP_MAX;
 // Research desk: "Track as my brand" adds the open advertiser as one of your brands.
 function toggleMine(){
- if(!state.page)return;const b={id:state.page,name:state.brand||"My brand"},r=addBrand(b);
+ if(!state.page)return;
+ if(needAccount({kind:"brand",id:state.page,name:state.brand||"My brand"}))return;const b={id:state.page,name:state.brand||"My brand"},r=addBrand(b);
  if(r==="limit"){toast("The "+PLAN.name+" plan tracks "+PLAN.brands+" brand"+(PLAN.brands===1?"":"s")+". More brands are coming with paid plans.");return}
  if(r==="exists"){location.href="/tracker";return}
  toast("Tracking "+b.name+". Open My competitors to pick up to "+COMP_MAX+" competitors.");cmp.data.delete(b.id);showHeader();renderPinbar();
@@ -717,11 +719,94 @@ function renderPinbar(){
  const chip=(b,cls,label)=>'<span class="pinchip'+(b.id===state.page?' on':'')+(cls?' '+cls:'')+'"><button data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'" title="Open '+esc(b.name)+'">'+logoHTML(b.id,b.name,"")+'<span>'+esc(label||b.name)+'</span></button>'+(cls?'':'<button class="unpin" data-action="unpin" data-id="'+esc(b.id)+'" aria-label="Stop tracking '+esc(b.name)+'">×</button>')+'</span>';
  el.innerHTML='<span class="pin-k">'+(mine?'Tracking for '+esc(mine.name)+(t.brands.length>1?' (+'+(t.brands.length-1)+')':''):'Competitors')+' · '+list.length+'/'+COMP_MAX+'</span>'+(mine?chip(mine,"mine",mine.name+" · you"):'')+list.map(b=>chip(b)).join("")+'<a class="pin-cmp" href="/tracker">My competitors →</a>';
 }
+// ---- Accounts (Clerk) ----
+// Switched on when the server has Clerk keys; until then everything runs in
+// device mode. Signed-in users' brands sync to their account.
+const auth={checking:true,enabled:false,clerk:null,signedIn:false,userId:"",pushTimer:0,pulling:false};
+function loadScript(src,attrs){return new Promise((ok,bad)=>{const s=document.createElement("script");s.src=src;s.crossOrigin="anonymous";s.defer=true;for(const [k,v] of Object.entries(attrs||{}))s.setAttribute(k,v);s.onload=ok;s.onerror=()=>bad(Error("script"));document.head.appendChild(s)})}
+async function initAuth(){
+ let cfg=null;try{cfg=await fetch("/api/auth/config",{cache:"no-store"}).then(r=>r.ok?r.json():null)}catch{}
+ if(!cfg||!cfg.enabled||!/^[a-z0-9.-]+$/i.test(cfg.frontendApi||"")){auth.checking=false;renderAccountUI();if(TRACKER)renderCards();return}
+ auth.enabled=true;account.mode="clerk";
+ try{
+  const base="https://"+cfg.frontendApi+"/npm/";
+  await loadScript(base+"@clerk/ui@1/dist/ui.browser.js");
+  await loadScript(base+"@clerk/clerk-js@6/dist/clerk.browser.js",{"data-clerk-publishable-key":cfg.publishableKey});
+  await window.Clerk.load({ui:{ClerkUI:window.__internal_ClerkUICtor},appearance:{variables:{colorPrimary:"#0071e3",borderRadius:"12px"}}});
+  auth.clerk=window.Clerk;
+  auth.clerk.addListener(({user})=>{onAuthChange(user||null)});
+  await onAuthChange(auth.clerk.user||null);
+ }catch{auth.enabled=false;account.mode="device";toast("Sign-in is unavailable right now. Your brands stay on this device.")}
+ auth.checking=false;renderAccountUI();if(TRACKER)renderCards();
+}
+async function authToken(){try{return auth.clerk&&auth.clerk.session?await auth.clerk.session.getToken():null}catch{return null}}
+async function onAuthChange(user){
+ const id=user?user.id:"";
+ if(id===auth.userId)return;
+ const wasIn=auth.signedIn;auth.userId=id;auth.signedIn=!!id;account.user=id?{id,email:user.primaryEmailAddress?.emailAddress||""}:null;
+ if(id){await pullAccount();applyIntent()}
+ else if(wasIn){prefStore.write(TRACK_KEY,null);cmp.data.clear()} // signed out: don't leave brands on a shared device
+ renderAccountUI();renderPinbar();if(TRACKER||state.view==="discover")renderCards();
+}
+async function pullAccount(){
+ auth.pulling=true;
+ try{
+  const tok=await authToken();if(!tok)return;
+  const r=await fetch("/api/account",{headers:{Authorization:"Bearer "+tok},cache:"no-store"});if(!r.ok)throw Error();
+  const d=await r.json();
+  if(d.plan==="pro")PLAN={name:"Pro",brands:10,competitors:COMP_MAX};
+  const local=tracker();
+  if(d.tracker&&d.tracker.brands&&d.tracker.brands.length)prefStore.write(TRACK_KEY,{v:1,active:d.tracker.active,brands:d.tracker.brands,pending:[]});
+  else if(local.brands.length){pushAccount(true);toast("Your tracked brands are now saved to your account.")}
+ }catch{toast("Couldn’t load your account. Changes stay on this device for now.")}
+ finally{auth.pulling=false}
+}
+function pushAccount(now){
+ if(!auth.signedIn)return;clearTimeout(auth.pushTimer);
+ auth.pushTimer=setTimeout(async()=>{
+  const t=tracker(),tok=await authToken();if(!tok)return;
+  try{const r=await fetch("/api/account",{method:"PUT",headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"},body:JSON.stringify({tracker:{active:t.active,brands:t.brands}})});if(!r.ok)throw Error()}
+  catch{toast("Couldn’t save to your account. We’ll retry on your next change.")}
+ },now?0:600);
+}
+// Logged-out visitors on the desk: remember what they clicked, ask them to sign up.
+const INTENT_KEY="adsnoop-intent-v1";
+function needAccount(intent){
+ if(!auth.enabled||auth.signedIn)return false;
+ prefStore.write(INTENT_KEY,{...intent,at:Date.now()});
+ toast("Create a free account to track competitors.");
+ try{auth.clerk.openSignUp({})}catch{}
+ return true;
+}
+function applyIntent(){
+ const it=prefStore.read(INTENT_KEY,null);prefStore.write(INTENT_KEY,null);
+ if(!it||Date.now()-it.at>30*60000||!/^\d{1,30}$/.test(it.id||""))return;
+ if(it.kind==="brand"){if(addBrand({id:it.id,name:it.name})==="ok")toast("Tracking "+it.name+".")}
+ else{const b=activeBrand();const r=setCompetitor(b?b.id:"",{id:it.id,name:it.name},true);if(r==="ok")toast("Added "+it.name+(b?" to "+b.name+"’s competitors":"")+".")}
+}
+function renderAccountUI(){
+ const el=$("acct");if(!el)return;
+ if(!auth.enabled){el.hidden=true;el.innerHTML="";return}
+ el.hidden=false;
+ if(auth.signedIn){if(!el.dataset.mounted){el.innerHTML='<div id="acctBtn"></div>';try{auth.clerk.mountUserButton($("acctBtn"))}catch{}el.dataset.mounted="1"}}
+ else{delete el.dataset.mounted;el.innerHTML='<button type="button" class="acct-in" data-acct="signin">Sign in</button>'}
+}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-acct]");if(!b||!auth.clerk)return;if(b.dataset.acct==="signin")auth.clerk.openSignIn({});if(b.dataset.acct==="signup")auth.clerk.openSignUp({})});
+// What a logged-out visitor sees on /tracker: a blurred sample and a clear next step.
+function trackerGateHTML(){
+ const bars=(rows)=>'<div class="rb">'+rows.map(([n,v,w,me])=>'<div class="rb-row'+(me?' me':'')+'"><span class="rb-n">'+n+'</span><span class="rb-bar"><i style="--w:'+w+'%"></i></span><span class="rb-v">'+v+'</span></div>').join("")+'</div>';
+ const sample='<div class="trk-sample" aria-hidden="true"><div class="trk-bar"><div class="trk-brands"><span class="trk-b on"><span>Your brand<small>5/5 competitors</small></span></span></div></div>'+
+  '<div class="op-grid"><article class="op-card op-format"><span class="op-tag">Format opportunity</span><h4>Video is under-used in your ads</h4><p class="op-data">Your brand uses video in 12% of classified ads, compared with a competitor average of 46%.</p><div class="op-test"><span>Test</span>Turn your strongest static concept into a 15-second video.</div></article><article class="op-card op-message"><span class="op-tag">Messaging gap</span><h4>Guarantees: competitors use them, you rarely do</h4><p class="op-data">Four of your five competitors mention guarantees in at least 15% of their ads.</p><div class="op-test"><span>Test</span>Add your own guarantee beside the main benefit.</div></article></div>'+
+  '<div class="bm-grid"><div class="bm"><div class="bm-h"><h4>Active ad volume</h4></div>'+bars([["Competitor A","412",100],["Competitor B","268",65],["Your brand","97",24,1],["Competitor C","64",16]])+'</div><div class="bm"><div class="bm-h"><h4>Launched in 30 days</h4></div>'+bars([["Competitor B","151",100],["Competitor A","88",58],["Competitor C","40",26],["Your brand","17",11,1]])+'</div></div></div>';
+ return '<div class="trk-gate">'+sample+'<div class="trk-gate-card"><p class="trk-step">Free account</p><h3>See your brand against up to 5 competitors</h3><ul><li>Every live UK ad from you and your competitors, side by side</li><li>A Creative Opportunity Radar with tests to run next</li><li>Creative mix, launch activity and messaging gaps</li></ul><div class="trk-gate-acts"><button class="pill" data-acct="signup">Create free account</button><button class="ghost" data-acct="signin">Sign in</button></div><small>Free plan: 1 brand and 5 competitors. Sample data shown above.</small></div></div>';
+}
 // ---- Tracker page (/tracker): brand switcher, onboarding and the dashboard ----
 const trk={mode:null,timer:0,seq:0,lookups:new Map()};
 function trackerHTML(){
+ if(auth.checking)return '<div class="trk"><div class="op-empty"><span class="cmp-wait"></span> Checking your account…</div></div>';
+ if(auth.enabled&&!auth.signedIn)return trackerGateHTML();
  const t=tracker(),active=activeBrand();
- const note='<div class="trk-note"><span aria-hidden="true">🔒</span><span><b>Preview:</b> your brands are saved on this device. Sign-in with email or Google is on the way, and this setup will move into your account.</span></div>';
+ const note=auth.signedIn?'<div class="trk-note"><span aria-hidden="true">✓</span><span>Saved to your account'+(account.user&&account.user.email?' ('+esc(account.user.email)+')':'')+'. Your brands follow you to any device.</span></div>':'<div class="trk-note"><span aria-hidden="true">🔒</span><span><b>Preview:</b> your brands are saved on this device. Sign-in with email or Google is on the way, and this setup will move into your account.</span></div>';
  if(!t.brands.length||trk.mode==="add")return '<div class="trk">'+(t.brands.length?switcherHTML(t):'')+onboardBrandHTML(t)+note+'</div>';
  const body=trk.mode==="edit"||!active.competitors.length?editorHTML(active):compareHTML();
  return '<div class="trk">'+switcherHTML(t)+body+note+'</div>';
@@ -1744,7 +1829,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")$("modalOverlay").cl
 document.addEventListener("keydown",e=>{if(e.key!=="ArrowDown"&&e.key!=="ArrowUp")return;const cur=e.target.closest&&e.target.closest(".mx-item");if(!cur)return;const all=[...document.querySelectorAll(".mx-item")],i=all.indexOf(cur),n=all[i+(e.key==="ArrowDown"?1:-1)];if(n){e.preventDefault();n.focus()}});
 $("compareOpen").onclick=compareView;
 $("compareClear").onclick=()=>{state.compare.clear();renderCards()};
-document.addEventListener("click",trkClick);document.addEventListener("input",trkInput);
+document.addEventListener("click",trkClick);document.addEventListener("input",trkInput);initAuth();
 renderCards();if(TRACKER&&(!tracker().brands.length||!activeBrand()?.competitors.length))trkFocus();if(!TRACKER)health();
 // Deep links from other pages: /?page=PAGE_ID&name=Brand or /?q=brand
 {const p=new URLSearchParams(location.search),pg=p.get("page")||"",nm=(p.get("name")||"").slice(0,120),q=(p.get("q")||"").slice(0,120);
