@@ -199,14 +199,21 @@ function countTo(el,to){
  const step=t=>{const k=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-k,3);el.textContent=String(Math.round(from+(to-from)*e));if(k<1)el._raf=requestAnimationFrame(step)};
  el._raf=requestAnimationFrame(step);void prev;
 }
+// Preferences sit behind one small store so they can later belong to a signed-in
+// account (saved watchlists, weekly alerts) without changing the features that read them.
+const prefStore={adapter:{get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch{}}},
+ read(k,fb){const v=this.adapter.get(k);if(v==null)return fb;try{return JSON.parse(v)}catch{return fb}},
+ write(k,v){this.adapter.set(k,v==null?null:JSON.stringify(v))}};
+// The comparison set in one account-ready shape: {mine, competitors[]}.
+function comparisonSet(){const mine=myBrand();return {mine,competitors:followed().filter(b=>!mine||b.id!==mine.id).slice(0,PIN_MAX)}}
 const followKey="adsnoop-follow-v1";
-function followed(){try{const v=JSON.parse(localStorage.getItem(followKey)||"[]");return Array.isArray(v)?v.filter(b=>b&&/^\d{1,30}$/.test(b.id)&&typeof b.name==="string").slice(0,PIN_MAX):[]}catch{return []}}
+function followed(){try{const v=prefStore.read(followKey,[]);return Array.isArray(v)?v.filter(b=>b&&/^\d{1,30}$/.test(b.id)&&typeof b.name==="string").slice(0,PIN_MAX):[]}catch{return []}}
 function isFollowed(id){return !!id&&followed().some(b=>b.id===id)}
 function toggleFollow(){
  if(!state.page)return;let list=followed();const on=list.some(b=>b.id===state.page);
  if(!on&&list.length>=PIN_MAX){toast("You can pin up to "+PIN_MAX+" competitors. Unpin one first.");return}
  list=on?list.filter(b=>b.id!==state.page):[...list,{id:state.page,name:state.brand||"Advertiser"}];
- try{localStorage.setItem(followKey,JSON.stringify(list.slice(0,PIN_MAX)))}catch{}
+ prefStore.write(followKey,list.slice(0,PIN_MAX))
  toast(on?"Unpinned "+(state.brand||"brand"):"Pinned "+(state.brand||"brand")+" ("+list.length+"/"+PIN_MAX+"). Compare it any time.");cmp.data.delete(state.page);showHeader();renderPinbar();
 }
 let toastTimer=0;
@@ -288,7 +295,7 @@ function renderCards(){
  if(intel){setBar("hide");renderPinbar();return}
  const all=state.view==="discover"||state.view==="saved"?shownRows():[],rows=all.slice(0,state.limit),hidden=all.length-rows.length;
  if(state.view==="insights"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";renderPinbar();return}
- if(state.view==="compare"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
+ if(state.view==="compare"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
  const blank=state.view==="saved"?empty("No saved ads yet.","Save a creative from an advertiser search to find it here."):state.adsFailed&&state.page?empty("Meta lookup failed","The Page was identified, but its ads could not be loaded. Try again in a moment.",identityLinks()):state.page&&/^\d{1,30}$/.test(state.page)?empty("Page found, no active UK ads","Meta has no active ads for this Page in the selected countries. It can still be the right advertiser.",identityLinks()):empty("No ads to display.",state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():blank);
  renderPinbar();
@@ -632,115 +639,321 @@ function setBar(mode,ready=0,total=0,ids=null){
 }
 // ---- Pinned competitors, your brand and the comparison view ----
 const PIN_MAX=5,MINE_KEY="adsnoop-mybrand-v1";
-function myBrand(){try{const v=JSON.parse(localStorage.getItem(MINE_KEY)||"null");return v&&/^\d{1,30}$/.test(v.id)&&typeof v.name==="string"?v:null}catch{return null}}
+function myBrand(){try{const v=prefStore.read(MINE_KEY,null);return v&&/^\d{1,30}$/.test(v.id)&&typeof v.name==="string"?v:null}catch{return null}}
 function toggleMine(){
  if(!state.page)return;const cur=myBrand();
- if(cur&&cur.id===state.page){try{localStorage.removeItem(MINE_KEY)}catch{};toast("Cleared your brand.")}
- else{try{localStorage.setItem(MINE_KEY,JSON.stringify({id:state.page,name:state.brand||"My brand"}))}catch{}
-  if(isFollowed(state.page))try{localStorage.setItem(followKey,JSON.stringify(followed().filter(b=>b.id!==state.page)))}catch{}
+ if(cur&&cur.id===state.page){prefStore.write(MINE_KEY,null);toast("Cleared your brand.")}
+ else{prefStore.write(MINE_KEY,{id:state.page,name:state.brand||"My brand"})
+  if(isFollowed(state.page))prefStore.write(followKey,followed().filter(b=>b.id!==state.page))
   toast("Saved "+(state.brand||"this brand")+" as your brand. Open Compare to see it against your pins.")}
  cmp.data.delete(state.page);showHeader();renderPinbar();
 }
-function unpin(id){try{localStorage.setItem(followKey,JSON.stringify(followed().filter(b=>b.id!==id)))}catch{};renderPinbar();if(state.view==="compare")renderCards();else showHeader()}
+function unpin(id){prefStore.write(followKey,followed().filter(b=>b.id!==id));renderPinbar();if(state.view==="compare")renderCards();else showHeader()}
 function renderPinbar(){
  const el=$("pinbar");if(!el)return;const list=followed(),mine=myBrand();
  const show=(list.length||mine)&&!isStart();el.hidden=!show;if(!show){el.innerHTML="";return}
  const chip=(b,cls,label)=>'<span class="pinchip'+(b.id===state.page&&state.view!=="compare"?' on':'')+(cls?' '+cls:'')+'"><button data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'" title="Open '+esc(b.name)+'">'+logoHTML(b.id,b.name,"")+'<span>'+esc(label||b.name)+'</span></button>'+(cls?'':'<button class="unpin" data-action="unpin" data-id="'+esc(b.id)+'" aria-label="Unpin '+esc(b.name)+'">×</button>')+'</span>';
  el.innerHTML='<span class="pin-k">Pinned '+list.length+'/'+PIN_MAX+'</span>'+(mine?chip(mine,"mine",mine.name+" · you"):'')+list.map(b=>chip(b)).join("")+'<button class="pin-cmp'+(state.view==="compare"?' on':'')+'" data-view="compare">Compare →</button>';
 }
-const cmp={data:new Map(),running:false};
+// ---- Compare: your brand against up to five competitors ----
+// Data: /api/compare collects every accessible active ad per advertiser (no media),
+// cached on the server. Messaging reuses messagingThemes(); nothing here invents
+// performance, spend or refresh data.
+const cmp={data:new Map(),running:false,timer:0,tab:"overview",mode:"share",sort:"",anim:true,memo:new WeakMap()};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-function compareBrands(){const mine=myBrand(),list=followed().filter(b=>!mine||b.id!==mine.id);return (mine?[{...mine,mine:true}]:[]).concat(list.slice(0,PIN_MAX))}
-async function loadBrandRows(b){
- if(b.id===state.page&&state.rows.length&&!state.loading)return {at:Date.now(),rows:state.rows,more:!!state.cursor};
+function compareBrands(){const set=comparisonSet();return (set.mine?[{...set.mine,mine:true}]:[]).concat(set.competitors)}
+const median=xs=>{const s=xs.filter(x=>x!=null).sort((a,b)=>a-b);if(!s.length)return null;const m=Math.floor(s.length/2);return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2)};
+const pctOf=(n,t)=>t?Math.round(n/t*100):0;
+const fmtN=n=>Number(n||0).toLocaleString("en-GB");
+const FMT=[{k:"v",label:"Video",c:"#6e56cf"},{k:"s",label:"Static image",c:"#2f80ed"},{k:"c",label:"Carousel",c:"#f5a524"},{k:"d",label:"Catalogue / dynamic",c:"#14a3a3"},{k:"u",label:"Unknown",c:"#d9dbe3"}];
+const fmtName=k=>FMT.find(f=>f.k===k).label;
+// Older single-page loader, used only if the comparison service can't be reached.
+async function loadBrandRowsFallback(b){
  let rows=[],cursor=null,pages=0,seen=new Set();
  do{
   const p=new URLSearchParams({q:b.name,coverage:state.coverage,page:b.id});if(cursor)p.set("after",cursor);
-  let d;
-  try{d=await request("/api/ads?"+p)}catch(e){if(e.code!=="RATE_LIMITED")throw e;await sleep(20000);d=await request("/api/ads?"+p)}
-  for(const a of Array.isArray(d.ads)?d.ads:[])if(!seen.has(a.id)){seen.add(a.id);rows.push(a)}
+  let d;try{d=await request("/api/ads?"+p)}catch(e){if(e.code!=="RATE_LIMITED")throw e;await sleep(20000);d=await request("/api/ads?"+p)}
+  for(const a of Array.isArray(d.ads)?d.ads:[])if(!seen.has(a.id)){seen.add(a.id);rows.push({...a,fmt:"u"})}
   cursor=d.nextCursor||null;
  }while(cursor&&++pages<2);
- return {at:Date.now(),rows,more:!!cursor};
+ return {status:"ready",rows,meta:{complete:!cursor,limitReason:cursor?"Only the newest "+rows.length+" ads could be loaded.":null,source:"fallback",formats:{complete:false,basis:{},note:"Formats unavailable in this fallback."},generatedAt:new Date().toISOString()}};
 }
-async function loadCompare(force,only){
- if(cmp.running)return;cmp.running=true;
- try{for(const b of compareBrands()){
-  if(only&&b.id!==only)continue;
-  const hit=cmp.data.get(b.id);if(!force&&hit&&(hit.loading||hit.error||(hit.rows&&Date.now()-hit.at<20*60000)))continue;
-  cmp.data.set(b.id,{loading:true});if(state.view==="compare")renderCards();
-  try{cmp.data.set(b.id,await loadBrandRows(b))}catch(e){cmp.data.set(b.id,{error:e.message||"Couldn’t load"})}
-  if(state.view==="compare")renderCards();
- }}finally{cmp.running=false}
+function toRows(d){return (d.ads||[]).map(a=>({id:a.id,start:a.s||"",stop:a.e||null,fmt:a.f||"u",title:a.t||"",copy:a.b||"No ad copy provided by Meta.",reach:a.r??null,pageId:d.page}))}
+async function loadCompare(force){
+ if(cmp.running)return;cmp.running=true;clearTimeout(cmp.timer);
+ const brands=compareBrands();if(!brands.length){cmp.running=false;return}
+ if(force)for(const b of brands)cmp.data.delete(b.id);
+ const started=Date.now();
+ try{
+  while(true){
+   const need=brands.filter(b=>{const d=cmp.data.get(b.id);return !d||d.status==="running"||d.status==="queued"});
+   if(!need.length)break;
+   let st;
+   try{st=await request("/api/compare?"+new URLSearchParams({pages:need.map(b=>b.id).join(","),coverage:state.coverage}))}
+   catch(e){
+    // Service unavailable: fall back to the older sample so the page still works.
+    for(const b of need){cmp.data.set(b.id,{status:"running",fetched:0,phase:"fallback"});}
+    if(state.view==="compare")renderCards();
+    for(const b of need){try{cmp.data.set(b.id,await loadBrandRowsFallback(b))}catch(err){cmp.data.set(b.id,{status:"error",error:err.message||"Couldn’t load"})}if(state.view==="compare")renderCards()}
+    break;
+   }
+   for(const b of need){
+    const it=st.items&&st.items[b.id]||{status:"queued"};
+    if(it.status==="ready"){
+     try{const d=await request("/api/compare?"+new URLSearchParams({page:b.id,coverage:state.coverage}));
+      if(Array.isArray(d.ads)){cmp.data.set(b.id,{status:"ready",rows:toRows(d),meta:d});recordSnapshot(b.id,d)}
+     }catch(e){cmp.data.set(b.id,{status:"error",error:e.message||"Couldn’t load"})}
+    }else if(it.status==="error")cmp.data.set(b.id,{status:"error",error:it.error||"Couldn’t load"});
+    else cmp.data.set(b.id,{status:it.status==="running"?"running":"queued",fetched:it.fetched||0,phase:it.phase||"queued"});
+   }
+   if(state.view==="compare")renderCards();
+   if(Date.now()-started>8*60000)break;
+   await sleep(2500);
+  }
+ }finally{cmp.running=false;if(state.view==="compare")renderCards()}
 }
-const median=xs=>{const s=xs.filter(x=>x!=null).sort((a,b)=>a-b);return s.length?s[Math.floor(s.length/2)]:null};
-const pctOf=(n,t)=>t?Math.round(n/t*100):0;
-function brandStats(rows){
- const total=rows.length,days=rows.map(daysRunning),themes=messagingThemes(rows),share={};
- for(const t of themes)share[t.id]=pctOf(t.ads.length,total);
+// Observed history, kept per browser: which ad IDs were active at each complete check.
+// Lets us say "newly observed" or "no longer active" only when we really saw both states.
+const snapKey=id=>"adsnoop-cmp-snap-v1:"+id;
+function recordSnapshot(id,d){
+ if(!d.complete||!Array.isArray(d.ads))return;
+ const cur={at:Date.parse(d.generatedAt)||Date.now(),ids:d.ads.map(a=>a.id)};
+ const s=prefStore.read(snapKey(id),{});
+ if(s.last&&cur.at-s.last.at<20*3600e3){s.last=s.last.ids.length===cur.ids.length?s.last:{...cur,at:s.last.at}}
+ else{if(s.last)s.prev=s.last;s.last=cur}
+ prefStore.write(snapKey(id),s);
+}
+function observedChange(id,rows){
+ const s=prefStore.read(snapKey(id),{});if(!s.prev)return null;
+ const before=new Set(s.prev.ids),now=new Set(rows.map(a=>a.id));
+ let added=0,gone=0;for(const x of now)if(!before.has(x))added++;for(const x of before)if(!now.has(x))gone++;
+ return {since:s.prev.at,added,gone};
+}
+// Benchmarks for one advertiser, computed once per dataset.
+function bench(c){
+ const d=c.d;if(!d||d.status!=="ready")return null;
+ const hit=cmp.memo.get(d);if(hit)return hit;
+ const rows=d.rows,total=new Set(rows.map(a=>a.id)).size,days=rows.map(daysRunning);
+ const fmt={v:0,s:0,c:0,d:0,u:0};for(const a of rows)fmt[a.fmt in fmt?a.fmt:"u"]++;
+ const classified=total-fmt.u;
+ const n7=days.filter(x=>x!=null&&x<=7).length,n30=days.filter(x=>x!=null&&x<=30).length,long=days.filter(x=>x!=null&&x>=90).length;
+ const age={a:days.filter(x=>x!=null&&x<=7).length,b:days.filter(x=>x!=null&&x>7&&x<30).length,c:days.filter(x=>x!=null&&x>=30&&x<90).length,d:long};
+ const recent=rows.filter(a=>{const x=daysRunning(a);return x!=null&&x<=30&&a.fmt!=="u"}),older=rows.filter(a=>{const x=daysRunning(a);return x!=null&&x>30&&a.fmt!=="u"});
+ const themes=messagingThemes(rows),share={},count={},byRule={};
+ for(const t of themes){share[t.id]=pctOf(t.ads.length,total);count[t.id]=t.ads.length;byRule[t.id]=t}
  const offerIds=new Set(themes.filter(t=>t.category==="offers").flatMap(t=>t.ads.map(a=>a.id)));
  const top=cat=>themes.find(t=>t.category===cat)?.label||"—";
- return {total,distinct:new Set(rows.map(groupKey)).size,median:median(days),new30:pctOf(days.filter(d=>d!=null&&d<=30).length,total),long:pctOf(days.filter(d=>d!=null&&d>=90).length,total),offers:pctOf(offerIds.size,total),share,hook:top("hooks"),benefit:top("benefits"),proof:top("proof"),cta:topCTAs(rows).list[0]?.label||"—"};
+ const meta=d.meta||{};
+ const out={total,creatives:new Set(rows.map(groupKey)).size,fmt,classified,n7,n30,long,age,median:median(days),weekly:weeklyLaunches(rows,12),
+  recentVideo:recent.length>=5?pctOf(recent.filter(a=>a.fmt==="v").length,recent.length):null,olderVideo:older.length>=5?pctOf(older.filter(a=>a.fmt==="v").length,older.length):null,recentN:recent.length,olderN:older.length,
+  share,count,byRule,offers:pctOf(offerIds.size,total),offerN:offerIds.size,hook:top("hooks"),benefit:top("benefits"),proof:top("proof"),cta:topCTAs(rows).list[0]?.label||"—",
+  partial:!meta.complete,limitReason:meta.limitReason||null,fmtComplete:!!(meta.formats&&meta.formats.complete),fmtNote:meta.formats?.note||"",source:meta.source||"",carouselKnown:meta.source==="direct",generatedAt:meta.generatedAt,
+  change:observedChange(c.id,rows)};
+ cmp.memo.set(d,out);return out;
 }
-function compareInsights(cols){
- const me=cols.find(c=>c.mine),rivals=cols.filter(c=>!c.mine),out=[];
- if(!rivals.length)return out;
- const name=c=>c.name;
- if(me){
-  const gaps=[],edges=[];
-  for(const r of messageRules){
-   const mine=me.stats.share[r.id]||0,users=rivals.filter(c=>(c.stats.share[r.id]||0)>=10).sort((a,b)=>b.stats.share[r.id]-a.stats.share[r.id]);
-   if(mine<5&&(users.length>=2||users.some(c=>c.stats.share[r.id]>=25)))gaps.push({r,users,score:users.reduce((s,c)=>s+c.stats.share[r.id],0)});
-   if(mine>=10&&rivals.every(c=>(c.stats.share[r.id]||0)<5))edges.push({r,mine});
-  }
-  gaps.sort((a,b)=>b.score-a.score);
-  for(const g of gaps.slice(0,3))out.push({kind:"gap",title:"Gap: "+g.r.label,text:g.users.slice(0,3).map(c=>name(c)+" "+c.stats.share[g.r.id]+"%").join(", ")+" of ads use it. You "+((me.stats.share[g.r.id]||0)?"barely do ("+me.stats.share[g.r.id]+"%)":"don’t")+".",tip:g.r.test});
-  for(const e of edges.slice(0,2))out.push({kind:"edge",title:"Only you: "+e.r.label,text:e.mine+"% of your ads lean on it; no pinned competitor does. Keep it distinctive."});
-  const avgOffer=Math.round(rivals.reduce((s,c)=>s+c.stats.offers,0)/rivals.length);
-  if(Math.abs(me.stats.offers-avgOffer)>=15)out.push({kind:me.stats.offers>avgOffer?"note":"gap",title:me.stats.offers>avgOffer?"You discount more":"Competitors push offers harder",text:"Offers appear in "+me.stats.offers+"% of your ads vs "+avgOffer+"% on average for your pins."});
+const fpct=(b,k)=>b.classified?pctOf(b.fmt[k],b.classified):0;
+const listNames=xs=>xs.length<=1?xs.join(""):xs.slice(0,-1).join(", ")+" and "+xs[xs.length-1];
+const words=["no","one","two","three","four","five","six"];
+const numWord=n=>words[n]||String(n);
+function evidenceFor(cols,pick,limit=4){
+ const out=[],used=new Set();
+ // One ad per competitor first, then fill.
+ for(let round=0;round<2&&out.length<limit;round++)for(const c of cols){
+  const ads=pick(c).filter(a=>!used.has(a.id));if(!ads.length)continue;
+  const take=round?ads.slice(0,limit-out.length):ads.slice(0,1);
+  for(const a of take){if(out.length>=limit)break;used.add(a.id);out.push({a,c})}
  }
- const full=cols.filter(c=>!c.stats.partial);
- const fresh=[...full].sort((a,b)=>b.stats.new30-a.stats.new30)[0];
- if(fresh&&fresh.stats.new30>=20)out.push({kind:"note",title:name(fresh)+" has the highest share of recent ads",text:fresh.stats.new30+"% of their live ads launched in the last 30 days."});
- const durable=[...full].sort((a,b)=>b.stats.long-a.stats.long)[0];
- if(durable&&durable.stats.long>=20)out.push({kind:"note",title:name(durable)+" has the most long-runners",text:durable.stats.long+"% of their ads have run 90+ days. Ad longevity alone does not prove results."});
- return out.slice(0,6);
+ return out;
+}
+const byReach=(x,y)=>(y.reach??-1)-(x.reach??-1)||String(x.start||"9").localeCompare(String(y.start||"9"));
+// Creative Opportunity Radar: deterministic, explainable comparisons. Picks the
+// strongest two or three, one per kind, each with denominators and caveats.
+function opportunities(cols){
+ const me=cols.find(c=>c.mine&&c.b),rivals=cols.filter(c=>!c.mine&&c.b&&c.b.total>=10);
+ if(!me||!rivals.length||me.b.total<5)return {list:[],why:!me?"mine":rivals.length?"small":"rivals"};
+ const R=rivals.length,partial=[me,...rivals].filter(c=>c.b.partial).map(c=>c.name);
+ const pnote=partial.length?" Partial data for "+listNames(partial)+": counts cover the ads collected.":"";
+ const cand=[];
+ const fmtWhy={v:"Competitors are putting production effort into video. If your customers respond the way theirs might, your account may have little creative suited to Reels, Stories and in-stream placements. This shows where competitors invest, not what performs for them.",c:"Carousels let competitors show a range, steps or several benefits in one ad. Heavy use suggests they see value in giving people more to swipe through. It doesn’t prove carousels work better.",d:"Catalogue ads are built from a product feed and are typically used for product retargeting or broad product prospecting. Competitors running them likely have a feed set up; you may be missing that coverage."};
+ const fmtTest={v:"Turn your strongest current static concept into a 6–15 second video with the same offer, audience and landing page, and run it against the static version.",c:"Build a 3–5 card carousel from one existing concept (one product, benefit or step per card) and test it against your best single image.",d:"If you sell products online, test a catalogue ad set from your product feed against your best static product ad, with the same budget and audience."};
+ for(const k of ["v","c","d"]){
+  if(k==="c"&&!me.b.carouselKnown)continue;
+  const rv=rivals.filter(c=>c.b.classified>=10);if(rv.length<1||me.b.classified<5)continue;
+  const mine=fpct(me.b,k),vals=rv.map(c=>fpct(c.b,k)),avg=Math.round(vals.reduce((s,x)=>s+x,0)/vals.length),users=rv.filter(c=>fpct(c.b,k)>=20);
+  if(avg-mine>=15&&users.length>=Math.min(2,rv.length)){
+   const lo=Math.min(...vals),hi=Math.max(...vals);
+   cand.push({kind:"format",tag:"Format opportunity",score:(avg-mine)*(users.length/rv.length)*1.1,
+    title:fmtName(k)+" is under-used in your ads",
+    data:"Your brand uses "+fmtName(k).toLowerCase()+" in "+mine+"% of classified ads ("+me.b.fmt[k]+" of "+fmtN(me.b.classified)+"), compared with a competitor average of "+avg+"% (range "+lo+"–"+hi+"% across "+rv.length+"). "+(users.length===rv.length?"All":numWord(users.length).replace(/^./,m=>m.toUpperCase())+" of "+rv.length)+" competitors use it in at least 20% of their ads.",
+    why:fmtWhy[k],test:fmtTest[k],
+    ev:evidenceFor(users,c=>c.d.rows.filter(a=>a.fmt===k).sort(byReach)),
+    note:"Shares use classified ads only (unknown formats excluded)."+(rivals.concat(me).some(c=>!c.b.fmtComplete)?" Some formats couldn’t be classified.":"")+pnote});
+  }
+ }
+ {
+  const busy=rivals.filter(c=>c.b.n30>=10),med=median(busy.map(c=>c.b.n30));
+  if(busy.length>=Math.min(2,R)&&med!=null&&me.b.n30<med/2){
+   cand.push({kind:"activity",tag:"Creative activity",score:Math.min(60,(med-me.b.n30)/med*60)*(busy.length/R),
+    title:"Competitors are launching more new ads",
+    data:(busy.length===R?"All":numWord(busy.length).replace(/^./,m=>m.toUpperCase())+" of your "+R)+" competitors have at least ten currently active ads launched in the last 30 days (median "+med+"). You have "+me.b.n30+".",
+    why:"A steadier stream of new ads gives an account more creative to rotate and learn from, and suggests those competitors are actively testing. It doesn’t show their new ads are working.",
+    test:"Commit to a fixed cadence for the next month, for example three to five new ads a fortnight, each built around one message, and track how many are still running after 30 days.",
+    ev:evidenceFor(busy,c=>c.d.rows.filter(a=>{const x=daysRunning(a);return x!=null&&x<=30}).sort((x,y)=>String(y.start).localeCompare(String(x.start)))),
+    note:"Counts only include ads still active today, by Meta’s delivery start date; ads launched and already stopped aren’t visible, and a launch isn’t necessarily new creative."+pnote});
+  }
+ }
+ const catWhy={hooks:"It’s a recurring way competitors open their ads, so your audience is seeing it often from others.",benefits:"Competitors keep returning to this benefit, which suggests they think it matters to buyers in this category.",offers:"Competitors are giving people a reason to act now. If your ads rarely do, compare them on how clear the next step and incentive are.",proof:"Reassurance answers buying objections. If competitors keep addressing them and you don’t, your ads may leave the question open.",actions:"This is a common next step competitors ask for."};
+ for(const r of messageRules){
+  if(r.category==="actions")continue;
+  const mine=me.b.share[r.id]||0,users=rivals.filter(c=>(c.b.share[r.id]||0)>=15);
+  if(mine<5&&users.length>=Math.min(2,R)){
+   const avgU=Math.round(users.reduce((s,c)=>s+c.b.share[r.id],0)/users.length);
+   cand.push({kind:"message",tag:"Messaging gap",score:(avgU-mine)*(users.length/R),
+    title:r.label+": competitors use it, you rarely do",
+    data:(users.length===R?"All "+R:numWord(users.length).replace(/^./,m=>m.toUpperCase())+" of your "+R)+" competitors use "+r.label.toLowerCase()+" in at least 15% of their ads ("+users.slice(0,3).map(c=>c.name+" "+c.b.share[r.id]+"%").join(", ")+"). It appears in "+mine+"% of yours ("+(me.b.count[r.id]||0)+" of "+fmtN(me.b.total)+").",
+    why:catWhy[r.category],test:r.test,
+    ev:evidenceFor(users,c=>(c.b.byRule[r.id]?.ads||[]).slice().sort(byReach)).map(e=>({...e,quote:e.c.b.byRule[r.id]?.evidence[e.a.id]})),
+    note:"Themes are matched in ad text by fixed rules; claims aren’t verified."+pnote});
+  }
+  if(mine>=15&&(me.b.count[r.id]||0)>=3&&rivals.every(c=>(c.b.share[r.id]||0)<5)){
+   cand.push({kind:"edge",tag:"Your distinctive advantage",score:mine*0.6,
+    title:"You own "+r.label.toLowerCase(),
+    data:r.label+" appears in "+mine+"% of your ads ("+me.b.count[r.id]+" of "+fmtN(me.b.total)+"). None of your "+R+" competitors uses it in more than 5% of theirs.",
+    why:"It’s a point of difference in what people see from your category. Worth protecting rather than diluting.",
+    test:"Keep "+r.label.toLowerCase()+" in your lead creative and test moving it earlier (first line of copy or first three seconds) against your current version.",
+    ev:evidenceFor([me],c=>(c.b.byRule[r.id]?.ads||[]).slice().sort(byReach)).map(e=>({...e,quote:me.b.byRule[r.id]?.evidence[e.a.id]})),
+    note:"Themes are matched in ad text by fixed rules."+pnote});
+  }
+ }
+ {
+  const avg=Math.round(rivals.reduce((s,c)=>s+c.b.offers,0)/R);
+  if(avg-me.b.offers>=20)cand.push({kind:"offer",tag:"Offer strategy",score:(avg-me.b.offers)*0.7,
+   title:"Competitors lean harder on offers",
+   data:"Offers (price incentives, free first steps or payment options) appear in "+me.b.offers+"% of your ads ("+me.b.offerN+" of "+fmtN(me.b.total)+") against a competitor average of "+avg+"%.",
+   why:"Competitors are giving people a reason to act now. That may suit the category’s buying cycle, or it may be margin they’re willing to give away.",
+   test:"If you have a genuine offer, test stating it clearly in the first line against your current opening. Don’t invent one to match competitors.",
+   ev:evidenceFor(rivals.filter(c=>c.b.offers>=avg),c=>c.d.rows.filter(a=>["saving","free","finance"].some(id=>c.b.byRule[id]?.evidence[a.id])).sort(byReach)),
+   note:"Offer detection reads ad text only."+pnote});
+ }
+ cand.sort((a,b)=>b.score-a.score);
+ const picked=[],kinds=new Set();
+ for(const x of cand){if(picked.length>=3)break;if(kinds.has(x.kind))continue;kinds.add(x.kind);picked.push(x)}
+ return {list:picked,why:"none"};
+}
+// ---- Rendering ----
+function cmpStatusChip(c){
+ const d=c.d,b=c.b;
+ if(b)return '<span class="cb-st '+(b.partial?'part':'ok')+'" title="'+esc(b.partial?(b.limitReason||"Partial data")+" Figures use the "+fmtN(b.total)+" ads collected.":"All accessible active ads analysed")+'">'+(b.partial?'Partial · ':'')+fmtN(b.total)+' ads</span>';
+ if(d&&d.status==="error")return '<span class="cb-st err">Couldn’t load</span>';
+ return '<span class="cb-st load"><i></i>'+(d&&d.fetched?'Collecting '+fmtN(d.fetched)+'…':d&&d.phase==="formats"?'Classifying…':'Queued…')+'</span>';
+}
+function brandStrip(cols){
+ const ready=cols.filter(c=>c.b),rank=[...ready].sort((x,y)=>y.b.total-x.b.total);
+ return '<div class="cb-strip" role="list">'+cols.map(c=>{
+  const r=c.b?rank.indexOf(c)+1:0;
+  return '<div class="cb'+(c.mine?' me':'')+'" role="listitem"><button class="cb-name" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'" title="Open '+esc(c.name)+'">'+logoHTML(c.id,c.name,"")+'<span><b>'+esc(c.name)+'</b><small>'+(c.mine?'Your brand':'Competitor')+(r?' · #'+r+' by active ads':'')+'</small></span></button>'+cmpStatusChip(c)+'</div>';
+ }).join("")+'</div>';
+}
+function tabsHTML(){
+ const t=[["overview","Overview"],["mix","Creative mix"],["activity","Creative activity"],["messaging","Messaging"]];
+ return '<div class="cmp-tabs" role="tablist" aria-label="Comparison sections">'+t.map(([k,l])=>'<button role="tab" aria-selected="'+(cmp.tab===k)+'" class="'+(cmp.tab===k?'on':'')+'" data-action="cmptab" data-tab="'+k+'">'+l+'</button>').join("")+'</div>';
+}
+function evidenceHTML(ev){
+ if(!ev||!ev.length)return "";
+ return '<div class="op-ev"><span class="op-k">Supporting ads</span><div class="op-ev-row">'+ev.map(e=>'<a class="op-ad" href="https://www.facebook.com/ads/library/?id='+esc(e.a.id)+'" target="_blank" rel="noopener noreferrer" title="'+esc(e.c.name+(e.quote?" — “"+e.quote+"”":"")+" · open in Meta Ad Library")+'">'+thumbHTML(e.a.id,"op-th")+'<span><b>'+esc(e.c.name)+'</b><small>'+esc(e.quote?"“"+e.quote.slice(0,70)+(e.quote.length>70?"…":"")+"”":fmtName(e.a.fmt)+(e.a.start?" · since "+e.a.start:""))+'</small></span></a>').join("")+'</div></div>';
+}
+function radarHTML(cols){
+ const loading=cols.some(c=>!c.b&&!(c.d&&c.d.status==="error"));
+ const op=opportunities(cols);
+ const head='<div class="op-head"><div><p class="eyebrow">Creative Opportunity Radar</p><h3>Where your brand could test next</h3></div><span class="op-sub">The strongest differences between your ads and your competitors’, ranked. Signals of competitor activity, not proof of performance.</span></div>';
+ if(op.why==="mine")return '<section class="op">'+head+'<div class="op-empty">Search your own brand and press <b>This is my brand</b> to see opportunities against your competitors.</div></section>';
+ if(op.why==="rivals"||op.why==="small")return '<section class="op">'+head+'<div class="op-empty">'+(loading?'<span class="cmp-wait"></span> Collecting ads…':op.why==="small"?'Your brand has fewer than five active ads, too few to compare fairly.':'Pin competitors with at least ten active ads to compare against.')+'</div></section>';
+ if(!op.list.length)return '<section class="op">'+head+'<div class="op-empty">'+(loading?'<span class="cmp-wait"></span> Still collecting, opportunities appear when all brands are in.':'No strong gaps: your formats, launch activity and messaging sit close to your competitors.')+'</div></section>';
+ return '<section class="op">'+head+'<div class="op-grid">'+op.list.map((o,i)=>'<article class="op-card op-'+o.kind+'" style="--i:'+i+'"><span class="op-tag">'+esc(o.tag)+'</span><h4>'+esc(o.title)+'</h4><p class="op-data">'+esc(o.data)+'</p><p class="op-why"><b>Why it could matter.</b> '+esc(o.why)+'</p><div class="op-test"><span>Test</span>'+esc(o.test)+'</div>'+evidenceHTML(o.ev)+'<p class="op-note">'+esc(o.note)+'</p></article>').join("")+'</div>'+(loading?'<p class="op-foot"><span class="cmp-wait"></span> Some brands are still loading; this may change.</p>':'')+'</section>';
+}
+// A ranked bar list with your brand highlighted.
+function rankBars(cols,val,label,fmtv){
+ const r=cols.filter(c=>c.b).map(c=>({c,v:val(c.b)})).filter(x=>x.v!=null).sort((a,b)=>b.v-a.v);
+ const max=Math.max(1,...r.map(x=>x.v));
+ return '<div class="rb">'+r.map(x=>'<div class="rb-row'+(x.c.mine?' me':'')+'" title="'+esc(x.c.name+": "+label(x.c.b))+'"><span class="rb-n">'+esc(x.c.name)+'</span><span class="rb-bar"><i style="--w:'+(x.v/max*100).toFixed(1)+'%"></i></span><span class="rb-v">'+(fmtv?fmtv(x.c.b):fmtN(x.v))+'</span></div>').join("")+'</div>';
+}
+function kpiCard(title,sub,body,foot){return '<div class="bm"><div class="bm-h"><h4>'+esc(title)+'</h4>'+(sub?'<small>'+sub+'</small>':'')+'</div>'+body+(foot?'<p class="bm-f">'+foot+'</p>':'')+'</div>'}
+function positionLine(cols,val,unit){unit=unit||"";
+ const me=cols.find(c=>c.mine&&c.b);const r=cols.filter(c=>c.b&&val(c.b)!=null);if(!me||r.length<2)return "";
+ const sorted=[...r].sort((a,b)=>val(b.b)-val(a.b));const pos=sorted.indexOf(me)+1;
+ const rv=r.filter(c=>!c.mine).map(c=>val(c.b)),avg=rv.length?Math.round(rv.reduce((s,x)=>s+x,0)/rv.length):null;
+ return 'You rank <b>#'+pos+' of '+r.length+'</b>'+(avg!=null?' · competitor average '+fmtN(avg)+unit:'');
+}
+function overviewHTML(cols){
+ const ready=cols.filter(c=>c.b);
+ const vol=kpiCard("Active ad volume","Unique Meta ad IDs live now",rankBars(cols,b=>b.total,b=>fmtN(b.total)+" active ads · "+fmtN(b.creatives)+" distinct creatives (identical copy and headline grouped)"),positionLine(cols,b=>b.total));
+ const vid=kpiCard("Video share","% of classified ads",rankBars(cols,b=>b.classified?fpct(b,"v"):null,b=>fpct(b,"v")+"% video ("+b.fmt.v+" of "+fmtN(b.classified)+" classified)",b=>fpct(b,"v")+"%"),positionLine(cols,b=>b.classified?fpct(b,"v"):null,"%"));
+ const fresh=kpiCard("Launched in 30 days","Active ads that started in the last 30 days",rankBars(cols,b=>b.n30,b=>b.n30+" ads ("+pctOf(b.n30,b.total)+"% of active) · "+b.n7+" in the last 7 days",b=>b.n30+' <small>'+pctOf(b.n30,b.total)+'%</small>'),positionLine(cols,b=>b.n30));
+ const age=kpiCard("Median ad age","Days since launch, active ads",rankBars(cols,b=>b.median,b=>"Median "+b.median+" days · "+b.long+" ads running 90+ days",b=>b.median+'d'),"Longer isn’t better or worse: long-running ads aren’t proof of performance.");
+ const msg=(()=>{const me=cols.find(c=>c.mine&&c.b),r=ready.filter(c=>!c.mine);if(!r.length)return "";
+  const rows=[["Lead hook","hook"],["Lead benefit","benefit"],["Lead proof","proof"],["Ads with an offer","offers"]];
+  return kpiCard("Messaging at a glance","Most common theme per brand",'<div class="mg">'+ready.map(c=>'<div class="mg-c'+(c.mine?' me':'')+'"><b>'+esc(c.name)+'</b>'+rows.map(([l,k])=>'<span><small>'+l+'</small>'+(k==="offers"?c.b.offers+'%':esc(c.b[k]))+'</span>').join("")+'</div>').join("")+'</div>',"<button class=\"linkbutton\" data-action=\"cmptab\" data-tab=\"messaging\">Full messaging comparison →</button>")})();
+ return radarHTML(cols)+'<div class="bm-grid">'+vol+vid+fresh+age+'</div>'+msg;
+}
+function mixHTML(cols){
+ const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';
+ const mode=cmp.mode,sort=cmp.sort;
+ const list=sort?[...ready].sort((a,b)=>(sort==="total"?b.b.total-a.b.total:fpct(b.b,sort)-fpct(a.b,sort))):ready;
+ const maxT=Math.max(1,...ready.map(c=>c.b.total));
+ const legend='<div class="mx-legend">'+FMT.map(f=>'<button class="'+(sort===f.k?'on':'')+'" data-action="cmpsort" data-sort="'+f.k+'" title="Sort by '+esc(f.label)+'"><i style="background:'+f.c+'"></i>'+esc(f.label)+'</button>').join("")+'</div>';
+ const toggle='<div class="seg" role="group" aria-label="Show"><button class="'+(mode==="share"?'on':'')+'" data-action="cmpmode" data-mode="share">Share</button><button class="'+(mode==="count"?'on':'')+'" data-action="cmpmode" data-mode="count">Count</button></div>';
+ const bars=list.map(c=>{
+  const b=c.b,base=mode==="share"?b.total:maxT;
+  const segs=FMT.map(f=>{const n=b.fmt[f.k];if(!n)return "";const w=n/base*100;const p=f.k==="u"?pctOf(n,b.total)+"% of all ads":fpct(b,f.k)+"% of classified";return '<span class="mx-seg" style="--w:'+w.toFixed(2)+'%;background:'+f.c+'" title="'+esc(c.name+" · "+f.label+": "+fmtN(n)+" ads ("+p+")")+'">'+(w>=9?'<em>'+(mode==="share"?(f.k==="u"?pctOf(n,b.total):fpct(b,f.k))+'%':fmtN(n))+'</em>':'')+'</span>'}).join("");
+  return '<div class="mx-row'+(c.mine?' me':'')+'"><span class="mx-n">'+esc(c.name)+'<small>'+fmtN(b.classified)+' of '+fmtN(b.total)+' classified</small></span><span class="mx-bar">'+segs+'</span></div>';
+ }).join("");
+ const shift='<div class="bm"><div class="bm-h"><h4>Video in recent launches</h4><small>Video share of ads launched in the last 30 days vs older active ads</small></div><div class="sh">'+ready.map(c=>{const b=c.b;if(b.recentVideo==null||b.olderVideo==null)return '<div class="sh-row'+(c.mine?' me':'')+'"><span>'+esc(c.name)+'</span><small>Too few dated ads to compare</small></div>';const dlt=b.recentVideo-b.olderVideo;return '<div class="sh-row'+(c.mine?' me':'')+'" title="'+esc(b.recentN+" recent and "+b.olderN+" older classified ads")+'"><span>'+esc(c.name)+'</span><span class="sh-v">'+b.olderVideo+'% <i>→</i> <b>'+b.recentVideo+'%</b></span><span class="sh-d '+(dlt>=10?'up':dlt<=-10?'down':'')+'">'+(dlt>0?'+':'')+dlt+' pts</span></div>'}).join("")+'</div><p class="bm-f">Compares ads still active today by launch date. It describes the current mix, not ads that were replaced.</p></div>';
+ const note=ready.some(c=>!c.b.carouselKnown)?'<p class="cmp-note">'+esc(ready.find(c=>!c.b.carouselKnown).b.fmtNote)+'</p>':'<p class="cmp-note">Video and image come from Meta’s media-type filter, carousels from ads with several card headlines, catalogue ads from product templates. Ads Meta doesn’t tag are shown as Unknown and left out of shares.</p>';
+ return '<div class="mx"><div class="mx-top"><div><h3 class="cmp-h">Creative format mix</h3><small class="intel-sub">'+(mode==="share"?'Share of each brand’s active ads':'Number of active ads, on one scale')+'. Click a format to sort.</small></div>'+toggle+'</div>'+legend+'<div class="mx-bars">'+bars+'</div>'+note+'</div>'+shift;
+}
+function sparkWeeks(w,max){
+ const W=168,H=40,bw=W/w.length;
+ return '<svg class="spk" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Weekly launches, last 12 weeks: '+w.join(", ")+'">'+w.map((n,i)=>{const h=max?Math.max(n?2:0,n/max*(H-4)):0;return '<rect x="'+(i*bw+1).toFixed(1)+'" y="'+(H-h).toFixed(1)+'" width="'+(bw-2).toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2"><title>'+(12-i===1?"This week":(12-i-1)+" weeks ago")+': '+n+' launched</title></rect>'}).join("")+'</svg>';
+}
+function activityHTML(cols){
+ const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';
+ const max=Math.max(1,...ready.flatMap(c=>c.b.weekly));
+ const head='<div class="ac-row ac-h"><span>Brand</span><span>Weekly launches · last 12 weeks</span><span>7 days</span><span>30 days</span><span>Median age</span><span>90d+</span></div>';
+ const rows=ready.map(c=>{const b=c.b;return '<div class="ac-row'+(c.mine?' me':'')+'"><span class="ac-n">'+esc(c.name)+(b.partial?'<small>Partial data</small>':'')+'</span><span>'+sparkWeeks(b.weekly,max)+'</span><span><b>'+b.n7+'</b><small>'+pctOf(b.n7,b.total)+'%</small></span><span><b>'+b.n30+'</b><small>'+pctOf(b.n30,b.total)+'%</small></span><span><b>'+(b.median??"—")+'</b><small>days</small></span><span><b>'+b.long+'</b><small>'+pctOf(b.long,b.total)+'%</small></span></div>'}).join("");
+ const ageCols=[["a","≤7 days","#0071e3"],["b","8–29 days","#5ea8ff"],["c","30–89 days","#a8cfff"],["d","90+ days","#d5e6fb"]];
+ const ages='<div class="bm"><div class="bm-h"><h4>Recently launched vs long-running</h4><small>Active ads by age</small></div><div class="mx-legend static">'+ageCols.map(a=>'<span><i style="background:'+a[2]+'"></i>'+a[1]+'</span>').join("")+'</div><div class="mx-bars">'+ready.map(c=>{const b=c.b,t=Math.max(1,b.age.a+b.age.b+b.age.c+b.age.d);return '<div class="mx-row'+(c.mine?' me':'')+'"><span class="mx-n">'+esc(c.name)+'</span><span class="mx-bar">'+ageCols.map(a=>{const n=b.age[a[0]];if(!n)return "";const w=n/t*100;return '<span class="mx-seg" style="--w:'+w.toFixed(2)+'%;background:'+a[2]+'" title="'+esc(c.name+" · "+a[1]+": "+n+" ads ("+Math.round(w)+"%)")+'">'+(w>=9?'<em class="dk">'+Math.round(w)+'%</em>':'')+'</span>'}).join("")+'</span></div>'}).join("")+'</div></div>';
+ const changes=ready.map(c=>{const ch=c.b.change;return '<div class="ob-row'+(c.mine?' me':'')+'"><span>'+esc(c.name)+'</span>'+(ch?'<span><b class="up">+'+ch.added+'</b> newly observed · <b class="down">−'+ch.gone+'</b> no longer active <small>since '+new Date(ch.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"})+'</small></span>':'<span class="intel-sub">Tracking from today</span>')+'</div>'}).join("");
+ return '<div class="bm"><div class="bm-h"><h4>Creative momentum</h4><small>When currently active ads launched (Meta delivery start dates)</small></div><div class="ac">'+head+rows+'</div><p class="bm-f">These count launches of ads that are still running today. AdSnoop can’t see ads that launched and already stopped, so this isn’t a creative refresh rate.</p></div>'+ages+'<div class="bm"><div class="bm-h"><h4>Observed changes</h4><small>Ad IDs seen in this browser between complete checks at least a day apart</small></div><div class="ob">'+changes+'</div><p class="bm-f">“Newly observed” means active now but not at your last check; it may have launched earlier. History is kept on this device for now.</p></div>';
+}
+function messagingCmpHTML(cols){
+ const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';
+ const me=ready.find(c=>c.mine);
+ const head='<tr><th></th>'+ready.map(c=>'<th class="'+(c.mine?'me':'')+'">'+logoHTML(c.id,c.name,"")+'<span>'+esc(c.name)+'</span><small>'+fmtN(c.b.total)+' ads</small></th>').join("")+'</tr>';
+ const body=messageCategories.map(cat=>{
+  const rules=messageRules.filter(r=>r.category===cat.id&&ready.some(c=>c.b.share[r.id]));
+  if(!rules.length)return "";
+  return '<tr class="cmp-cat"><th colspan="'+(ready.length+1)+'"><i style="background:'+catColor[cat.id]+'"></i>'+esc(cat.label)+'</th></tr>'+rules.map(r=>{
+   const rivalUse=ready.filter(c=>!c.mine&&(c.b.share[r.id]||0)>=10).length;
+   return '<tr><th scope="row">'+esc(r.label)+'</th>'+ready.map(c=>{
+    const v=c.b.share[r.id]||0,gap=c.mine&&v<5&&rivalUse>=2,ev=c.b.byRule[r.id],q=ev?Object.values(ev.evidence)[0]:"";
+    return '<td class="heat'+(c.mine?' me':'')+(gap?' gap':'')+'" style="--h:'+Math.min(1,v/50).toFixed(2)+'" title="'+esc(c.name+": "+v+"% ("+(c.b.count[r.id]||0)+" of "+c.b.total+" ads)"+(q?" — e.g. “"+q.slice(0,120)+"”":""))+'">'+(v?v+'%':'·')+(gap?'<em>gap</em>':'')+'</td>';
+   }).join("")+'</tr>';
+  }).join("");
+ }).join("");
+ const cta='<div class="bm"><div class="bm-h"><h4>Offers and calls to action</h4><small>Share of ads with any offer, and the most common next step</small></div>'+rankBars(cols,b=>b.offers,b=>b.offers+"% of ads ("+b.offerN+") mention an offer · top CTA: "+b.cta,b=>b.offers+'%')+'<div class="mg">'+ready.map(c=>'<div class="mg-c'+(c.mine?' me':'')+'"><b>'+esc(c.name)+'</b><span><small>Top call to action</small>'+esc(c.b.cta)+'</span></div>').join("")+'</div></div>';
+ return '<h3 class="cmp-h">Messaging matrix <small>Share of each brand’s ads using the theme. Hover a cell for an example line.'+(me?' <em class="gapkey">gap</em> = two or more competitors use it, you don’t.':'')+'</small></h3><div class="cmp-scroll"><table class="cmp-table cmp-matrix"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+cta+'<p class="cmp-note">Themes come from the same rules as the Messaging tab, applied to every collected ad’s text. Claims aren’t verified.</p>';
 }
 function compareHTML(){
  const brands=compareBrands(),mine=myBrand();
- if(!mine&&!brands.length)return '<div class="cmp-empty"><h3>Compare your brand with your competitors</h3><ol><li>Search your own brand and press <b>This is my brand</b>.</li><li>Search up to 5 competitors and press <b>Pin competitor</b> on each.</li><li>Come back here to see the gaps.</li></ol></div>';
- const need=brands.some(b=>{const d=cmp.data.get(b.id);return !d||(!d.rows&&!d.loading&&!d.error)});
- if(need)setTimeout(()=>loadCompare(false),0);
- const cols=brands.map(b=>{const d=cmp.data.get(b.id);const st=d&&d.rows?brandStats(d.rows):null;if(st)st.partial=!!d.more;return {...b,d,stats:st}});
- const ready=cols.filter(c=>c.stats);
- const head='<tr><th></th>'+cols.map(c=>'<th class="'+(c.mine?'me':'')+'"><button class="cmp-brand" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'">'+logoHTML(c.id,c.name,"")+'<span>'+esc(c.name)+'</span></button>'+(c.mine?'<small>Your brand</small>':'<small>Competitor</small>')+'</th>').join("")+'</tr>';
- const cell=(c,f)=>c.stats?f(c.stats):c.d&&c.d.error?'<span class="cmp-err">Couldn’t load</span>':'<span class="cmp-wait"></span>';
- const row=(label,f,hint)=>'<tr><th scope="row">'+esc(label)+(hint?'<small>'+esc(hint)+'</small>':'')+'</th>'+cols.map(c=>'<td class="'+(c.mine?'me':'')+'">'+cell(c,f)+'</td>').join("")+'</tr>';
- const stats='<table class="cmp-table"><thead>'+head+'</thead><tbody>'+
-  row("Live ads",s=>'<b>'+s.distinct+'</b>'+(s.distinct<s.total?' <small>('+s.total+' incl. variants)</small>':''),"Newest 100 per brand are analysed")+
-  row("Launched in 30 days",s=>'<b>'+s.new30+'%</b>'+(s.partial?' <small>of newest 100</small>':''),"Share started in the last 30 days")+
-  row("Long-runners 90d+",s=>'<b>'+s.long+'%</b>'+(s.partial?' <small>of newest 100</small>':''),"Share active for 90+ days")+
-  row("Median days live",s=>'<b>'+(s.median??"—")+'</b>')+
-  row("Ads with an offer",s=>'<b>'+s.offers+'%</b>')+
-  row("Lead hook",s=>esc(s.hook))+row("Lead benefit",s=>esc(s.benefit))+row("Lead proof",s=>esc(s.proof))+row("Top call to action",s=>esc(s.cta))+
- '</tbody></table>';
- const me=cols.find(c=>c.mine&&c.stats);
- const matrix='<table class="cmp-table cmp-matrix"><thead>'+head+'</thead><tbody>'+messageCategories.map(cat=>{
-  const rules=messageRules.filter(r=>r.category===cat.id&&ready.some(c=>c.stats.share[r.id]));
-  if(!rules.length)return "";
-  return '<tr class="cmp-cat"><th colspan="'+(cols.length+1)+'">'+esc(cat.label)+'</th></tr>'+rules.map(r=>{
-   const rivalUse=cols.filter(c=>!c.mine&&c.stats&&(c.stats.share[r.id]||0)>=10).length;
-   return '<tr><th scope="row">'+esc(r.label)+'</th>'+cols.map(c=>{
-    if(!c.stats)return '<td class="'+(c.mine?'me':'')+'">'+cell(c,()=>"")+'</td>';
-    const v=c.stats.share[r.id]||0,gap=c.mine&&v<5&&rivalUse>=2;
-    return '<td class="heat'+(c.mine?' me':'')+(gap?' gap':'')+'" style="--h:'+Math.min(1,v/50).toFixed(2)+'">'+(v?v+'%':'·')+(gap?'<em>gap</em>':'')+'</td>';
-   }).join("")+'</tr>';
-  }).join("");
- }).join("")+'</tbody></table>';
- const ins=compareInsights(ready);
- const insHTML=ready.length>1?(ins.length?'<div class="ins-grid">'+ins.map(i=>'<div class="ins-card ins-'+i.kind+'"><p class="ins-t">'+esc(i.title)+'</p><p>'+esc(i.text)+'</p>'+(i.tip?'<p class="ins-tip">Try: '+esc(i.tip)+'</p>':'')+'</div>').join("")+'</div>':'<p class="intel-sub">No standout gaps yet. Your messaging overlaps closely with your pins.</p>'):'';
- const hint=!mine?'<p class="cmp-hint">Tip: search your own brand and press <b>This is my brand</b> to see your gaps highlighted.</p>':brands.length<2?'<p class="cmp-hint">Pin some competitors (up to 5) to compare against.</p>':'';
- return '<div class="cmp-wrap">'+hint+(insHTML?'<h3 class="cmp-h">What stands out</h3>'+insHTML:'')+'<h3 class="cmp-h">At a glance</h3><div class="cmp-scroll">'+stats+'</div><h3 class="cmp-h">Messaging matrix <small>Share of each brand’s ads using the theme'+(me?' · <em class="gapkey">gap</em> = 2+ competitors use it, you don’t':'')+'</small></h3><div class="cmp-scroll">'+matrix+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh data</button><span class="intel-sub">Based on each brand’s most recent live UK ads in Meta’s Ad Library. Themes come from ad text; claims aren’t verified.</span></div></div>';
+ if(!brands.length)return '<div class="cmp-empty"><h3>Compare your brand with your competitors</h3><ol><li>Search your own brand and press <b>This is my brand</b>.</li><li>Search up to 5 competitors and press <b>Pin competitor</b> on each.</li><li>Come back here to see the gaps.</li></ol></div>';
+ const need=brands.some(b=>{const d=cmp.data.get(b.id);return !d||d.status==="running"||d.status==="queued"});
+ if(need&&!cmp.running)setTimeout(()=>loadCompare(false),0);
+ const cols=brands.map(b=>{const c={...b,d:cmp.data.get(b.id)};c.b=bench(c);return c});
+ const hint=!mine?'<p class="cmp-hint">Tip: search your own brand and press <b>This is my brand</b> to unlock the Opportunity Radar.</p>':brands.length<2?'<p class="cmp-hint">Pin up to five competitors to compare against.</p>':'';
+ const pane=cmp.tab==="mix"?mixHTML(cols):cmp.tab==="activity"?activityHTML(cols):cmp.tab==="messaging"?messagingCmpHTML(cols):overviewHTML(cols);
+ const when=cols.map(c=>c.b&&c.b.generatedAt).filter(Boolean).sort()[0];
+ const anim=cmp.anim;cmp.anim=false;
+ return '<div class="cmp-wrap cmp2">'+hint+brandStrip(cols)+tabsHTML()+'<div class="cmp-pane'+(anim?' in':'')+'" role="tabpanel">'+pane+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh</button><span class="intel-sub">All accessible active '+(state.coverage==="GB"?"UK":"UK + EU")+' ads per brand from Meta’s Ad Library'+(when?', collected '+new Date(when).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):'')+'. Activity and format signals aren’t measures of performance or spend.</span></div></div>';
 }
 // Messaging tab: what is rising, what lasts, and how it compares with your brand.
 // Messaging map: deterministic rules applied to loaded ad copy. Ported from
@@ -1363,6 +1576,9 @@ document.addEventListener("click",e=>{
  if(action==="mybrand")toggleMine();
  if(action==="unpin")unpin(b.dataset.id);
  if(action==="cmpreload"){cmp.data.clear();loadCompare(true)}
+ if(action==="cmptab"){const t=b.dataset.tab;if(t&&t!==cmp.tab){cmp.tab=t;cmp.anim=true;if(state.view!=="compare"){state.view="compare"}renderCards();document.querySelector(".cmp-tabs")?.scrollIntoView({block:"nearest",behavior:"smooth"})}}
+ if(action==="cmpmode"){cmp.mode=b.dataset.mode==="count"?"count":"share";renderCards()}
+ if(action==="cmpsort"){const k=b.dataset.sort;cmp.sort=cmp.sort===k?"":k;renderCards()}
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}
  if(action==="showmore"){state.limit+=25;renderCards()}
  if(action==="group"){const gm=state.groupMeta?.get(id);if(gm){state.expanded=state.expanded||new Set();if(state.expanded.has(gm.key))state.expanded.delete(gm.key);else{state.expanded.add(gm.key);state.revealAll=true}renderCards();for(const a of state.rows)if(groupKey(a)===gm.key)requestMedia(a.id,{priority:true})}}
