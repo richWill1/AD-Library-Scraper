@@ -755,6 +755,9 @@ const fpct=(b,k)=>b.classified?pctOf(b.fmt[k],b.classified):0;
 const listNames=xs=>xs.length<=1?xs.join(""):xs.slice(0,-1).join(", ")+" and "+xs[xs.length-1];
 const words=["no","one","two","three","four","five","six"];
 const numWord=n=>words[n]||String(n);
+const cap1=t=>t.charAt(0).toUpperCase()+t.slice(1);
+// "Three of your four competitors" / "All four competitors", with the base stated.
+const ofYour=(k,n)=>k===n?(n===1?"Your competitor":"All "+numWord(n)+" competitors"):cap1(numWord(k))+" of your "+numWord(n)+" competitors";
 function evidenceFor(cols,pick,limit=4){
  const out=[],used=new Set();
  // One ad per competitor first, then fill.
@@ -772,7 +775,8 @@ function opportunities(cols){
  const me=cols.find(c=>c.mine&&c.b),rivals=cols.filter(c=>!c.mine&&c.b&&c.b.total>=10);
  if(!me||!rivals.length||me.b.total<5)return {list:[],why:!me?"mine":rivals.length?"small":"rivals"};
  const R=rivals.length,partial=[me,...rivals].filter(c=>c.b.partial).map(c=>c.name);
- const pnote=partial.length?" Partial data for "+listNames(partial)+": counts cover the ads collected.":"";
+ const small=cols.filter(c=>!c.mine&&c.b&&c.b.total<10).map(c=>c.name+" ("+c.b.total+")");
+ const pnote=(partial.length?" Partial data for "+listNames(partial)+": counts cover the ads collected.":"")+(small.length?" Left out with fewer than ten active ads: "+listNames(small)+".":"");
  const cand=[];
  const fmtWhy={v:"Competitors are putting production effort into video. If your customers respond the way theirs might, your account may have little creative suited to Reels, Stories and in-stream placements. This shows where competitors invest, not what performs for them.",c:"Carousels let competitors show a range, steps or several benefits in one ad. Heavy use suggests they see value in giving people more to swipe through. It doesn’t prove carousels work better.",d:"Catalogue ads are built from a product feed and are typically used for product retargeting or broad product prospecting. Competitors running them likely have a feed set up; you may be missing that coverage."};
  const fmtTest={v:"Turn your strongest current static concept into a 6–15 second video with the same offer, audience and landing page, and run it against the static version.",c:"Build a 3–5 card carousel from one existing concept (one product, benefit or step per card) and test it against your best single image.",d:"If you sell products online, test a catalogue ad set from your product feed against your best static product ad, with the same budget and audience."};
@@ -784,7 +788,7 @@ function opportunities(cols){
    const lo=Math.min(...vals),hi=Math.max(...vals);
    cand.push({kind:"format",tag:"Format opportunity",score:(avg-mine)*(users.length/rv.length)*1.1,
     title:fmtName(k)+" is under-used in your ads",
-    data:"Your brand uses "+fmtName(k).toLowerCase()+" in "+mine+"% of classified ads ("+me.b.fmt[k]+" of "+fmtN(me.b.classified)+"), compared with a competitor average of "+avg+"% (range "+lo+"–"+hi+"% across "+rv.length+"). "+(users.length===rv.length?"All":numWord(users.length).replace(/^./,m=>m.toUpperCase())+" of "+rv.length)+" competitors use it in at least 20% of their ads.",
+    data:"Your brand uses "+fmtName(k).toLowerCase()+" in "+mine+"% of classified ads ("+me.b.fmt[k]+" of "+fmtN(me.b.classified)+"), compared with a competitor average of "+avg+"% (range "+lo+"–"+hi+"% across "+rv.length+"). "+ofYour(users.length,rv.length)+" use it in at least 20% of their ads.",
     why:fmtWhy[k],test:fmtTest[k],
     ev:evidenceFor(users,c=>c.d.rows.filter(a=>a.fmt===k).sort(byReach)),
     note:"Shares use classified ads only (unknown formats excluded)."+(rivals.concat(me).some(c=>!c.b.fmtComplete)?" Some formats couldn’t be classified.":"")+pnote});
@@ -795,7 +799,7 @@ function opportunities(cols){
   if(busy.length>=Math.min(2,R)&&med!=null&&me.b.n30<med/2){
    cand.push({kind:"activity",tag:"Creative activity",score:Math.min(60,(med-me.b.n30)/med*60)*(busy.length/R),
     title:"Competitors are launching more new ads",
-    data:(busy.length===R?"All":numWord(busy.length).replace(/^./,m=>m.toUpperCase())+" of your "+R)+" competitors have at least ten currently active ads launched in the last 30 days (median "+med+"). You have "+me.b.n30+".",
+    data:ofYour(busy.length,R)+" have at least ten currently active ads launched in the last 30 days (median "+med+"). You have "+me.b.n30+".",
     why:"A steadier stream of new ads gives an account more creative to rotate and learn from, and suggests those competitors are actively testing. It doesn’t show their new ads are working.",
     test:"Commit to a fixed cadence for the next month, for example three to five new ads a fortnight, each built around one message, and track how many are still running after 30 days.",
     ev:evidenceFor(busy,c=>c.d.rows.filter(a=>{const x=daysRunning(a);return x!=null&&x<=30}).sort((x,y)=>String(y.start).localeCompare(String(x.start)))),
@@ -810,7 +814,7 @@ function opportunities(cols){
    const avgU=Math.round(users.reduce((s,c)=>s+c.b.share[r.id],0)/users.length);
    cand.push({kind:"message",tag:"Messaging gap",score:(avgU-mine)*(users.length/R),
     title:r.label+": competitors use it, you rarely do",
-    data:(users.length===R?"All "+R:numWord(users.length).replace(/^./,m=>m.toUpperCase())+" of your "+R)+" competitors use "+r.label.toLowerCase()+" in at least 15% of their ads ("+users.slice(0,3).map(c=>c.name+" "+c.b.share[r.id]+"%").join(", ")+"). It appears in "+mine+"% of yours ("+(me.b.count[r.id]||0)+" of "+fmtN(me.b.total)+").",
+    data:ofYour(users.length,R)+" use "+r.label.toLowerCase()+" in at least 15% of their ads ("+users.slice(0,3).map(c=>c.name+" "+c.b.share[r.id]+"%").join(", ")+"). It appears in "+mine+"% of yours ("+(me.b.count[r.id]||0)+" of "+fmtN(me.b.total)+").",
     why:catWhy[r.category],test:r.test,
     ev:evidenceFor(users,c=>(c.b.byRule[r.id]?.ads||[]).slice().sort(byReach)).map(e=>({...e,quote:e.c.b.byRule[r.id]?.evidence[e.a.id]})),
     note:"Themes are matched in ad text by fixed rules; claims aren’t verified."+pnote});
@@ -851,7 +855,7 @@ function brandStrip(cols){
  const ready=cols.filter(c=>c.b),rank=[...ready].sort((x,y)=>y.b.total-x.b.total);
  return '<div class="cb-strip" role="list">'+cols.map(c=>{
   const r=c.b?rank.indexOf(c)+1:0;
-  return '<div class="cb'+(c.mine?' me':'')+'" role="listitem"><button class="cb-name" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'" title="Open '+esc(c.name)+'">'+logoHTML(c.id,c.name,"")+'<span><b>'+esc(c.name)+'</b><small>'+(c.mine?'Your brand':'Competitor')+(r?' · #'+r+' by active ads':'')+'</small></span></button>'+cmpStatusChip(c)+'</div>';
+  return '<div class="cb'+(c.mine?' me':'')+'" role="listitem"><button class="cb-name" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'" title="Open '+esc(c.name)+'">'+logoHTML(c.id,c.name,"")+'<span><b>'+esc(c.name)+'</b><small>'+(c.mine?'Your brand':'Competitor')+'</small></span></button><div class="cb-foot">'+cmpStatusChip(c)+(r?'<span class="cb-rank" title="Rank by active ads">#'+r+'</span>':'')+'</div></div>';
  }).join("")+'</div>';
 }
 function tabsHTML(){
@@ -900,16 +904,16 @@ function mixHTML(cols){
  const mode=cmp.mode,sort=cmp.sort;
  const list=sort?[...ready].sort((a,b)=>(sort==="total"?b.b.total-a.b.total:fpct(b.b,sort)-fpct(a.b,sort))):ready;
  const maxT=Math.max(1,...ready.map(c=>c.b.total));
- const legend='<div class="mx-legend">'+FMT.map(f=>'<button class="'+(sort===f.k?'on':'')+'" data-action="cmpsort" data-sort="'+f.k+'" title="Sort by '+esc(f.label)+'"><i style="background:'+f.c+'"></i>'+esc(f.label)+'</button>').join("")+'</div>';
+ const legend='<div class="mx-legend">'+FMT.filter(f=>mode==="count"||f.k!=="u").map(f=>'<button class="'+(sort===f.k?'on':'')+'" data-action="cmpsort" data-sort="'+f.k+'" title="Sort by '+esc(f.label)+'"><i style="background:'+f.c+'"></i>'+esc(f.label)+'</button>').join("")+'</div>';
  const toggle='<div class="seg" role="group" aria-label="Show"><button class="'+(mode==="share"?'on':'')+'" data-action="cmpmode" data-mode="share">Share</button><button class="'+(mode==="count"?'on':'')+'" data-action="cmpmode" data-mode="count">Count</button></div>';
  const bars=list.map(c=>{
-  const b=c.b,base=mode==="share"?b.total:maxT;
-  const segs=FMT.map(f=>{const n=b.fmt[f.k];if(!n)return "";const w=n/base*100;const p=f.k==="u"?pctOf(n,b.total)+"% of all ads":fpct(b,f.k)+"% of classified";return '<span class="mx-seg" style="--w:'+w.toFixed(2)+'%;background:'+f.c+'" title="'+esc(c.name+" · "+f.label+": "+fmtN(n)+" ads ("+p+")")+'">'+(w>=9?'<em>'+(mode==="share"?(f.k==="u"?pctOf(n,b.total):fpct(b,f.k))+'%':fmtN(n))+'</em>':'')+'</span>'}).join("");
-  return '<div class="mx-row'+(c.mine?' me':'')+'"><span class="mx-n">'+esc(c.name)+'<small>'+fmtN(b.classified)+' of '+fmtN(b.total)+' classified</small></span><span class="mx-bar">'+segs+'</span></div>';
+  const b=c.b,base=mode==="share"?Math.max(1,b.classified):maxT;
+  const segs=FMT.map(f=>{const n=b.fmt[f.k];if(!n||(mode==="share"&&f.k==="u"))return "";const w=n/base*100;const p=f.k==="u"?pctOf(n,b.total)+"% of all ads":fpct(b,f.k)+"% of classified";return '<span class="mx-seg" style="--w:'+w.toFixed(2)+'%;background:'+f.c+'" title="'+esc(c.name+" · "+f.label+": "+fmtN(n)+" ads ("+p+")")+'">'+(w>=9?'<em>'+(mode==="share"?(f.k==="u"?pctOf(n,b.total):fpct(b,f.k))+'%':fmtN(n))+'</em>':'')+'</span>'}).join("");
+  return '<div class="mx-row'+(c.mine?' me':'')+'"><span class="mx-n">'+esc(c.name)+'<small>'+fmtN(b.classified)+' of '+fmtN(b.total)+' classified'+(b.fmt.u?' · '+fmtN(b.fmt.u)+' unknown':'')+'</small></span><span class="mx-bar">'+(segs||'<span class="mx-none">No classified ads</span>')+'</span></div>';
  }).join("");
  const shift='<div class="bm"><div class="bm-h"><h4>Video in recent launches</h4><small>Video share of ads launched in the last 30 days vs older active ads</small></div><div class="sh">'+ready.map(c=>{const b=c.b;if(b.recentVideo==null||b.olderVideo==null)return '<div class="sh-row'+(c.mine?' me':'')+'"><span>'+esc(c.name)+'</span><small>Too few dated ads to compare</small></div>';const dlt=b.recentVideo-b.olderVideo;return '<div class="sh-row'+(c.mine?' me':'')+'" title="'+esc(b.recentN+" recent and "+b.olderN+" older classified ads")+'"><span>'+esc(c.name)+'</span><span class="sh-v">'+b.olderVideo+'% <i>→</i> <b>'+b.recentVideo+'%</b></span><span class="sh-d '+(dlt>=10?'up':dlt<=-10?'down':'')+'">'+(dlt>0?'+':'')+dlt+' pts</span></div>'}).join("")+'</div><p class="bm-f">Compares ads still active today by launch date. It describes the current mix, not ads that were replaced.</p></div>';
  const note=ready.some(c=>!c.b.carouselKnown)?'<p class="cmp-note">'+esc(ready.find(c=>!c.b.carouselKnown).b.fmtNote)+'</p>':'<p class="cmp-note">Video and image come from Meta’s media-type filter, carousels from ads with several card headlines, catalogue ads from product templates. Ads Meta doesn’t tag are shown as Unknown and left out of shares.</p>';
- return '<div class="mx"><div class="mx-top"><div><h3 class="cmp-h">Creative format mix</h3><small class="intel-sub">'+(mode==="share"?'Share of each brand’s active ads':'Number of active ads, on one scale')+'. Click a format to sort.</small></div>'+toggle+'</div>'+legend+'<div class="mx-bars">'+bars+'</div>'+note+'</div>'+shift;
+ return '<div class="mx"><div class="mx-top"><div><h3 class="cmp-h">Creative format mix</h3><small class="intel-sub">'+(mode==="share"?'Share of each brand’s classified ads (unknown formats left out)':'Number of active ads, on one scale, including unknown')+'. Click a format to sort.</small></div>'+toggle+'</div>'+legend+'<div class="mx-bars">'+bars+'</div>'+note+'</div>'+shift;
 }
 function sparkWeeks(w,max){
  const W=168,H=40,bw=W/w.length;
@@ -917,9 +921,8 @@ function sparkWeeks(w,max){
 }
 function activityHTML(cols){
  const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';
- const max=Math.max(1,...ready.flatMap(c=>c.b.weekly));
- const head='<div class="ac-row ac-h"><span>Brand</span><span>Weekly launches · last 12 weeks</span><span>7 days</span><span>30 days</span><span>Median age</span><span>90d+</span></div>';
- const rows=ready.map(c=>{const b=c.b;return '<div class="ac-row'+(c.mine?' me':'')+'"><span class="ac-n">'+esc(c.name)+(b.partial?'<small>Partial data</small>':'')+'</span><span>'+sparkWeeks(b.weekly,max)+'</span><span><b>'+b.n7+'</b><small>'+pctOf(b.n7,b.total)+'%</small></span><span><b>'+b.n30+'</b><small>'+pctOf(b.n30,b.total)+'%</small></span><span><b>'+(b.median??"—")+'</b><small>days</small></span><span><b>'+b.long+'</b><small>'+pctOf(b.long,b.total)+'%</small></span></div>'}).join("");
+ const head='<div class="ac-row ac-h"><span>Brand</span><span>Weekly launches · last 12 weeks (own scale)</span><span>7 days</span><span>30 days</span><span>Median age</span><span>90d+</span></div>';
+ const rows=ready.map(c=>{const b=c.b;return '<div class="ac-row'+(c.mine?' me':'')+'"><span class="ac-n">'+esc(c.name)+(b.partial?'<small>Partial data</small>':'')+'</span><span class="ac-spk">'+sparkWeeks(b.weekly,Math.max(1,...b.weekly))+'<small>'+fmtN(b.weekly.reduce((x,y)=>x+y,0))+' in 12 weeks · peak '+Math.max(...b.weekly)+'/wk</small></span><span><b>'+b.n7+'</b><small>'+pctOf(b.n7,b.total)+'%</small></span><span><b>'+b.n30+'</b><small>'+pctOf(b.n30,b.total)+'%</small></span><span><b>'+(b.median??"—")+'</b><small>days</small></span><span><b>'+b.long+'</b><small>'+pctOf(b.long,b.total)+'%</small></span></div>'}).join("");
  const ageCols=[["a","≤7 days","#0071e3"],["b","8–29 days","#5ea8ff"],["c","30–89 days","#a8cfff"],["d","90+ days","#d5e6fb"]];
  const ages='<div class="bm"><div class="bm-h"><h4>Recently launched vs long-running</h4><small>Active ads by age</small></div><div class="mx-legend static">'+ageCols.map(a=>'<span><i style="background:'+a[2]+'"></i>'+a[1]+'</span>').join("")+'</div><div class="mx-bars">'+ready.map(c=>{const b=c.b,t=Math.max(1,b.age.a+b.age.b+b.age.c+b.age.d);return '<div class="mx-row'+(c.mine?' me':'')+'"><span class="mx-n">'+esc(c.name)+'</span><span class="mx-bar">'+ageCols.map(a=>{const n=b.age[a[0]];if(!n)return "";const w=n/t*100;return '<span class="mx-seg" style="--w:'+w.toFixed(2)+'%;background:'+a[2]+'" title="'+esc(c.name+" · "+a[1]+": "+n+" ads ("+Math.round(w)+"%)")+'">'+(w>=9?'<em class="dk">'+Math.round(w)+'%</em>':'')+'</span>'}).join("")+'</span></div>'}).join("")+'</div></div>';
  const changes=ready.map(c=>{const ch=c.b.change;return '<div class="ob-row'+(c.mine?' me':'')+'"><span>'+esc(c.name)+'</span>'+(ch?'<span><b class="up">+'+ch.added+'</b> newly observed · <b class="down">−'+ch.gone+'</b> no longer active <small>since '+new Date(ch.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"})+'</small></span>':'<span class="intel-sub">Tracking from today</span>')+'</div>'}).join("");

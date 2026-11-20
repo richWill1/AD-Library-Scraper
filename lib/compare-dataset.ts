@@ -9,6 +9,7 @@
 import {createHash} from 'node:crypto';
 import {metaFetch} from '@/lib/meta-api';
 import {observeAds} from '@/lib/advertiser-directory';
+import {readStored,storeReady} from '@/lib/creative-store';
 
 export type FormatCode='v'|'s'|'c'|'d'|'u'; // video, static image, carousel, catalogue/dynamic, unknown
 export type CompareAd={id:string;s:string;e:string|null;f:FormatCode;t:string;b:string;r:number|null};
@@ -18,7 +19,7 @@ export type CompareDataset={
  complete:boolean;            // every accessible active ad was retrieved
  limitReason:string|null;     // why not, in plain English
  cap:number;
- formats:{complete:boolean;basis:{mediaType:number;template:number;cards:number;none:number};note:string};
+ formats:{complete:boolean;basis:{mediaType:number;template:number;cards:number;none:number;stored?:number};note:string};
 };
 type Job={status:'running';fetched:number;phase:string;started:number;promise:Promise<void>};
 
@@ -91,7 +92,7 @@ async function buildDirect(token:string,page:string,coverage:string,job:Job):Pro
  try{observeAds(raw.slice(0,50));}catch{}
  job.phase='formats';
  const [video,image]=await Promise.all([idSet(token,page,countries,'VIDEO',DIRECT_CAP),idSet(token,page,countries,'IMAGE',DIRECT_CAP)]);
- const basis={mediaType:0,template:0,cards:0,none:0};
+ const basis:CompareDataset['formats']['basis']={mediaType:0,template:0,cards:0,none:0};
  const ads=raw.map(a=>{
   const bodies=[...new Set<string>((a.ad_creative_bodies||[]).map((s:string)=>String(s).trim()).filter(Boolean))];
   const titles=[...new Set<string>((a.ad_creative_link_titles||[]).map((s:string)=>String(s).trim()).filter(Boolean))];
@@ -99,9 +100,17 @@ async function buildDirect(token:string,page:string,coverage:string,job:Job):Pro
   const reach=a.total_reach_by_location?.find((r:any)=>(r.key??r.location)==='GB')?.value??null;
   return {id:String(a.id),s:String(a.ad_delivery_start_time||'').slice(0,10),e:a.ad_delivery_stop_time?String(a.ad_delivery_stop_time).slice(0,10):null,f:classify(String(a.id),text,titles.length,bodies.length,video.found,image.found,basis),t:clip(titles[0]||'',160),b:clip(bodies.join('\n\n'),900),r:typeof reach==='number'?reach:null} as CompareAd;
  });
+ // Meta's own display format, for ads AdSnoop has already collected. Reads small stored
+ // records only; nothing new is downloaded. Fills unknowns and confirms carousels.
+ if(storeReady){
+  job.phase='refining';
+  const todo=ads.filter(a=>a.f==='u'||a.f==='s').slice(0,800);let i=0;basis.stored=0;
+  const map:Record<string,FormatCode>={VIDEO:'v',IMAGE:'s',CAROUSEL:'c',MULTI_IMAGES:'c',MULTI_VIDEOS:'c',DPA:'d',DCO:'d'};
+  await Promise.all(Array.from({length:12},async()=>{while(i<todo.length){const a=todo[i++];try{const st=await readStored(a.id);const f=st?.displayFormat&&map[String(st.displayFormat).toUpperCase()];if(f&&f!==a.f){if(a.f==='u'){basis.none--;}else{basis.mediaType--;}a.f=f;basis.stored!++;}}catch{}}}));
+ }
  const fmtComplete=video.complete&&image.complete;
  return {page,coverage,generatedAt:new Date().toISOString(),source:'direct',ads,complete:main.complete,limitReason:main.reason,cap:DIRECT_CAP,
-  formats:{complete:fmtComplete,basis,note:fmtComplete?'Video and image from Meta’s media-type filter; carousels from multiple card headlines; catalogue ads from product templates.':'Meta’s media-type lists were cut short, so some ads are unclassified.'}};
+  formats:{complete:fmtComplete,basis,note:fmtComplete?'Video and image from Meta’s media-type filter, refined with Meta’s own display format where AdSnoop has collected the ad; carousels from card headlines; catalogue ads from product templates.':'Meta’s media-type lists were cut short, so some ads are unclassified.'}};
 }
 
 // ---- relay source (credential-free preview) ----
