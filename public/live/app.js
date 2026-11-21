@@ -805,13 +805,81 @@ function renderAccountUI(){
  else{delete el.dataset.mounted;el.innerHTML='<button type="button" class="acct-in" data-acct="signin">Sign in</button>'}
 }
 document.addEventListener("click",e=>{const b=e.target.closest("[data-acct]");if(!b||!auth.clerk)return;if(b.dataset.acct==="signin")auth.clerk.openSignIn({});if(b.dataset.acct==="signup")auth.clerk.openSignUp({})});
-// What a logged-out visitor sees on /tracker: a blurred sample and a clear next step.
+// Show the value before asking for an account. All example figures are illustrative.
+function radarExampleBannerHTML(prefix){
+ if(prefix!=="homeRadarExample")return '<div class="trk-example-head"><div><p class="eyebrow">A look inside the radar</p><h3 id="'+prefix+'Title">Find your next creative test.</h3><p>Compare your brand with up to five competitors, then see where your ads could try something different.</p></div><span class="trk-example-label">Illustrative example</span></div>';
+ const instruments={
+  format:'<rect x="5" y="9" width="32" height="25" rx="4"/><rect x="16" y="16" width="34" height="26" rx="4" class="rd-glyph-front"/><path d="m29 23 9 6-9 6Z" class="rd-glyph-fill"/>',
+  message:'<path d="M5 9h32v18H17l-8 6v-6H5Z"/><path d="M19 21h32v18h-6v6l-8-6H19Z" class="rd-glyph-front"/><path d="M25 27h17m-17 6h11"/>',
+  activity:'<path d="M5 39h46M5 27h46M5 15h46" opacity=".3"/><path d="M9 31h5v8H9zm10-12h5v20h-5zm10 5h5v15h-5zm10-14h5v29h-5z" class="rd-glyph-fill"/>'
+ };
+ const signals=radarExamples.map(signal=>`
+   <button type="button" class="rd-signal rd-${signal.kind}" data-demo-filter="${signal.kind}" aria-pressed="false">
+     <svg class="rd-instrument" viewBox="0 0 56 52" aria-hidden="true">${instruments[signal.kind]}</svg>
+     <span><b>${signal.tag}</b><small>${signal.shortMetric}</small></span>
+   </button>`).join("");
+ return '<div class="rd-banner"><div class="rd-grid" aria-hidden="true"></div><div class="rd-ambient" aria-hidden="true"></div><div class="rd-copy"><div class="rd-kicker"><span class="rd-kicker-mark" aria-hidden="true">✳</span> COMPETITOR RADAR</div><h3 id="'+prefix+'Title">Their ads.<br><span>Your next move.</span></h3><p class="rd-description">See how your Meta ads compare with your competitors’ ads, and choose what to test next.</p><div class="rd-explore"><span class="rd-explore-line" aria-hidden="true"></span><span>Select a signal to explore its ad test.</span></div><span class="rd-example-badge">Interactive preview <span aria-hidden="true">·</span> Illustrative data</span></div><div class="rd-stage"><div class="rd-disc" aria-hidden="true"><div class="rd-ring rd-ring-outer"></div><div class="rd-ring rd-ring-middle"></div><div class="rd-ring rd-ring-inner"></div><div class="rd-cross"></div><div class="rd-sweep"></div><span class="rd-dot rd-dot-a"></span><span class="rd-dot rd-dot-b"></span><span class="rd-dot rd-dot-c"></span><span class="rd-origin"></span></div>'+signals+'<div class="rd-readout" aria-live="polite"><span aria-hidden="true">⌁</span> <span data-demo-readout>3 example signals</span></div></div></div>';
+}
+const radarExamples=[
+  {kind:"format",tag:"Creative mix",shortMetric:"Video share",title:"Give your best image a video version",mine:"12%",rivals:"46%",metric:"Video share of classified ads",why:"In this example, competitors use more video. That is a format gap to explore, not evidence that their videos perform better.",test:"Try a 15-second product demonstration with the same message and offer as your strongest image ad."},
+  {kind:"message",tag:"Messaging gap",shortMetric:"Guarantees",title:"Make your reassurance easier to spot",mine:"2%",rivals:"24%",metric:"Ads mentioning a guarantee",why:"The example competitors mention guarantees more often. Your real radar checks the ad copy and links to the ads behind the finding; it does not verify the claims.",test:"If you offer a guarantee, test putting it beside your main benefit rather than leaving it on the landing page."},
+  {kind:"activity",tag:"Creative activity",shortMetric:"New ad launches",title:"Try a steadier rhythm of new ads",mine:"4",rivals:"18",metric:"Active ads launched in the last 30 days",why:"This counts currently active ad IDs by their start date. Stopped ads are not included, and a new ad ID is not necessarily a new creative.",test:"Test one fresh angle each week. Compare the results in your own ad account before increasing production."}
+ ];
+function radarExampleHTML(prefix){
+ const isHome=prefix==="homeRadarExample";
+ function comparisonBar(signal,value){
+  if(!isHome)return "";
+  const scale=signal.mine.endsWith("%")?100:Math.max(Number(signal.mine),Number(signal.rivals));
+  return '<i class="rd-bar" aria-hidden="true"><i style="width:'+parseFloat(value)/scale*100+'%"></i></i>';
+ }
+ const cards=radarExamples.map((o,i)=>'<article data-demo-kind="'+o.kind+'" class="op-card op-'+o.kind+'" style="--i:'+i+'"><span class="op-tag">'+o.tag+'</span><h4>'+o.title+'</h4><p class="trk-example-metric">'+o.metric+'</p><div class="trk-example-values"><div><strong>'+o.mine+'</strong><span>Example brand</span>'+comparisonBar(o,o.mine)+'</div><div><strong>'+o.rivals+'</strong><span>Competitor average</span>'+comparisonBar(o,o.rivals)+'</div></div><details class="trk-example-details"><summary>What this tells you</summary><p>'+o.why+'</p></details><div class="op-test"><span>Test idea</span>'+o.test+'</div></article>').join("");
+ const filters=isHome
+  ? '<div class="rd-results-head"><h4>Example insights</h4><button type="button" class="rd-reset" data-demo-filter="all" aria-pressed="true">Show all signals</button></div>'
+  : '<div class="trk-demo-filters" role="group" aria-label="Explore example opportunities">'+[["all","All opportunities"],["format","Creative mix"],["message","Messaging"],["activity","Activity"]].map(([key,label])=>'<button type="button" data-demo-filter="'+key+'" aria-pressed="'+(key==="all")+'">'+label+'</button>').join("")+'</div>';
+ return '<section class="trk-sample" data-radar-example aria-labelledby="'+prefix+'Title">'+radarExampleBannerHTML(prefix)+filters+'<div class="op-grid">'+cards+'</div><p class="trk-example-note">Made-up figures to explain the radar, not live research or sector benchmarks. Your radar uses the ads collected from Meta, with supporting ad links and coverage notes. Ad activity is not proof of performance.</p></section>';
+}
 function trackerGateHTML(){
- const bars=(rows)=>'<div class="rb">'+rows.map(([n,v,w,me])=>'<div class="rb-row'+(me?' me':'')+'"><span class="rb-n">'+n+'</span><span class="rb-bar"><i style="--w:'+w+'%"></i></span><span class="rb-v">'+v+'</span></div>').join("")+'</div>';
- const sample='<div class="trk-sample" aria-hidden="true"><div class="trk-bar"><div class="trk-brands"><span class="trk-b on"><span>Your brand<small>5/5 competitors</small></span></span></div></div>'+
-  '<div class="op-grid"><article class="op-card op-format"><span class="op-tag">Format opportunity</span><h4>Video is under-used in your ads</h4><p class="op-data">Your brand uses video in 12% of classified ads, compared with a competitor average of 46%.</p><div class="op-test"><span>Test</span>Turn your strongest static concept into a 15-second video.</div></article><article class="op-card op-message"><span class="op-tag">Messaging gap</span><h4>Guarantees: competitors use them, you rarely do</h4><p class="op-data">Four of your five competitors mention guarantees in at least 15% of their ads.</p><div class="op-test"><span>Test</span>Add your own guarantee beside the main benefit.</div></article></div>'+
-  '<div class="bm-grid"><div class="bm"><div class="bm-h"><h4>Active ad volume</h4></div>'+bars([["Competitor A","412",100],["Competitor B","268",65],["Your brand","97",24,1],["Competitor C","64",16]])+'</div><div class="bm"><div class="bm-h"><h4>Launched in 30 days</h4></div>'+bars([["Competitor B","151",100],["Competitor A","88",58],["Competitor C","40",26],["Your brand","17",11,1]])+'</div></div></div>';
- return '<div class="trk-gate">'+sample+'<div class="trk-gate-card"><p class="trk-step">Free account</p><h3>See your brand against up to 5 competitors</h3><ul><li>Every live UK ad from you and your competitors, side by side</li><li>A Creative Opportunity Radar with tests to run next</li><li>Creative mix, launch activity and messaging gaps</li></ul><div class="trk-gate-acts"><button class="pill" data-acct="signup">Create free account</button><button class="ghost" data-acct="signin">Sign in</button></div><small>Free plan: 1 brand and 5 competitors. Sample data shown above.</small></div></div>';
+ return '<div class="trk-gate">'+radarExampleHTML('radarExample')+'<section class="trk-gate-card" aria-labelledby="radarJoinTitle"><div><p class="trk-step">Make it yours · Free account</p><h3 id="radarJoinTitle">What could your brand try next?</h3><p>Choose your brand, add up to five competitors, and save your comparison to come back to.</p><ol class="trk-join-steps"><li>Find your brand</li><li>Choose competitors</li><li>Explore your opportunities</li></ol></div><div class="trk-join-action"><button class="pill" data-acct="signup">Build my free radar →</button><button class="ghost" data-acct="signin">Already have an account? Sign in</button><small>Free plan: 1 brand and up to 5 competitors.</small><a href="/" class="trk-browse">Explore live advertiser ads first ↗</a></div></section></div>';
+}
+// Preview filters stay local to each example; they never change tracked brands.
+document.addEventListener("click",e=>{
+ const button=e.target.closest("[data-demo-filter]");if(!button)return;
+ const demo=button.closest("[data-radar-example]");if(!demo)return;
+ for(const b of demo.querySelectorAll("[data-demo-filter]"))b.setAttribute("aria-pressed",String(b.dataset.demoFilter===button.dataset.demoFilter));
+ for(const card of demo.querySelectorAll("[data-demo-kind]"))card.hidden=button.dataset.demoFilter!=="all"&&card.dataset.demoKind!==button.dataset.demoFilter;
+ if(demo.hasAttribute("data-radar-home"))showRadarSignal(demo,button.dataset.demoFilter);
+});
+function showRadarSignal(demo,kind){
+ const signal=radarExamples.find(example=>example.kind===kind);
+ demo.dataset.signal=kind;
+ demo.querySelector("[data-demo-readout]").textContent=signal
+  ? signal.shortMetric+" · Brand "+signal.mine+" / rivals "+signal.rivals
+  : "3 example signals";
+}
+if(!TRACKER&&$("radarDemo")){
+ const home=$("radarDemo");
+ home.innerHTML='<div class="wrap">'+radarExampleHTML("homeRadarExample")+'<div class="trk-home-next"><a class="pill" href="/tracker">Build my competitor radar →</a><span>Free account · 1 brand · up to 5 competitors</span></div></div>';
+ home.hidden=false;
+ const demo=home.querySelector("[data-radar-example]");
+ demo.setAttribute("data-radar-home","");
+ const banner=demo.querySelector(".rd-banner");
+ const disc=banner.querySelector(".rd-disc");
+ const motion=matchMedia("(prefers-reduced-motion: reduce)");
+ const selected=()=>demo.querySelector('[data-demo-filter][aria-pressed="true"]').dataset.demoFilter;
+ for(const button of banner.querySelectorAll(".rd-signal")){
+  button.addEventListener("pointerenter",e=>{if(e.pointerType==="mouse")showRadarSignal(demo,button.dataset.demoFilter)});
+  button.addEventListener("pointerleave",()=>showRadarSignal(demo,selected()));
+  button.addEventListener("focus",()=>showRadarSignal(demo,button.dataset.demoFilter));
+  button.addEventListener("blur",()=>showRadarSignal(demo,selected()));
+ }
+ banner.addEventListener("pointermove",e=>{
+  if(e.pointerType!=="mouse"||motion.matches)return;
+  const rect=disc.getBoundingClientRect();
+  const angle=Math.atan2(e.clientY-rect.top-rect.height/2,e.clientX-rect.left-rect.width/2);
+  banner.style.setProperty("--rd-bearing",(angle*180/Math.PI+75)+"deg");
+  banner.classList.add("rd-aiming");
+ },{passive:true});
+ banner.addEventListener("pointerleave",()=>banner.classList.remove("rd-aiming"));
 }
 // ---- Tracker page (/tracker): brand switcher, onboarding and the dashboard ----
 const trk={mode:null,timer:0,seq:0,lookups:new Map()};
