@@ -297,7 +297,14 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.01ms!important}html{scroll-behavior:auto}}
 .main:has(.start) #feedback{display:none}
-.feature{background:linear-gradient(180deg,#0e1433 0%,#090e20 100%)!important}.feature .featurepanel{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07)}
+.feature,.trk-home-demo{--section-join:#171524;--card-edge:rgba(209,197,232,.14)}
+.feature{position:relative;isolation:isolate;overflow:hidden;scroll-margin-top:76px;background:linear-gradient(to bottom,transparent 55%,var(--section-join)),radial-gradient(ellipse at 85% 28%,#312039,transparent 54%),#141423!important}
+.feature::after{content:"";position:absolute;inset:auto 0 0;height:20%;pointer-events:none;background:linear-gradient(transparent,var(--section-join))}
+.feature .featurein{position:relative;z-index:1}
+.messaging-waves{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;mask-image:linear-gradient(90deg,#0006,#0007 34%,#000 67%)}
+.feature .featurepanel{border:1px solid var(--card-edge);border-radius:18px;background:linear-gradient(112deg,#1a192bde,#2b2135b8);backdrop-filter:blur(6px)}
+.feature .featuretags span{background:#181725a8;border-color:#ffffff28}
+
 
 /* Loading bar: eyes ride the progress, a filmstrip fills as creatives land */
 .lb-rail{position:relative;padding-top:18px}
@@ -1021,20 +1028,18 @@ body.tracker-mode main#research{padding-top:8px!important}
 .trk-home-next span{font-size:13px;color:#606068}
 @media(max-width:720px){.trk-home-demo{padding-top:32px;padding-bottom:32px}.trk-home-next{align-items:stretch;flex-direction:column}.trk-home-next a{justify-content:center}}
 #radarDemo{scroll-margin-top:72px}
-.trk-home-demo{position:relative;isolation:isolate;padding:clamp(20px,4vw,56px) 0 clamp(44px,6vw,84px);border:0;color:#fff;background:radial-gradient(ellipse 52% 380px at 72% 235px,#3426498c,transparent 95%),linear-gradient(#090e20,#0e1125 58%,#05071a)}
+.trk-home-demo{position:relative;isolation:isolate;padding:clamp(20px,4vw,56px) 0 clamp(44px,6vw,84px);border:0;color:#fff;background:linear-gradient(to bottom,var(--section-join),transparent 200px),radial-gradient(ellipse 55% 420px at 74% 220px,#44305183,transparent 96%),linear-gradient(var(--section-join),#121424 62%,#05071a)}
 .rd-banner{position:relative;isolation:isolate;display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:28px;padding:24px 0 44px;color:#faf9ff}
 .rd-grid,.rd-ambient{position:absolute;inset:0;z-index:-1;pointer-events:none}
 .rd-grid{background-image:linear-gradient(#dad2ff0c 1px,transparent 1px),linear-gradient(90deg,#dad2ff0c 1px,transparent 1px);background-size:30px 30px;mask-image:linear-gradient(95deg,transparent,#000 85%)}
 .rd-ambient{background:radial-gradient(ellipse 240px 200px at var(--rd-x,70%) var(--rd-y,50%),#ad89ff19,transparent)}
-.rd-kicker,.rd-readout{font:500 11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace}
+.rd-kicker{font:500 11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace}
 .rd-kicker{display:flex;align-items:center;gap:10px;color:#c8baf4;letter-spacing:.14em}
 .rd-kicker-mark{font-size:22px;line-height:1}
 .rd-copy h3{margin:20px 0 16px;font-size:clamp(43px,5.3vw,74px);font-weight:620;line-height:.99;letter-spacing:-.06em;color:#fff;text-transform:none}
 .rd-copy h3 span{background:linear-gradient(100deg,#c3adff,#f0c5dc 66%,#ffc59c);color:transparent;background-clip:text}
 .rd-description{margin:0;max-width:36ch;font-size:16px;line-height:1.5;color:#c9c6d5}
-.rd-explore{display:flex;align-items:center;gap:10px;margin:26px 0 10px;font-size:13px;color:#eee9ff}
-.rd-explore-line{width:28px;height:1px;background:#b7a3e5}
-.rd-example-badge{color:#b5aec5;font-size:11px}
+.rd-example-badge{display:inline-block;margin-top:18px;color:#b5aec5;font-size:11px}
 .rd-stage{position:relative;isolation:isolate;width:100%;max-width:480px;min-height:334px;justify-self:center}
 .rd-disc{position:absolute;left:50%;top:45%;width:282px;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,#9078ed28,transparent 67%);box-shadow:0 0 72px #a67eff13}
 .rd-ring,.rd-cross,.rd-sweep,.rd-origin{position:absolute;border-radius:50%}
@@ -1051,24 +1056,35 @@ body.tracker-mode main#research{padding-top:8px!important}
 @keyframes rd-ripple{0%{transform:scale(.05);opacity:0}12%{opacity:.7}100%{transform:scale(.99);opacity:0}}
 .rd-dot{position:absolute;width:6px;height:6px;border-radius:50%;background:var(--dot);box-shadow:0 0 10px var(--dot)}
 .rd-dot-a{left:28%;top:21%;--dot:#b8a3ff}.rd-dot-b{left:86%;top:51%;--dot:#8bdde2}.rd-dot-c{left:33%;top:81%;--dot:#ffb598}
-.rd-signal{position:absolute;display:flex;align-items:center;gap:11px;min-height:64px;width:184px;padding:10px 14px;text-align:left;color:#fff;cursor:pointer;border-radius:15px;border:1px solid color-mix(in srgb,var(--signal) 42%,#242332);background:radial-gradient(at 0 100%,color-mix(in srgb,var(--signal) 23%,transparent),transparent 85%),#191b30;box-shadow:inset 0 1px #ffffff19,0 8px 24px #03051275;transform:rotate(var(--tilt));transition:transform .2s,box-shadow .2s}
-.rd-signal:hover,.rd-signal:focus-visible,.rd-signal[aria-pressed=true]{z-index:2;transform:translateY(-3px);border-color:var(--signal);box-shadow:0 0 22px color-mix(in srgb,var(--signal) 20%,transparent)}
-.rd-signal:focus-visible,.rd-reset:focus-visible{outline:2px solid white;outline-offset:4px}
+.rd-signal{position:absolute;display:flex;align-items:center;gap:11px;min-height:64px;width:184px;padding:10px 14px;text-align:left;color:#fff;border-radius:15px;border:1px solid color-mix(in srgb,var(--signal) 27%,#333043);background:linear-gradient(120deg,color-mix(in srgb,var(--signal) 13%,#191929),#1d1b2def);box-shadow:inset 0 1px #ffffff0c,0 5px 16px #08081045;transform:rotate(var(--tilt))}
+.rd-signal{cursor:pointer}
+.rd-signal:hover,.rd-signal[aria-pressed=true]{border-color:var(--signal);box-shadow:0 0 18px color-mix(in srgb,var(--signal) 24%,transparent)}
+.rd-signal:focus-visible,.rd-reset:focus-visible{outline:2px solid #fff;outline-offset:4px}
+.rd-reset{color:#e0d8f8;background:#ffffff0c;border:1px solid #ffffff38;padding:9px 14px;border-radius:30px;font:inherit;font-size:13px}
+.rd-reset[aria-pressed=true]{opacity:.7}.rd-reset:hover{border-color:#d1bfed}
 .rd-format,.trk-home-demo .op-format{--signal:#cab2ff}.rd-message,.trk-home-demo .op-message{--signal:#87e6d8}.rd-activity,.trk-home-demo .op-activity{--signal:#ffb692}
 .rd-format{left:0;top:3%;--tilt:-4deg}.rd-message{right:0;top:52%;--tilt:3deg}.rd-activity{left:0;bottom:10%;--tilt:-3deg}
 .rd-instrument{flex:none;width:47px;height:43px;color:var(--signal);stroke:currentColor;stroke-width:1.5;stroke-linejoin:round;fill:none;filter:drop-shadow(0 2px 6px #0006)}
 .rd-glyph-front{fill:color-mix(in srgb,var(--signal) 16%,#202238)}.rd-glyph-fill{fill:currentColor;stroke:none}
 .rd-signal b,.rd-signal small{display:block;line-height:1.35}.rd-signal b{font-size:13px}.rd-signal small{color:#c7c3d4;font-size:11px}
-.rd-readout{position:absolute;bottom:-4px;left:0;right:0;text-align:center;color:#d2c9e4}.rd-readout>span:first-child{color:#c0aaff}
+/* Each label catches the beam once during its 14-second revolution. */
+.rd-format,.rd-dot-a{--echo-delay:-2s}
+.rd-message,.rd-dot-b{--echo-delay:-11.1s}
+.rd-activity,.rd-dot-c{--echo-delay:-6.4s}
+@media(prefers-reduced-motion:no-preference){
+ .rd-signal::after,.rd-dot::after{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;opacity:0;animation:rd-echo 14s linear var(--echo-delay) infinite}
+ .rd-signal::after{border:1px solid var(--signal);box-shadow:0 0 16px color-mix(in srgb,var(--signal) 30%,transparent)}
+ .rd-dot::after{inset:-4px;border:1px solid var(--dot)}
+}
+@keyframes rd-echo{0%,18%,100%{opacity:0}3%{opacity:.9}}
 @keyframes rd-orbit{to{transform:rotate(360deg)}}
 .rd-ambient{background:radial-gradient(ellipse at 73% 53%,#7c6fc119,transparent 48%)}
 .rd-grid{mask-image:radial-gradient(ellipse 46% 49% at 74% 50%,#000,transparent)}
-.rd-results-head{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #ffffff20;padding-top:24px;gap:12px}
+.rd-results-head{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--card-edge);padding-top:24px;gap:12px}
 .rd-results-head h4{margin:0;font-size:21px;font-weight:600;letter-spacing:-.035em}
-.rd-reset{color:#e0d8f8;background:#ffffff0c;border:1px solid #ffffff38;padding:9px 14px;border-radius:30px;font:inherit;font-size:13px}
-.rd-reset[aria-pressed=true]{opacity:.7}.rd-reset:hover{border-color:#d1bfed}
-.trk-home-demo .op-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-.trk-home-demo .op-card{min-width:0;gap:12px;padding:clamp(16px,2vw,26px);border-radius:18px;border:1px solid color-mix(in srgb,var(--signal) 25%,#242738);background:radial-gradient(at 94% 0%,color-mix(in srgb,var(--signal) 13%,transparent),transparent 60%),#141729}
+.trk-home-demo .op-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.trk-home-demo .op-grid:not(:has([hidden])){padding:6px;border-radius:23px;background:linear-gradient(110deg,#b79cd50d,#86ccbf0b 54%,#ffb7950c)}
+.trk-home-demo .op-card{min-width:0;gap:12px;padding:clamp(16px,2vw,26px);border-radius:18px;border:1px solid var(--card-edge);background:linear-gradient(155deg,color-mix(in srgb,var(--signal) 11%,#161626),#171827 64%,#171826)}
 .trk-home-demo .op-card::before{height:1px;background:linear-gradient(90deg,transparent,var(--signal),transparent)}
 .trk-home-demo .op-tag{color:var(--signal);display:flex;align-items:center;gap:8px}
 .trk-home-demo .op-tag:before{content:"";width:7px;height:7px;border-radius:100%;background:var(--signal);box-shadow:0 0 10px color-mix(in srgb,var(--signal) 56%,transparent)}
@@ -1077,15 +1093,13 @@ body.tracker-mode main#research{padding-top:8px!important}
 .trk-home-demo .trk-example-values strong{color:var(--signal)}.trk-home-demo .trk-example-values div:first-child strong{color:white}
 .trk-home-demo .trk-example-values span,.trk-home-demo .trk-example-details,.trk-home-demo .trk-example-metric,.trk-home-next span,.trk-home-demo .trk-example-note{color:#b8bfd0}
 .rd-bar{display:block;height:4px;border-radius:6px;background:#ffffff18;overflow:hidden}.rd-bar i{display:block;height:100%;background:var(--signal)}.trk-example-values>div:first-child .rd-bar i{background:white}
-.trk-home-demo .op-test{background:#0b1022;color:#dddeeb;margin-top:auto}.trk-home-demo .op-test span{display:block;padding:0;background:none;color:var(--signal);margin:0 0 5px}
+.trk-home-demo .op-test{background:transparent;border-top:1px solid var(--card-edge);border-radius:0;padding:12px 0 0;color:#dddeeb;margin-top:auto}.trk-home-demo .op-test span{display:block;padding:0;background:none;color:var(--signal);margin:0 0 5px}
 .trk-home-next .pill{background:#eee9ff;color:#181527}
 @media(max-width:850px){.trk-home-demo .op-grid{grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr))}}
 @media(max-width:680px){.trk-home-demo .op-grid{grid-template-columns:1fr}}
-[data-signal=format] .rd-dot-a,[data-signal=message] .rd-dot-b,[data-signal=activity] .rd-dot-c{outline:1px solid var(--dot);outline-offset:4px;box-shadow:0 0 16px 3px var(--dot)}
-@media(prefers-reduced-motion:no-preference){.rd-aiming .rd-sweep{animation:none;transform:rotate(var(--rd-bearing))}}
 @media(max-width:850px){.rd-banner{gap:16px}.rd-signal{width:151px;gap:7px;padding:8px}.rd-disc{width:246px}.rd-instrument{width:38px}}
-@media(max-width:680px){.rd-banner{grid-template-columns:1fr;gap:23px;padding:14px 0 20px}.rd-copy h3{font-size:clamp(40px,10vw,58px);margin:14px 0}.rd-description{font-size:15px}.rd-explore{margin:16px 0 4px}.rd-stage{max-width:370px;min-height:320px}.rd-message{top:50%}.rd-activity{bottom:7%}.rd-grid{mask-image:radial-gradient(ellipse at 50% 68%,#000,transparent 65%)}}
-@media(prefers-reduced-motion:reduce){.rd-ring-outer,.rd-sweep,.trk-home-demo .op-card{animation:none}.rd-signal{transition:none}.rd-signal:hover,.rd-signal:focus-visible,.rd-signal[aria-pressed=true]{transform:rotate(var(--tilt))}}
+@media(max-width:680px){.rd-banner{grid-template-columns:1fr;gap:23px;padding:14px 0 20px}.rd-copy h3{font-size:clamp(40px,10vw,58px);margin:14px 0}.rd-description{font-size:15px}.rd-stage{max-width:370px;min-height:320px}.rd-message{top:50%}.rd-activity{bottom:7%}.rd-grid{mask-image:radial-gradient(ellipse at 50% 68%,#000,transparent 65%)}}
+@media(prefers-reduced-motion:reduce){.rd-ring-outer,.rd-sweep,.trk-home-demo .op-card{animation:none}}
 </style></head>
 <body><a href="#research" class="skip">Skip to research</a>
 <header class="topnav as-unified-nav"><div class="nav-in"><div class="as-nav-identity"><a href="/" class="brand as-logo" aria-label="AdSnoop home"><svg class="as-interactive-wordmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 252 66" width="200" height="52" aria-hidden="true" focusable="false"><g fill="#FFFFFF"><g transform="translate(0 51) scale(.028 -.028)"><path d="M13 0H297L419 356H997L1116 0H1407L877 1490H545ZM493 573 565 783C610 920 655 1063 711 1251C767 1063 811 920 855 783L925 573Z"/></g><g transform="translate(38 51) scale(.028 -.028)"><path d="M520 -21C658 -21 774 39 840 161H842V0H1090V1490H838V906H836C768 1022 655 1077 518 1077C247 1077 63 854 63 529C63 200 244 -21 520 -21ZM579 190C423 190 318 310 318 529C318 747 423 868 579 868C744 868 852 734 852 529C852 323 744 190 579 190Z"/></g><g transform="translate(70 51) scale(.028 -.028)"><path d="M663 -24C1016 -24 1237 152 1237 430C1237 649 1098 778 789 847L638 882C444 927 367 983 367 1083C367 1205 484 1290 649 1290C823 1290 937 1195 948 1038H1199C1190 1334 983 1514 650 1514C321 1514 102 1336 102 1070C102 861 239 730 537 662L697 626C896 580 974 519 974 414C974 283 851 199 665 199C458 199 334 306 332 486H73C73 167 294 -24 663 -24Z"/></g><g transform="translate(105 51) scale(.028 -.028)"><path d="M364 597C364 777 463 856 595 856C730 856 808 775 808 620V0H1061V660C1061 931 905 1077 684 1077C539 1077 432 1013 360 894V1056H112V0H364Z"/></g><g transform="translate(215.5 51) scale(.028 -.028)"><path d="M112 -418H364V159H367C433 39 544 -21 682 -21C958 -21 1139 200 1139 529C1139 854 955 1077 683 1077C546 1077 429 1021 363 909H360V1056H112ZM623 190C458 190 350 323 350 529C350 734 458 868 623 868C779 868 884 747 884 529C884 310 779 190 623 190Z"/></g></g><g fill="none" stroke="#FFFFFF" stroke-width="4.8"><circle cx="163" cy="34" r="13"/><circle cx="195" cy="34" r="13"/></g><g class="as-pupils" fill="#FFFFFF" transform="translate(3.5 0)"><circle cx="163" cy="34" r="5.4"/><circle cx="195" cy="34" r="5.4"/></g></svg></a><span class="as-nav-divider" aria-hidden="true"></span><span class="as-nav-descriptor">Creative intelligence<span class="as-nav-period">.</span></span></div><div class="as-nav-actions"><nav class="toplinks" aria-label="Main navigation"><button class="nav-btn active" data-view="discover">Discover</button><a class="nav-btn nav-trk" href="/tracker" style="text-decoration:none">My competitors</a><a class="nav-btn" href="/seasonal" style="text-decoration:none">Seasonal</a><a class="nav-btn" href="/meta-updates" style="text-decoration:none">Meta updates</a></nav><div id="acct" class="acct" hidden></div></div></div></header>
@@ -1097,11 +1111,11 @@ body.tracker-mode main#research{padding-top:8px!important}
 <div id="research-panel"><section id="intel" class="intel" hidden aria-label="Advertiser intelligence"></section><div class="toolbar" id="toolbar" style="display:none"><div class="filters"><button class="filter active" data-filter="all">All ads</button><button class="filter" data-filter="video">Video</button><button class="filter" data-filter="static">Static</button><button class="filter" data-filter="carousel">Carousel</button><button class="filter" data-filter="catalogue">Catalogue</button></div><label class="sortwrap">Sort by <select id="sort"><option value="reach">Top UK reach</option><option value="longest">Longest running</option><option value="newest">Newest</option></select></label></div>
 <div id="loadbar" class="loadbar" hidden role="status" aria-live="polite"><div class="lb-rail"><div class="loadbar-track"><div class="loadbar-fill"></div></div><img class="lb-rider" id="loadbarRider" src="/brand/adsnoop-loader.svg" width="38" height="22" alt="" aria-hidden="true"></div><div class="lb-game story" id="loadbarGame" hidden><canvas aria-hidden="true"></canvas><div class="lb-game-top"><span class="lb-title"><span aria-hidden="true">👀</span> <span class="lb-story"></span></span></div></div><div class="loadbar-row"><div class="lb-text"><span id="loadbarText"></span><small id="loadbarHint"></small></div><button class="linkbutton" id="loadbarAll" data-action="revealall">Show all ads now</button></div><div class="lb-strip" id="loadbarStrip" aria-hidden="true"></div></div><div id="cards" class="cards"></div><div id="pager" class="live-pager"></div></div><p class="notice">The Meta Ad Library does not provide spend, conversions or verified creative performance for commercial ads here. Preview availability depends on the source media collector. Format and funnel labels may be inferred.</p>
 </div></main>
-<section class="feature" id="feature"><div class="wrap featurein"><div><p class="eyebrow">Messaging intelligence</p><h2>What themes keep coming up?</h2><p>Get a quick overview of repeated language across the ads currently loaded. These are text-based estimates, not measured performance.</p><div class="featuretags"><span>Creative hooks</span><span>Benefits</span><span>Offers</span><span>Proof points</span></div></div><div class="featurepanel"><p class="eyebrow">Messaging breakdown</p><p>Choose an advertiser to analyse messaging themes.</p></div></div></section>
+<section class="feature" id="feature"><canvas class="messaging-waves" aria-hidden="true"></canvas><div class="wrap featurein"><div><p class="eyebrow">Messaging intelligence</p><h2>What themes keep coming up?</h2><p>Get a quick overview of repeated language across the ads currently loaded. These are text-based estimates, not measured performance.</p><div class="featuretags"><span>Creative hooks</span><span>Benefits</span><span>Offers</span><span>Proof points</span></div></div><div class="featurepanel"><p class="eyebrow">Messaging breakdown</p><p>Choose an advertiser to analyse messaging themes.</p></div></div></section>
 <section id="radarDemo" class="trk-home-demo" aria-label="Try the competitor radar" hidden></section><footer class="foot space-foot" data-space="footer"><div class="space-bg" aria-hidden="true"><canvas class="space-canvas"></canvas><div class="foot-glow"></div></div><div class="footin"><div class="foot-brand"><img src="/brand/adsnoop-wordmark-light.svg" alt="AdSnoop" width="132" height="34"><p>See what your competitors are putting out there.</p></div><nav class="foot-links" aria-label="Footer"><button data-view="discover">Discover</button><button data-view="saved">Saved ideas</button><a href="/tracker">My competitors</a><a href="/christmas-ads">Christmas ads</a><a href="/black-friday-ads">Black Friday ads</a><a href="/meta-updates">Meta ads updates</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><button type="button" id="analytics-settings" hidden>Analytics settings</button><a href="#top" data-scrolltop>Back to top ↑</a></nav><p class="foot-note">Data from Meta’s public Ad Library. Not affiliated with Meta. UK reach figures are Meta’s own estimates.</p></div></footer>
 <div id="modalOverlay" class="overlay"><div role="dialog" aria-modal="true" aria-labelledby="modalTitle" class="modal"><div class="modalhead"><div><p class="eyebrow">Creative research</p><h2 id="modalTitle"></h2></div><button class="close" id="closeModal" aria-label="Close details">×</button></div><div id="modalContent"></div></div></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div><div id="comparisonBar" class="cmpbar"><span id="compareCount">0 of 3 selected</span><button class="pill sm" id="compareOpen">Compare ads</button><button class="square" id="compareClear" aria-label="Clear comparison" style="background:#333338;color:white;border-color:#555">×</button></div>
-<script src="/brand/eyes-interaction.js" defer></script><script src="/brand/hero-space.js" defer></script><script src="/brand/loadstory.js"></script><script src="/live/app.js" defer></script><aside id="analytics-choice" aria-labelledby="analytics-heading" hidden style="position:fixed;bottom:12px;left:12px;z-index:9999;width:min(390px,calc(100% - 24px));background:white;color:#222;border:1px solid #bbb;border-radius:12px;padding:16px;box-shadow:0 4px 20px #0002;font-size:14px">
+<script src="/brand/eyes-interaction.js" defer></script><script src="/brand/hero-space.js" defer></script><script src="/brand/messaging-waves.js" defer></script><script src="/brand/loadstory.js"></script><script src="/live/app.js" defer></script><aside id="analytics-choice" aria-labelledby="analytics-heading" hidden style="position:fixed;bottom:12px;left:12px;z-index:9999;width:min(390px,calc(100% - 24px));background:white;color:#222;border:1px solid #bbb;border-radius:12px;padding:16px;box-shadow:0 4px 20px #0002;font-size:14px">
 <strong id="analytics-heading">Analytics cookies</strong>
 <p>With your permission, AdSnoop uses Google Analytics cookies to measure page visits and interactions. You can change your choice in the footer. <a style="text-decoration:underline" href="https://policies.google.com/technologies/partner-sites">How Google uses this data</a></p>
 <button class="ghost" type="button" id="analytics-decline">Decline</button> <button class="ghost" type="button" id="analytics-allow">Allow analytics</button>
