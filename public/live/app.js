@@ -828,7 +828,6 @@ const radarExamples=[
 function radarExampleHTML(prefix){
  const isHome=prefix==="homeRadarExample";
  function comparisonBar(signal,value){
-  if(!isHome)return "";
   const scale=signal.mine.endsWith("%")?100:Math.max(Number(signal.mine),Number(signal.rivals));
   return '<i class="rd-bar" aria-hidden="true"><i style="width:'+parseFloat(value)/scale*100+'%"></i></i>';
  }
