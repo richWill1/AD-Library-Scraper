@@ -8,7 +8,7 @@
 
   const ads = [...panel.querySelectorAll(".ms-ad")];
   const themes = [...panel.querySelectorAll(".ms-themes li")];
-  const say = panel.querySelector(".ms-say");
+  const say = document.querySelector("#feature .ms-say");
   const sayStill = say?.textContent;
   const KINDS = ["a creative hook", "a benefit", "an offer", "a proof point"];
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
