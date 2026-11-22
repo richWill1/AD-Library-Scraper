@@ -104,7 +104,7 @@ async function resolveBrands(max = 20) {
       lookups[b.name] = top ? {id: top.id, pageName: top.name, at: Date.now()} : {at: Date.now()};
       await sleep(4000);
     }
-    if (todo.length) { indexBrands(); await writeSnapshot(snapName('seasonal-brand-pages'), JSON.stringify({savedAt: new Date().toISOString(), lookups})); }
+    if (todo.length) { indexBrands(); console.log('[seasonal brands]', JSON.stringify({resolved: BRANDS.length, listed: BRAND_LIST.length, triedNow: todo.length})); await writeSnapshot(snapName('seasonal-brand-pages'), JSON.stringify({savedAt: new Date().toISOString(), lookups})); }
   } finally { resolving = false; }
 }
 const MAJOR_IDS: Record<string, true> = Object.fromEntries(Object.values(MAJOR_PAGES).map(id => [id, true]));
@@ -290,7 +290,7 @@ async function build(key: string) {
 function refresh(key: string) {
   let work = inflight.get(key);
   if (!work) {
-    work = build(key).then(d => { if ((d as {stats: {ads: number}}).stats.ads) { cache.set(key, {at: Date.now(), data: d}); writeSnapshot(snapName('seasonal-' + key), JSON.stringify(d)); } return d; }).finally(() => inflight.delete(key));
+    work = build(key).then(d => { const x = d as {stats: object; coverage: object; partial: boolean; lists: Record<string, {pageName: string}[]>}; console.log('[seasonal]', key, JSON.stringify({partial: x.partial, stats: x.stats, coverage: x.coverage, topReach: x.lists.reach.slice(0, 6).map(a => a.pageName)})); if ((d as {stats: {ads: number}}).stats.ads) { cache.set(key, {at: Date.now(), data: d}); writeSnapshot(snapName('seasonal-' + key), JSON.stringify(d)); } return d; }).finally(() => inflight.delete(key));
     inflight.set(key, work);
   }
   return work;
