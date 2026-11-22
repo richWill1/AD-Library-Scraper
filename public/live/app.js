@@ -216,7 +216,7 @@ function countTo(el,to){
  if(!el)return;const key=state.page+"|"+state.view,prev=Number(el.dataset.v||0);
  if(el.dataset.v===String(to)&&el.dataset.k===key)return;
  const animate=el.dataset.k!==key&&!document.hidden&&!matchMedia("(prefers-reduced-motion: reduce)").matches&&to>0;
- el.dataset.v=String(to);el.dataset.k=key;cancelAnimationFrame(el._raf||0);
+ el.dataset.v=String(to);el.dataset.k=key;cancelAnimationFrame(el._raf||0);clearTimeout(el._done||0);
  if(!animate){el.textContent=String(to);return}
  // The clock starts on the first frame and progress is clamped to 0..1. A frame's
  // timestamp can be earlier than performance.now() taken during a long render, and
@@ -225,6 +225,8 @@ function countTo(el,to){
  el.textContent="0";
  const step=t=>{if(t0==null)t0=t;const k=Math.max(0,Math.min(1,(t-t0)/dur)),e=1-Math.pow(1-k,3);el.textContent=String(Math.max(0,Math.min(to,Math.round(to*e))));if(k<1)el._raf=requestAnimationFrame(step)};
  el._raf=requestAnimationFrame(step);void prev;
+ // Frames can stall while the page isn't being painted; always land on the real number.
+ el._done=setTimeout(()=>{cancelAnimationFrame(el._raf||0);el.textContent=String(to)},dur+400);
 }
 // Preferences sit behind one small store so they can later belong to a signed-in
 // account (saved watchlists, weekly alerts) without changing the features that read them.
