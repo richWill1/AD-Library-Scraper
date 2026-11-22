@@ -149,7 +149,6 @@ const consentSrc = metaUpdates.match(/<aside id="analytics-choice"[\s\S]*?<\/asi
 if (!headerSrc || !footerSrc || !consentSrc) fail('could not read the shared header/footer from public/live/meta-updates.html');
 if (!headerSrc.includes('href="/insights"')) fail('the site header has no Insights link; add it to public/live/*.html first');
 const header = headerSrc
-  .replace(/ class="nav-btn active" href="\/meta-updates" aria-current="page"/, ' class="nav-btn" href="/meta-updates"')
   .replace(/<a class="nav-btn" href="\/insights"[^>]*>/, '<a class="nav-btn active" href="/insights" aria-current="page">');
 const footer = footerSrc;
 
