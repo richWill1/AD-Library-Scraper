@@ -69,7 +69,7 @@ const BRAND_NAMES = [
 ];
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 let lastCall = 0, failures = 0, calls = 0, rateLimited = false;
-async function paced() { const wait = lastCall + 3200 - Date.now(); if (wait > 0) await sleep(wait); lastCall = Date.now(); }
+async function paced() { const wait = lastCall + 3600 - Date.now(); if (wait > 0) await sleep(wait); lastCall = Date.now(); }
 const cache = new Map<string, {at: number; data: unknown}>();
 const inflight = new Map<string, Promise<unknown>>();
 const archives = new Map<string, Map<string, Arch>>();
@@ -186,7 +186,8 @@ async function build(key: string) {
   const {pages, pool: brandPool} = await pagesToCheck(key, arch);
   // The preview goes through the live site's rate-limited endpoint, so it does a lighter pass.
   const depth = (n: number) => directToken ? n : Math.max(1, Math.ceil(n / 4));
-  const jobs: [string, string, number][] = [...ev.terms.map(([t, n]) => [t, '', depth(n)] as [string, string, number]), ...pages.map(id => [id, id, directToken ? 2 : 1] as [string, string, number])];
+  // Brand pages first: the big retailers carry most of the reach, so they must not be the part that gets cut if Meta slows us down.
+  const jobs: [string, string, number][] = [...pages.map(id => [id, id, directToken ? 2 : 1] as [string, string, number]), ...ev.terms.map(([t, n]) => [t, '', depth(n)] as [string, string, number])];
   await pool(jobs, directToken ? 4 : 1, async ([term, page, n]) => { add(await search(term, page, n)); });
   // Merge this refresh into the season archive.
   let added = 0;
