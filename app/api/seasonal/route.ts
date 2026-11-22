@@ -3,7 +3,6 @@ import {directorySearch} from '@/lib/advertiser-directory';
 import {metaFetch} from '@/lib/meta-api';
 import {getMetaCredential} from '@/lib/meta-token-store';
 import {readSnapshot,writeSnapshot} from '@/lib/creative-store';
-import picksFile from '@/content/seasonal/picks.json';
 export const runtime = 'nodejs';
 
 // Seasonal ad collections (Christmas, Black Friday). Built from Meta's public
@@ -160,7 +159,7 @@ async function pagesToCheck(key: string, arch: Map<string, Arch>) {
   return {pages: [...fixed, ...slice], pool: fixed.length + rota.length};
 }
 
-type Item = {id: string; pageId: string; pageName: string; title: string; copy: string; start: string; days: number | null; run: number; reach: number | null; live: boolean; lastSeen: string; versions?: number; reason?: string};
+type Item = {id: string; pageId: string; pageName: string; title: string; copy: string; start: string; days: number | null; run: number; reach: number | null; live: boolean; lastSeen: string; versions?: number};
 const copyKey = (a: Arch) => (a.c || a.t || '').toLowerCase().replace(/\s+/g, ' ').slice(0, 90);
 const runDays = (a: Arch) => { const s = Date.parse(a.s + 'T00:00:00Z'); return Number.isFinite(s) ? Math.max(0, Math.floor((a.l - s) / DAY)) : 0; };
 const toItem = (a: Arch, now: number, extra: Partial<Item> = {}): Item => ({id: a.i, pageId: a.p, pageName: a.n, title: a.t === 'Ad creative' ? '' : a.t, copy: (a.c === 'No ad copy provided by Meta.' ? '' : a.c).slice(0, 320), start: a.s, days: days(a.s), run: runDays(a), reach: a.r, live: now - a.l < LIVE_WINDOW, lastSeen: new Date(a.l).toISOString().slice(0, 10), ...extra});
@@ -215,11 +214,7 @@ async function build(key: string) {
     reach: shortlist([...ads].sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now),
     longest: shortlist(ads.filter(a => runDays(a) >= 7).sort((x, y) => runDays(y) - runDays(x) || (y.r || 0) - (x.r || 0)), now),
     tested: shortlist(tested, now, 12, a => ({versions: versions(a)})),
-    challengers: shortlist(ads.filter(a => !big.has(a.p)).sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now),
-    picks: ((picksFile as unknown as Record<string, {id: string; pageId?: string; pageName?: string; reason: string}[]>)[key] || []).filter(p => /^\d{1,30}$/.test(p.id)).map(p => {
-      const a = arch.get(p.id);
-      return a ? toItem(a, now, {reason: p.reason}) : {id: p.id, pageId: p.pageId || '', pageName: p.pageName || '', title: '', copy: '', start: '', days: null, run: 0, reach: null, live: false, lastSeen: '', reason: p.reason};
-    })
+    challengers: shortlist(ads.filter(a => !big.has(a.p)).sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now)
   };
   // Launches per day, last 42 days, across the whole archive
   const timeline: number[] = new Array(42).fill(0);

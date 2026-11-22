@@ -126,7 +126,6 @@ button{font:inherit}
 .col-tabs button:hover{border-color:#c7c7cc}
 .col-tabs button[aria-selected="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 .col-why{font-size:14px;color:var(--muted);margin:0 0 18px;max-width:760px}
-.ad-reason{font-size:13.5px;margin:0;padding:9px 11px;border-radius:12px;background:#fff8e1;color:#5c4400}
 .chip.live{background:#e8f7ee;color:#1d6b3a}
 .chip.ended{background:#f2f2f5;color:var(--soft)}
 @media (max-width:520px){.col-tabs{flex-wrap:nowrap;overflow-x:auto;margin-right:-16px;padding-right:16px;scrollbar-width:none}.col-tabs button{flex:none}}
