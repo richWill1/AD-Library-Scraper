@@ -8,11 +8,31 @@
 
   const ads = [...panel.querySelectorAll(".ms-ad")];
   const themes = [...panel.querySelectorAll(".ms-themes li")];
+  const say = panel.querySelector(".ms-say");
+  const sayStill = say?.textContent;
+  const KINDS = ["a creative hook", "a benefit", "an offer", "a proof point"];
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
   const STEP = 1700, HOLD = 2600, FADE = 650;
   let timers = [], running = false, visible = false;
 
   const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+
+  // Stop-motion caption: words pop in a few frames at a time, then "boil".
+  function caption(parts, colour) {
+    if (!say) return;
+    say.classList.remove("jitter");
+    say.textContent = "";
+    let n = 0;
+    parts.forEach(([text, key]) => text.split(" ").forEach((word) => {
+      const w = document.createElement("span");
+      w.className = key ? "w k" : "w";
+      w.textContent = word;
+      w.style.animationDelay = n++ * 90 + "ms";
+      say.appendChild(w);
+    }));
+    if (colour) say.style.setProperty("--c", colour);
+    later(() => say.classList.add("jitter"), n * 90 + 450);
+  }
 
   function countUp(el) {
     const target = +el.dataset.v, start = performance.now();
@@ -57,13 +77,20 @@
 
   function cycle() {
     if (!running) return;
+    timers = [];
     panel.classList.remove("fade");
     reset();
+    caption([["Reading", 0], ["every ad", 1], ["this advertiser is running…", 0]], "#b48cff");
     ads.forEach((ad, i) => {
       const row = themes[+ad.dataset.t];
       const t = 250 + i * STEP;
       later(() => ad.classList.add("in"), t);
-      later(() => ad.classList.add("lit"), t + 450);
+      later(() => {
+        ad.classList.add("lit");
+        const phrase = ad.querySelector("mark").textContent.replace(/[.,]$/, "");
+        caption([["“" + phrase + "”", 1], ["is " + KINDS[+ad.dataset.t], 0]],
+          getComputedStyle(row).getPropertyValue("--c").trim());
+      }, t + 450);
       later(() => fly(ad, row), t + 800);
       later(() => {
         row.classList.add("on", "hit");
@@ -71,6 +98,7 @@
       }, t + 1450);
     });
     const end = 250 + ads.length * STEP + HOLD;
+    later(() => caption([["Result:", 0], ["hooks", 1], ["lead this advertiser’s messaging.", 0]], "#5fd4c4"), end - HOLD + 200);
     later(() => panel.classList.add("fade"), end);
     later(cycle, end + FADE);
   }
@@ -81,6 +109,7 @@
     timers = [];
     panel.querySelectorAll(".ms-chip").forEach((c) => c.remove());
     panel.classList.remove("ms-live", "fade");
+    if (say) { say.classList.remove("jitter"); say.textContent = sayStill; }
     themes.forEach((t) => {
       t.classList.remove("hit");
       const v = t.querySelector(".ms-val");
