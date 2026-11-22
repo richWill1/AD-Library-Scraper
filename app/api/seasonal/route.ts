@@ -66,7 +66,7 @@ const MAJOR_PAGES: Record<string, string> = {Currys: '282722695080974', Argos: '
 type Brand = {id: string; name: string; sector: string};
 type BrandEntry = {name: string; sector: string; id?: string; pageName?: string};
 const BRAND_LIST: BrandEntry[] = ((brandsFile as unknown as {brands: BrandEntry[]}).brands || []).filter(b => b && b.name && b.sector);
-type Lookup = {id?: string; pageName?: string; at: number};
+type Lookup = {id?: string; pageName?: string; at: number; v?: number};
 let lookups: Record<string, Lookup> = {};
 let lookupsLoaded = false;
 let BRANDS: Brand[] = [];
@@ -92,18 +92,31 @@ async function loadLookups() {
 // competes with visitors for Meta's rate limit. Names with no verified Page are
 // tried again after a week.
 let resolving = false;
-async function resolveBrands(max = 20) {
+async function resolveBrands(max = 10) {
   if (resolving || !directToken) return; resolving = true;
   try {
-    const todo = BRAND_LIST.filter(b => !b.id && (!lookups[b.name] || (!lookups[b.name].id && Date.now() - lookups[b.name].at > 7 * DAY))).slice(0, max);
+    // v2 lookups also try name variants and accept an exact-name match among several candidates, so v1 misses are retried now.
+    const todo = BRAND_LIST.filter(b => !b.id && (!lookups[b.name] || (!lookups[b.name].id && ((lookups[b.name].v || 1) < 2 || Date.now() - lookups[b.name].at > 7 * DAY)))).slice(0, max);
+    const norm = (x: string) => x.toLowerCase().replace(/&/g, 'and').replace(/\b(uk|gb|official|ltd|plc|the)\b/g, '').replace(/[^a-z0-9]/g, '');
+    const misses: string[] = [];
+    let stopped = false;
     for (const b of todo) {
-      let result: DiscoveryResult | null = null;
-      try { result = await discoverTradingName(b.name, {token: directToken, directory: await directorySearch(b.name)}); } catch {}
-      if (!result || result.status === 'lookup_failed') break; // probably rate-limited: stop and try again next refresh
-      const top = result.status === 'resolved' ? result.advertisers.find(a => a.confidence === 'verified' && /^\d{3,30}$/.test(a.id)) : undefined;
-      lookups[b.name] = top ? {id: top.id, pageName: top.name, at: Date.now()} : {at: Date.now()};
-      await sleep(4000);
+      const variants = [...new Set([b.name, b.name.replace(/\s+(UK|GB)$/i, ''), /\b(UK|GB)$/i.test(b.name) ? '' : b.name + ' UK'].filter(Boolean))];
+      let hit: {id: string; name: string} | undefined;
+      for (const q of variants) {
+        let result: DiscoveryResult | null = null;
+        try { result = await discoverTradingName(q, {token: directToken, directory: await directorySearch(q)}); } catch {}
+        if (!result || result.status === 'lookup_failed') { stopped = true; break; } // probably rate-limited: try again next refresh
+        hit = result.advertisers.find(a => /^\d{3,30}$/.test(a.id) && a.confidence === 'verified' && (result!.status === 'resolved' || norm(a.name) === norm(b.name)))
+          || (result.status === 'choose' ? result.advertisers.find(a => /^\d{3,30}$/.test(a.id) && norm(a.name) === norm(b.name) && (a.adCount || 0) >= 3) : undefined);
+        await sleep(4000);
+        if (hit) break;
+      }
+      if (stopped) break;
+      lookups[b.name] = hit ? {id: hit.id, pageName: hit.name, at: Date.now(), v: 2} : {at: Date.now(), v: 2};
+      if (!hit) misses.push(b.name);
     }
+    if (misses.length) console.log('[seasonal brands] no verified Page for', JSON.stringify(misses));
     if (todo.length) { indexBrands(); console.log('[seasonal brands]', JSON.stringify({resolved: BRANDS.length, listed: BRAND_LIST.length, triedNow: todo.length})); await writeSnapshot(snapName('seasonal-brand-pages'), JSON.stringify({savedAt: new Date().toISOString(), lookups})); }
   } finally { resolving = false; }
 }
