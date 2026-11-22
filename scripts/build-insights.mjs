@@ -163,7 +163,7 @@ function page({ title, description, canonical, ogImage, ogType = 'website', json
 <meta property="og:type" content="${ogType}"><meta property="og:site_name" content="AdSnoop"><meta property="og:locale" content="en_GB"><meta property="og:url" content="${SITE}${canonical}">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}${ogImage}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description)}"><meta name="twitter:image" content="${SITE}${ogImage}">
-<link rel="icon" type="image/svg+xml" href="/brand/favicon-light.svg"><link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="/brand/favicon-dark.svg">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="/brand/favicon-dark.svg">
 <link rel="alternate" type="application/rss+xml" title="AdSnoop Insights" href="/insights/feed.xml">
 <link rel="stylesheet" href="/live/header.css"><link rel="stylesheet" href="/insights-assets/insights.css?v=${cssV}">${extraHead}
 ${jsonLd.map(o => `<script type="application/ld+json">${json(o)}</script>`).join('')}
@@ -295,9 +295,16 @@ function rss() {
 
 // Existing indexable pages keep their place in the sitemap.
 const STATIC_URLS = ['/', '/christmas-ads', '/black-friday-ads', '/meta-updates'];
+function latestContentDate(list) {
+  return list.map(a => a.updatedAt || a.publishedAt).sort().at(-1);
+}
+
 function sitemap(catIndexable) {
-  const urls = [...STATIC_URLS.map(u => ({ loc: u })), { loc: '/insights', lastmod: live[0]?.updatedAt || live[0]?.publishedAt },
-    ...categories.filter(c => catIndexable[c.slug]).map(c => ({ loc: `/insights/category/${c.slug}` })),
+  const urls = [...STATIC_URLS.map(u => ({ loc: u })), { loc: '/insights', lastmod: latestContentDate(live) },
+    ...categories.filter(c => catIndexable[c.slug]).map(c => ({
+      loc: `/insights/category/${c.slug}`,
+      lastmod: latestContentDate(live.filter(a => a.category === c.slug)),
+    })),
     ...live.map(a => ({ loc: a.url, lastmod: a.updatedAt || a.publishedAt }))];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(u => `  <url>\n    <loc>${SITE}${u.loc}</loc>${u.lastmod ? `\n    <lastmod>${isoDate(u.lastmod)}</lastmod>` : ''}\n  </url>`).join('\n')}\n</urlset>\n`;
 }
