@@ -1,0 +1,28 @@
+# Insights categories. The order here is the order shown on the site.
+# slug: used in the URL /insights/category/<slug>
+# colour: accent used on cards, chips and illustrations
+- slug: meta-updates
+  name: Meta Updates
+  short: Updates
+  colour: "#2f7bf6"
+  description: Official Meta changes, new advertising features, campaign updates, policy changes and platform announcements, translated into what they mean for advertisers.
+- slug: creative-intelligence
+  name: Creative Intelligence
+  short: Creative
+  colour: "#8b5cf6"
+  description: Video versus static, creative testing, messaging trends, catalogue ads, carousels, competitor creative strategies and emerging formats.
+- slug: strategy-optimisation
+  name: Strategy & Optimisation
+  short: Strategy
+  colour: "#14a37f"
+  description: Campaign structures, Advantage+, budgeting, scaling, audience strategy, attribution and performance optimisation.
+- slug: measurement-profitability
+  name: Measurement & Profitability
+  short: Measurement
+  colour: "#e8772e"
+  description: ROAS, POAS, contribution margin, conversion tracking, first-party data, the Conversions API and incrementality.
+- slug: competitor-intelligence
+  name: Competitor Intelligence
+  short: Competitors
+  colour: "#e0457b"
+  description: How advertisers analyse competitors, creative refresh frequency, campaign themes, benchmarking and practical AdSnoop research workflows.

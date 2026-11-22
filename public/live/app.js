@@ -47,8 +47,17 @@ function directAdvertiser(query){
  const v=canonicalName(q);
  return knownPages.find(p=>p.aliases.some(a=>canonicalName(a)===v)||canonicalName(p.name)===v)||null;
 }
+// Analytics: one event per advertiser search, credited to the Insights article
+// that sent the visitor here (if any, within 30 minutes). Consent-gated GA4 only.
+function trackAdvertiserSearch(){
+ let ref=null;try{ref=JSON.parse(sessionStorage.getItem("adsnoop-insights-ref")||"null");if(ref&&Date.now()-ref.t>1800000)ref=null;}catch{}
+ const p={search_source:ref?"insights":"direct"};if(ref){p.insights_article=String(ref.slug).slice(0,100);p.insights_category=String(ref.category||"").slice(0,60);p.insights_placement=String(ref.placement||"").slice(0,60);}
+ try{if(location.hostname!=="adsnoop.co.uk"||localStorage.getItem("adsnoop-analytics-choice")!=="allow"){(window.__insightsEvents=window.__insightsEvents||[]).push(["advertiser_search",p]);return;}}catch{return}
+ window.dataLayer=window.dataLayer||[];(function(){window.dataLayer.push(arguments)})("event","advertiser_search",p);
+}
 function searchClient(query){
  const q=String(query||"").trim();if(!q)return;
+ trackAdvertiserSearch();
  state.view="discover";state.filter="all";state.limit=25;state.theme="";state.revealAll=false;
  const exact=directAdvertiser(q);
  state.query=q;

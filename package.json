@@ -7,21 +7,24 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "node scripts/build-insights.mjs && next build --webpack",
     "start": "node scripts/start.mjs",
     "meta:connect": "node scripts/meta-token.mjs",
-    "meta:check": "node scripts/meta-check.mjs"
+    "meta:check": "node scripts/meta-check.mjs",
+    "insights": "node scripts/build-insights.mjs"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "^1.31.0",
+    "marked": "18.2.1",
     "next": "16.3.8",
     "pg": "^8.23.1",
     "radix-ui": "^1.6.7",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tailwind-merge": "3.6.0"
+    "tailwind-merge": "3.6.0",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
