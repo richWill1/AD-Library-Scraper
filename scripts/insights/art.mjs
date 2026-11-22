@@ -58,7 +58,7 @@ const ART = {
     for (let r = 0; r < 3; r++) for (let k = 0; k < 5; k++) {
       const i = r * 5 + k, x = 150 + k * 186 + (r % 2 ? 40 : 0), y = 90 + r * 172;
       const on = hi.has(i);
-      cards += `<g opacity="${on ? 1 : .7}">${glass(x, y, 150, 140, 16, on ? `stroke="${c}"` : '')}
+      cards += `<g opacity="${on ? 1 : .7}">${glass(x, y, 150, 140, 16)}${on ? `<rect x="${x}" y="${y}" width="150" height="140" rx="16" fill="none" stroke="${c}" stroke-width="2.5"/>` : ''}
 <rect x="${x + 14}" y="${y + 14}" width="122" height="66" rx="9" fill="${on ? rgba(c, .55) : 'rgba(255,255,255,.1)'}"/>
 <rect x="${x + 14}" y="${y + 92}" width="96" height="9" rx="4.5" fill="rgba(255,255,255,.32)"/>
 <rect x="${x + 14}" y="${y + 110}" width="64" height="9" rx="4.5" fill="rgba(255,255,255,.18)"/></g>`;

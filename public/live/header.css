@@ -36,3 +36,7 @@ body.scrolled .as-unified-nav{background:rgba(9,14,32,.9);-webkit-backdrop-filte
 }
 @media(max-width:370px){.as-unified-nav .toplinks{gap:12px}.as-unified-nav .nav-btn{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.as-logo svg .as-pupils{will-change:auto}}
+
+/* Five nav links: tighten spacing on phones and let the row scroll if needed */
+@media(max-width:660px){.as-unified-nav .toplinks{gap:13px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}.as-unified-nav .toplinks::-webkit-scrollbar{display:none}.as-unified-nav .toplinks .nav-btn{flex:none}}
+@media(max-width:400px){.as-unified-nav .toplinks{gap:11px}}

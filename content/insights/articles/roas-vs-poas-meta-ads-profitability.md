@@ -9,6 +9,7 @@ author: AdSnoop Editorial
 featured: true
 art: roas-poas
 artAlt: "Illustration of tall revenue bars beside much shorter profit bars, with a dashed break-even line"
+related: [meta-conversions-api-explained, how-often-to-refresh-meta-ad-creatives]
 keywords: [roas, poas, break-even roas, contribution margin, profit on ad spend, meta ads profitability, mer]
 cta:
   heading: "Margins decide what's worth advertising"
@@ -16,9 +17,6 @@ cta:
   label: "Search competitor ads"
   href: "/"
 sources:
-  - title: "Ads Insights reference: purchase_roas and related fields"
-    url: "https://developers.facebook.com/docs/marketing-api/reference/ads-insights/"
-    publisher: "Meta for Developers"
   - title: "Conversions API: custom data parameters (value and currency)"
     url: "https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/custom-data"
     publisher: "Meta for Developers"

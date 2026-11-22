@@ -185,10 +185,10 @@ const artUrl = a => `/insights-art/${a.slug}.svg`;
 const catChip = (c, tag = 'span') => `<${tag} class="ins-chip" style="--c:${c.colour}"${tag === 'a' ? ` href="/insights/category/${c.slug}" data-ins-cat="${c.slug}"` : ''}>${esc(c.name)}</${tag}>`;
 const draftBadge = a => a.status === 'draft' ? '<span class="ins-draft-badge">Draft</span>' : '';
 
-function card(a, { size = 'md', eager = false, placement = 'grid' } = {}) {
+function card(a, { size = 'md', eager = false, placement = 'grid', dup = false } = {}) {
   const c = catBySlug.get(a.category);
   const dims = size === 'lg' ? 'width="1200" height="675"' : 'width="600" height="338"';
-  return `<article class="ins-card ins-card-${size}" style="--c:${c.colour}" data-search="${esc([a.title, a.description, c.name, ...(a.keywords || [])].join(' ').toLowerCase())}">
+  return `<article class="ins-card ins-card-${size}${dup ? ' ins-dup' : ''}" style="--c:${c.colour}" data-search="${esc([a.title, a.description, c.name, ...(a.keywords || [])].join(' ').toLowerCase())}">
 <a class="ins-card-link" href="${a.url}" data-ins-related="${placement}"><div class="ins-card-media"><img src="${artUrl(a)}" alt="${esc(a.artAlt || '')}" ${dims} ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></div>
 <div class="ins-card-body"><p class="ins-card-meta">${catChip(c)}${draftBadge(a)}</p><h3>${esc(a.title)}</h3><p class="ins-card-desc">${esc(a.description)}</p>
 <p class="ins-card-foot"><time datetime="${isoDate(a.publishedAt)}">${fmtDate(a.publishedAt)}</time><span aria-hidden="true">·</span><span>${a.readingTime} min read</span></p></div></a></article>`;
@@ -234,7 +234,7 @@ ${productBand('article')}`;
     crumbs([['Insights', '/insights'], [c.name, `/insights/category/${c.slug}`], [a.title, a.url]]),
   ];
   return page({
-    title: `${a.seoTitle || a.title} | AdSnoop Insights`, description: a.description, canonical: a.url, ogImage, ogType: 'article', jsonLd: ld, body, noindex: a.status === 'draft',
+    title: `${a.seoTitle || a.title} | AdSnoop`, description: a.description, canonical: a.url, ogImage, ogType: 'article', jsonLd: ld, body, noindex: a.status === 'draft',
     pageData: { type: 'article', slug: a.slug, category: a.category },
     extraHead: `<meta property="article:published_time" content="${isoDate(a.publishedAt)}">${updated ? `<meta property="article:modified_time" content="${isoDate(updated)}">` : ''}<meta property="article:section" content="${esc(c.name)}">`,
   });
@@ -252,8 +252,8 @@ function hubPage() {
 ${categoryNav(null)}
 </div></section>
 ${featured ? `<section class="ins-wrap ins-featured" aria-labelledby="featured-h"><h2 id="featured-h" class="sr-only">Featured</h2><div class="ins-featured-grid">${card(featured, { size: 'lg', eager: true, placement: 'featured' })}<div class="ins-featured-side">${side.map(a => card(a, { size: 'sm', placement: 'featured' })).join('')}</div></div></section>` : ''}
-<section class="ins-wrap ins-all" aria-labelledby="all-h"><div class="ins-section-head"><h2 id="all-h">Latest insights</h2><p class="ins-results" aria-live="polite" id="ins-results"></p></div>
-<div class="ins-grid" id="ins-grid">${articles.map(a => card(a)).join('')}</div>
+<section class="ins-wrap ins-all" aria-labelledby="all-h"><div class="ins-section-head"><h2 id="all-h">More insights</h2><p class="ins-results" aria-live="polite" id="ins-results"></p></div>
+<div class="ins-grid" id="ins-grid">${articles.map(a => card(a, { dup: featured && (a === featured || side.includes(a)) && articles.length > 3 })).join('')}</div>
 <div class="ins-empty" id="ins-empty" hidden><p><strong>No articles match that search yet.</strong></p><p>Try a broader term, browse a topic below, or search competitor ads directly with AdSnoop.</p></div></section>
 <section class="ins-wrap ins-topics" aria-labelledby="topics-h"><div class="ins-section-head"><h2 id="topics-h">Browse by topic</h2></div><div class="ins-topic-grid">
 ${categories.map(c => `<a class="ins-topic" href="/insights/category/${c.slug}" data-ins-cat="${c.slug}" style="--c:${c.colour}"><span class="ins-topic-orb" aria-hidden="true"></span><h3>${esc(c.name)}</h3><p>${esc(c.description)}</p><span class="ins-topic-count">${counts[c.slug] ? `${counts[c.slug]} article${counts[c.slug] > 1 ? 's' : ''}` : 'Coming soon'}</span></a>`).join('')}

@@ -33,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   return new ImageResponse(
     (
       <div style={{ width: '100%', height: '100%', display: 'flex', position: 'relative', background: '#070b1d', color: '#fff' }}>
-        {art ? <img src={art} width={1200} height={675} style={{ position: 'absolute', top: -22, left: 0, opacity: 0.55 }} alt="" /> : null}
+        {art ? <img src={art} width={1200} height={675} style={{ position: 'absolute', top: -22, left: 0, opacity: 0.35 }} alt="" /> : null}
         <div style={{ position: 'absolute', inset: 0, display: 'flex', background: 'linear-gradient(90deg, rgba(7,11,29,.96) 0%, rgba(7,11,29,.82) 55%, rgba(7,11,29,.25) 100%)' }} />
         <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '64px 72px', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 30, fontWeight: 700, letterSpacing: -1 }}>

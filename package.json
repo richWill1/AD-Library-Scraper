@@ -11,7 +11,9 @@
     "start": "node scripts/start.mjs",
     "meta:connect": "node scripts/meta-token.mjs",
     "meta:check": "node scripts/meta-check.mjs",
-    "insights": "node scripts/build-insights.mjs"
+    "insights": "node scripts/build-insights.mjs",
+    "insights:news": "node scripts/insights-news.mjs",
+    "insights:new": "node scripts/insights-news.mjs new"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",

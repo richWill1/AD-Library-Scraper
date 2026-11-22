@@ -65,6 +65,7 @@ if(form&&grid){
   cards.forEach(function(c){var hay=c.getAttribute("data-search")||"";var ok=terms.every(function(w){return hay.indexOf(w)>-1});c.hidden=!ok;if(ok)n++});
   if(empty)empty.hidden=n>0;
   if(featured)featured.hidden=terms.length>0;
+  document.body.classList.toggle("is-searching",terms.length>0);
   if(results)results.textContent=terms.length?(n+" article"+(n===1?"":"s")+" for “"+q.trim()+"”"):"";
   if(report&&terms.length&&q.trim()!==last){last=q.trim();track("insights_search",{search_term:last.slice(0,80),results_count:n})}
  }
