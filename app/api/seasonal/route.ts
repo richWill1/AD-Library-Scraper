@@ -1,5 +1,7 @@
 import {NextRequest, NextResponse} from 'next/server';
+import brandsFile from '@/content/seasonal/brands.json';
 import {directorySearch} from '@/lib/advertiser-directory';
+import {discoverTradingName, type DiscoveryResult} from '@/lib/advertiser-discovery';
 import {metaFetch} from '@/lib/meta-api';
 import {getMetaCredential} from '@/lib/meta-token-store';
 import {readSnapshot,writeSnapshot} from '@/lib/creative-store';
@@ -21,7 +23,8 @@ const IS_MAIN = process.env.RENDER_SERVICE_ID === MAIN_SERVICE;
 const ORIGIN = process.env.ADS_ORIGIN || 'https://ad-library-scraper-94t0.onrender.com';
 const TTL = 4 * 3600 * 1000;
 const LIVE_WINDOW = 30 * 3600 * 1000; // seen within this long = still running
-const ROTATE_PER_RUN = 30;
+const ROTATE_PER_RUN = 50; // brand pages per refresh; ~250 brands cycle in about a day
+const MIN_REACH = 10000; // independents need this much UK reach to make a list
 const ARCHIVE_MAX = 12000;
 
 type Ad = {id: string; pageId: string; pageName: string; title: string; copy: string; start: string; reach: number | null; platforms?: string[]};
@@ -54,25 +57,65 @@ const TACTICS: {id: string; label: string; re: RegExp}[] = [
 ];
 // Checked on every refresh. Page IDs verified in Meta's Ad Library advertiser search.
 const MAJOR_PAGES: Record<string, string> = {Currys: '282722695080974', Argos: '108712049190071', 'Boots UK': '137917343831', 'John Lewis & Partners': '145210795501787', 'Amazon.co.uk': '136154403098698'};
-// Rotated through a few dozen at a time, alongside every advertiser already in
-// the archive. Names are matched against AdSnoop's advertiser directory; names
-// it doesn't know yet are skipped until it does.
-const BRAND_NAMES = [
-  'John Lewis', 'AO.com', 'Very', 'Lidl GB', 'Aldi UK', 'Tesco', "Sainsbury's", 'Asda', 'Morrisons', 'Waitrose', 'Marks and Spencer', 'M&S', 'Iceland Foods',
-  'JD Sports', 'Sports Direct', 'Superdrug', 'The Perfume Shop', 'Space NK', 'Lookfantastic', 'Cult Beauty', 'Charlotte Tilbury', 'Rituals', 'The Body Shop', 'Lush',
-  'Dunelm', 'IKEA UK', 'Next', 'ASOS', 'boohoo', 'PrettyLittleThing', 'River Island', 'New Look', 'Zara', 'H&M', 'Uniqlo', 'TK Maxx', 'Matalan', 'Primark', 'Fat Face', 'White Stuff', 'Joules', 'Seasalt Cornwall', 'Boden', 'Oasis', 'Monsoon', 'Clarks', 'Schuh', 'Office', 'Footasylum', 'Gymshark', 'End Clothing', 'Selfridges', 'Harrods', 'Liberty London', 'Fortnum & Mason', 'Debenhams', 'House of Fraser', 'Flannels',
-  'Smyths Toys', 'The Entertainer', 'Hamleys', 'Lego', 'Waterstones', 'WHSmith', 'The Works', 'Hobbycraft', 'Paperchase', 'Moonpig', 'Funky Pigeon', 'notonthehighstreet', 'Etsy',
-  'Ninja Kitchen UK', 'Dyson', 'Samsung UK', 'Apple', 'Google Pixel', 'Sony UK', 'Shark', 'Philips', 'Nespresso', 'Sage Appliances', 'Le Creuset', 'Lakeland', 'Robert Dyas', 'Wayfair UK', 'Habitat', 'Made.com', 'Oak Furnitureland', 'Furniture Village', 'DFS', 'ScS', 'Simba', 'Emma Sleep', 'Eve Sleep', 'Silentnight',
-  'B&Q', 'Wickes', 'Screwfix', 'Toolstation', 'Halfords', 'Pets at Home', 'Holland & Barrett', 'Myprotein', 'Bulk', 'Huel', 'Gousto', 'HelloFresh', 'Hotel Chocolat', 'Thorntons', 'Cadbury', 'Prezzybox', 'Firebox', 'Menkind', 'Virgin Experience Days', 'Buyagift', 'Red Letter Days',
-  'Pandora', 'Goldsmiths', 'Ernest Jones', 'H.Samuel', 'Beaverbrooks', 'Missoma', 'Monica Vinader', 'Abbott Lyon', 'Astrid & Miyu', 'Molton Brown', 'Jo Malone London', 'Charles Tyrwhitt', 'Sweaty Betty', 'Lounge Underwear', 'Oodie', 'Snug Sofa', 'Currys PC World', 'Argos UK', 'eBay UK', 'Temu', 'Shein'
-];
+// The curated UK brand list (content/seasonal/brands.json), grouped by sector.
+// Brands can be listed by name only: the live site looks up each one's verified
+// Meta Page with the same trading-name search as AdSnoop's advertiser search, a
+// few at a time, and saves the answers. Every brand is then checked by page about
+// once a day, and the main lists are drawn from these brands so the page reflects
+// the UK's main advertisers rather than whoever a keyword search surfaced.
+type Brand = {id: string; name: string; sector: string};
+type BrandEntry = {name: string; sector: string; id?: string; pageName?: string};
+const BRAND_LIST: BrandEntry[] = ((brandsFile as unknown as {brands: BrandEntry[]}).brands || []).filter(b => b && b.name && b.sector);
+type Lookup = {id?: string; pageName?: string; at: number};
+let lookups: Record<string, Lookup> = {};
+let lookupsLoaded = false;
+let BRANDS: Brand[] = [];
+let BRAND_BY_ID = new Map<string, Brand>();
+let SECTORS: string[] = [];
+function indexBrands() {
+  const seen = new Set<string>(); BRANDS = [];
+  for (const b of BRAND_LIST) {
+    const id = b.id || lookups[b.name]?.id || '';
+    if (!/^\d{1,30}$/.test(id) || seen.has(id)) continue;
+    seen.add(id); BRANDS.push({id, name: b.pageName || lookups[b.name]?.pageName || b.name, sector: b.sector});
+  }
+  BRAND_BY_ID = new Map(BRANDS.map(b => [b.id, b]));
+  SECTORS = [...new Set(BRANDS.map(b => b.sector))];
+}
+indexBrands();
+async function loadLookups() {
+  if (lookupsLoaded) return; lookupsLoaded = true;
+  try { const saved = await readSnapshot(snapName('seasonal-brand-pages')); if (saved) lookups = JSON.parse(saved).lookups || {}; } catch {}
+  indexBrands();
+}
+// Look up a few unresolved brands per refresh, live site only, so the search never
+// competes with visitors for Meta's rate limit. Names with no verified Page are
+// tried again after a week.
+let resolving = false;
+async function resolveBrands(max = 20) {
+  if (resolving || !directToken) return; resolving = true;
+  try {
+    const todo = BRAND_LIST.filter(b => !b.id && (!lookups[b.name] || (!lookups[b.name].id && Date.now() - lookups[b.name].at > 7 * DAY))).slice(0, max);
+    for (const b of todo) {
+      let result: DiscoveryResult | null = null;
+      try { result = await discoverTradingName(b.name, {token: directToken, directory: await directorySearch(b.name)}); } catch {}
+      if (!result || result.status === 'lookup_failed') break; // probably rate-limited: stop and try again next refresh
+      const top = result.status === 'resolved' ? result.advertisers.find(a => a.confidence === 'verified' && /^\d{3,30}$/.test(a.id)) : undefined;
+      lookups[b.name] = top ? {id: top.id, pageName: top.name, at: Date.now()} : {at: Date.now()};
+      await sleep(4000);
+    }
+    if (todo.length) { indexBrands(); await writeSnapshot(snapName('seasonal-brand-pages'), JSON.stringify({savedAt: new Date().toISOString(), lookups})); }
+  } finally { resolving = false; }
+}
+const MAJOR_IDS: Record<string, true> = Object.fromEntries(Object.values(MAJOR_PAGES).map(id => [id, true]));
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 let lastCall = 0, failures = 0, calls = 0, rateLimited = false;
 async function paced() { const wait = lastCall + 3600 - Date.now(); if (wait > 0) await sleep(wait); lastCall = Date.now(); }
 const cache = new Map<string, {at: number; data: unknown}>();
 const inflight = new Map<string, Promise<unknown>>();
 const archives = new Map<string, Map<string, Arch>>();
-const rotation = new Map<string, number>();
+// A brand page's ads serve both events, so each page is fetched once per refresh window.
+const pageCache = new Map<string, {at: number; ads: Ad[]}>();
 const DAY = 86400000;
 const days = (start: string) => { const t = Date.parse(start + 'T00:00:00Z'); return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / DAY)) : null; };
 // The season a date belongs to: January still counts towards last year's Christmas.
@@ -142,29 +185,37 @@ async function saveArchive(key: string, arch: Map<string, Arch>) {
 }
 
 // Which advertiser pages to check by ID this refresh: the big five every time,
-// plus the next slice of a rotating list (known UK brands + everyone already
-// found running seasonal ads, busiest first).
-async function pagesToCheck(key: string, arch: Map<string, Arch>) {
+// then the next slice of the curated list and every advertiser already in the
+// archive. The slice follows the clock, so both events check the same brands in
+// the same window and share the fetched pages.
+function pagesToCheck(arch: Map<string, Arch>) {
   const fixed = Object.values(MAJOR_PAGES);
   const rota: string[] = [];
   const add = (id: string) => { if (/^\d{1,30}$/.test(id) && !fixed.includes(id) && !rota.includes(id)) rota.push(id); };
-  for (const name of BRAND_NAMES) { try { for (const p of await directorySearch(name)) if (p.score >= 5) { add(p.id); break; } } catch {} }
+  for (const b of BRANDS) add(b.id);
   const counts = new Map<string, number>();
-  for (const a of arch.values()) counts.set(a.p, (counts.get(a.p) || 0) + 1);
-  for (const [id] of [...counts].sort((x, y) => y[1] - x[1])) add(id);
+  for (const a of arch.values()) if (!BRAND_BY_ID.has(a.p) && (a.r || 0) >= MIN_REACH) counts.set(a.p, (counts.get(a.p) || 0) + 1);
+  for (const [id] of [...counts].sort((x, y) => y[1] - x[1]).slice(0, 100)) add(id);
   const per = directToken ? ROTATE_PER_RUN : 8;
-  const start = (rotation.get(key) || 0) % Math.max(1, rota.length);
+  const start = (Math.floor(Date.now() / TTL) * per) % Math.max(1, rota.length);
   const slice = rota.length <= per ? rota : [...rota.slice(start, start + per), ...rota.slice(0, Math.max(0, start + per - rota.length))];
-  rotation.set(key, start + per);
   return {pages: [...fixed, ...slice], pool: fixed.length + rota.length};
 }
+async function pageAds(id: string, n: number) {
+  const hit = pageCache.get(id);
+  if (hit && Date.now() - hit.at < 2 * 3600 * 1000) return hit.ads;
+  const before = failures, ads = await search(id, id, n);
+  if (failures === before && !rateLimited) pageCache.set(id, {at: Date.now(), ads});
+  if (pageCache.size > 600) for (const [k, v] of pageCache) if (Date.now() - v.at > 2 * 3600 * 1000) pageCache.delete(k);
+  return ads;
+}
 
-type Item = {id: string; pageId: string; pageName: string; title: string; copy: string; start: string; days: number | null; run: number; reach: number | null; live: boolean; lastSeen: string; versions?: number};
+type Item = {id: string; pageId: string; pageName: string; title: string; copy: string; start: string; days: number | null; run: number; reach: number | null; live: boolean; lastSeen: string; versions?: number; sector: string};
 const copyKey = (a: Arch) => (a.c || a.t || '').toLowerCase().replace(/\s+/g, ' ').slice(0, 90);
 const runDays = (a: Arch) => { const s = Date.parse(a.s + 'T00:00:00Z'); return Number.isFinite(s) ? Math.max(0, Math.floor((a.l - s) / DAY)) : 0; };
-const toItem = (a: Arch, now: number, extra: Partial<Item> = {}): Item => ({id: a.i, pageId: a.p, pageName: a.n, title: a.t === 'Ad creative' ? '' : a.t, copy: (a.c === 'No ad copy provided by Meta.' ? '' : a.c).slice(0, 320), start: a.s, days: days(a.s), run: runDays(a), reach: a.r, live: now - a.l < LIVE_WINDOW, lastSeen: new Date(a.l).toISOString().slice(0, 10), ...extra});
+const toItem = (a: Arch, now: number, extra: Partial<Item> = {}): Item => ({id: a.i, pageId: a.p, pageName: a.n, title: a.t === 'Ad creative' ? '' : a.t, copy: (a.c === 'No ad copy provided by Meta.' ? '' : a.c).slice(0, 240), start: a.s, days: days(a.s), run: runDays(a), reach: a.r, live: now - a.l < LIVE_WINDOW, lastSeen: new Date(a.l).toISOString().slice(0, 10), sector: BRAND_BY_ID.get(a.p)?.sector || '', ...extra});
 // One ad per advertiser: their strongest by this list's measure.
-function shortlist(sorted: Arch[], now: number, n = 12, extra?: (a: Arch) => Partial<Item>) {
+function shortlist(sorted: Arch[], now: number, n = 120, extra?: (a: Arch) => Partial<Item>) {
   const seen = new Set<string>(), perBrand = new Map<string, number>(), out: Item[] = [];
   for (const a of sorted) {
     const k = a.p + '|' + copyKey(a); if (seen.has(k)) continue; seen.add(k);
@@ -180,14 +231,15 @@ async function build(key: string) {
   const now = Date.now();
   try { directToken = (await getMetaCredential()).token || ''; } catch { directToken = ''; }
   const arch = await loadArchive(key);
+  await loadLookups();
   const seen = new Map<string, Ad>();
   const add = (list: Ad[]) => { for (const a of list) if (a && /^\d{1,30}$/.test(String(a.id)) && !seen.has(a.id)) seen.set(a.id, a); };
-  const {pages, pool: brandPool} = await pagesToCheck(key, arch);
+  const {pages, pool: brandPool} = pagesToCheck(arch);
   // The preview goes through the live site's rate-limited endpoint, so it does a lighter pass.
   const depth = (n: number) => directToken ? n : Math.max(1, Math.ceil(n / 4));
   // Brand pages first: the big retailers carry most of the reach, so they must not be the part that gets cut if Meta slows us down.
-  const jobs: [string, string, number][] = [...pages.map(id => [id, id, directToken ? 2 : 1] as [string, string, number]), ...ev.terms.map(([t, n]) => [t, '', depth(n)] as [string, string, number])];
-  await pool(jobs, directToken ? 4 : 1, async ([term, page, n]) => { add(await search(term, page, n)); });
+  const jobs: [string, string, number][] = [...pages.map(id => [id, id, directToken && id in MAJOR_IDS ? 2 : 1] as [string, string, number]), ...ev.terms.map(([t, n]) => [t, '', depth(n)] as [string, string, number])];
+  await pool(jobs, directToken ? 4 : 1, async ([term, page, n]) => { add(page ? await pageAds(page, n) : await search(term, '', n)); });
   // Merge this refresh into the season archive.
   let added = 0;
   for (const a of seen.values()) {
@@ -203,18 +255,20 @@ async function build(key: string) {
   // Advertisers across the whole season
   const byPage = new Map<string, {id: string; name: string; ads: number; reach: number; first: string}>();
   for (const a of ads) { const e = byPage.get(a.p) || {id: a.p, name: a.n, ads: 0, reach: 0, first: a.s}; e.ads++; e.reach += a.r || 0; if (a.s && (!e.first || a.s < e.first)) e.first = a.s; byPage.set(a.p, e); }
-  const advertisers = [...byPage.values()].sort((x, y) => y.reach - x.reach || y.ads - x.ads).slice(0, 15);
+  const advertisers = [...byPage.values()].sort((x, y) => y.reach - x.reach || y.ads - x.ads).slice(0, 15).map(a => ({...a, sector: BRAND_BY_ID.get(a.id)?.sector || ''}));
   // The "best" lists. Meta gives no spend or results for commercial ads, so each list is a different, stated signal.
-  const big = new Set([...Object.values(MAJOR_PAGES), ...[...byPage.values()].filter(p => p.reach >= 1_000_000).map(p => p.id)]);
+  // Main lists use the curated brands; everyone else competes in "Independents" with a minimum reach.
+  const curated = (a: Arch) => BRAND_BY_ID.has(a.p) || a.p in MAJOR_IDS;
+  const main = ads.filter(curated);
   const groups = new Map<string, Arch[]>();
-  for (const a of ads) { const k = a.p + '|' + copyKey(a); const g = groups.get(k) || []; g.push(a); groups.set(k, g); }
+  for (const a of main) { const k = a.p + '|' + copyKey(a); const g = groups.get(k) || []; g.push(a); groups.set(k, g); }
   const versions = (a: Arch) => groups.get(a.p + '|' + copyKey(a))?.length || 1;
   const tested = [...groups.values()].filter(g => g.length >= 3).map(g => g.sort((x, y) => (y.r || 0) - (x.r || 0))[0]).sort((x, y) => versions(y) - versions(x) || (y.r || 0) - (x.r || 0));
   const lists = {
-    reach: shortlist([...ads].sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now),
-    longest: shortlist(ads.filter(a => runDays(a) >= 7).sort((x, y) => runDays(y) - runDays(x) || (y.r || 0) - (x.r || 0)), now),
+    reach: shortlist([...main].sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now),
+    longest: shortlist(main.filter(a => runDays(a) >= 7).sort((x, y) => runDays(y) - runDays(x) || (y.r || 0) - (x.r || 0)), now),
     tested: shortlist(tested, now, 12, a => ({versions: versions(a)})),
-    challengers: shortlist(ads.filter(a => !big.has(a.p)).sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now)
+    challengers: shortlist(ads.filter(a => !curated(a) && (a.r || 0) >= MIN_REACH).sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now)
   };
   // Launches per day, last 42 days, across the whole archive
   const timeline: number[] = new Array(42).fill(0);
@@ -227,8 +281,9 @@ async function build(key: string) {
   return {
     event: key, name: ev.name, season: seasonYear(), updatedAt: new Date().toISOString(), partial: failures > 0 || rateLimited,
     stats: {ads: ads.length, live: live.length, advertisers: byPage.size, newThisWeek: ads.filter(a => { const d = days(a.s); return d != null && d <= 7; }).length, addedThisRefresh: added, withDiscount: depths.length, typicalDiscount: depths.length ? depths[Math.floor(depths.length / 2)] : null, deepest: depths.length ? depths[depths.length - 1] : null},
-    coverage: {keywords: ev.terms.length, brandsChecked: pages.length, brandPool, calls, since: ads.length ? new Date(Math.min(...ads.map(a => a.f))).toISOString().slice(0, 10) : null},
-    lists, top: lists.reach, timeline, advertisers, tactics, discounts: buckets
+    coverage: {keywords: ev.terms.length, brandsChecked: pages.length, brandPool, brandsTracked: BRANDS.length + Object.keys(MAJOR_IDS).filter(id => !BRAND_BY_ID.has(id)).length, calls, since: ads.length ? new Date(Math.min(...ads.map(a => a.f))).toISOString().slice(0, 10) : null},
+    sectors: SECTORS.filter(sec => lists.reach.some(a => a.sector === sec) || lists.longest.some(a => a.sector === sec)), minReach: MIN_REACH,
+    lists, top: lists.reach.slice(0, 24), timeline, advertisers, tactics, discounts: buckets
   };
 }
 
@@ -246,7 +301,7 @@ let scheduled = false;
 function scheduleRefresh() {
   if (scheduled || !IS_MAIN) return;
   scheduled = true;
-  const tick = async () => { for (const k of Object.keys(EVENTS)) { const h = cache.get(k); if (!h || Date.now() - h.at > TTL - 15 * 60000) { try { await refresh(k); } catch {} } } };
+  const tick = async () => { try { directToken = (await getMetaCredential()).token || ''; await loadLookups(); await resolveBrands(); } catch {} for (const k of Object.keys(EVENTS)) { const h = cache.get(k); if (!h || Date.now() - h.at > TTL - 15 * 60000) { try { await refresh(k); } catch {} } } };
   setTimeout(tick, 5000); setInterval(tick, 20 * 60000).unref?.();
 }
 

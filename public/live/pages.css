@@ -129,3 +129,7 @@ button{font:inherit}
 .chip.live{background:#e8f7ee;color:#1d6b3a}
 .chip.ended{background:#f2f2f5;color:var(--soft)}
 @media (max-width:520px){.col-tabs{flex-wrap:nowrap;overflow-x:auto;margin-right:-16px;padding-right:16px;scrollbar-width:none}.col-tabs button{flex:none}}
+.col-sectors{margin-top:0}
+.col-sectors button{padding:5px 12px;font-size:13px;font-weight:500;color:var(--muted)}
+.col-sectors button[aria-pressed="true"]{background:var(--paper);color:var(--ink);border-color:#c7c7cc;font-weight:650}
+.col-sectors[hidden]{display:none}

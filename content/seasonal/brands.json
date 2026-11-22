@@ -1,0 +1,1183 @@
+{
+ "_readme": "UK brands tracked by the seasonal collections, by sector. Add a brand with just a name and sector: production looks up its verified Meta Page ID automatically (AdSnoop advertiser search, a few at a time) and saves it. Give an id to pin a Page yourself.",
+ "brands": [
+  {
+   "name": "John Lewis",
+   "sector": "Department stores & marketplaces",
+   "id": "145210795501787",
+   "pageName": "John Lewis & Partners"
+  },
+  {
+   "name": "Argos",
+   "sector": "Department stores & marketplaces",
+   "id": "108712049190071",
+   "pageName": "Argos"
+  },
+  {
+   "name": "Amazon UK",
+   "sector": "Department stores & marketplaces",
+   "id": "136154403098698",
+   "pageName": "Amazon.co.uk"
+  },
+  {
+   "name": "Marks and Spencer",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "Next",
+   "sector": "Department stores & marketplaces",
+   "id": "94971738769",
+   "pageName": "Next"
+  },
+  {
+   "name": "Very",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "Selfridges",
+   "sector": "Department stores & marketplaces",
+   "id": "59335895677",
+   "pageName": "Selfridges"
+  },
+  {
+   "name": "Harrods",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "Liberty London",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "Fenwick",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "House of Fraser",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "Debenhams",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "TK Maxx",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "eBay UK",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "Temu",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "Shein",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "B&M",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "The Range",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "Home Bargains",
+   "sector": "Department stores & marketplaces"
+  },
+  {
+   "name": "Currys",
+   "sector": "Electricals & tech",
+   "id": "282722695080974",
+   "pageName": "Currys"
+  },
+  {
+   "name": "AO.com",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Samsung UK",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Apple",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Google Pixel",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Sony UK",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Dyson",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Shark",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Ninja Kitchen",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Philips",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "LG UK",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Bose",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Sonos",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Nespresso",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "De'Longhi",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Sage Appliances",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Back Market",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Richer Sounds",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Box.co.uk",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Scan Computers",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Laptops Direct",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Hisense UK",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Tefal",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Breville UK",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "Garmin",
+   "sector": "Electricals & tech"
+  },
+  {
+   "name": "ASOS",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "boohoo",
+   "sector": "Fashion & footwear",
+   "id": "112850788732826",
+   "pageName": "boohoo.com"
+  },
+  {
+   "name": "PrettyLittleThing",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "River Island",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "New Look",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Zara",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "H&M",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Uniqlo",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Primark",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Matalan",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Fat Face",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "White Stuff",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Joules",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Seasalt Cornwall",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Boden",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Monsoon",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Phase Eight",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Hobbs",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Whistles",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Reiss",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Ted Baker",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "AllSaints",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Superdry",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Jack Wills",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Hollister",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Abercrombie & Fitch",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Levi's",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Nike",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "adidas",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Puma",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "JD Sports",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Sports Direct",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Footasylum",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Schuh",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Office",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Clarks",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Dr. Martens",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Kurt Geiger",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Skechers",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Gymshark",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Sweaty Betty",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Lululemon",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Charles Tyrwhitt",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Moss",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Mango",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "& Other Stories",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "COS",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Lounge Underwear",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Oodie",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "M&Co",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Quiz Clothing",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "In The Style",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Never Fully Dressed",
+   "sector": "Fashion & footwear"
+  },
+  {
+   "name": "Boots",
+   "sector": "Beauty & fragrance",
+   "id": "137917343831",
+   "pageName": "Boots UK"
+  },
+  {
+   "name": "Superdrug",
+   "sector": "Beauty & fragrance",
+   "id": "149952066774",
+   "pageName": "Superdrug"
+  },
+  {
+   "name": "The Perfume Shop",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Space NK",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Lookfantastic",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Cult Beauty",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Charlotte Tilbury",
+   "sector": "Beauty & fragrance",
+   "id": "198962256816920",
+   "pageName": "Charlotte Tilbury"
+  },
+  {
+   "name": "Rituals",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "The Body Shop",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Lush",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Sephora UK",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Fenty Beauty",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "MAC Cosmetics",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Clinique",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Estee Lauder",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "No7",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "The Ordinary",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Elemis",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Liz Earle",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Molton Brown",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Jo Malone London",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Glossybox",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Benefit Cosmetics",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Huda Beauty",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Rimmel London",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "NYX Professional Makeup",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Olaplex",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "ghd",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Cloud Nine Hair",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Beauty Bay",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Fragrance Direct",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Feelunique",
+   "sector": "Beauty & fragrance"
+  },
+  {
+   "name": "Dunelm",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "IKEA UK",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Wayfair UK",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Habitat",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Oak Furnitureland",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Furniture Village",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "DFS",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "ScS",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Sofology",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Loaf",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Swoon",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Cox & Cox",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "The White Company",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "OKA",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Simba",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Emma Sleep",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Eve Sleep",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Silentnight",
+   "sector": "Home & furniture",
+   "id": "179100528779193",
+   "pageName": "Silentnight"
+  },
+  {
+   "name": "Dreams",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Bensons for Beds",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Lakeland",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Robert Dyas",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Le Creuset",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Joseph Joseph",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Brabantia",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Ruggable",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Christy Towels",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "Cotswold Company",
+   "sector": "Home & furniture"
+  },
+  {
+   "name": "B&Q",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Wickes",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Screwfix",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Toolstation",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Homebase",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Dobbies",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Hillier Garden Centres",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Halfords",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Kwik Fit",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Euro Car Parts",
+   "sector": "DIY, garden & motoring"
+  },
+  {
+   "name": "Smyths Toys",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "The Entertainer",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "Hamleys",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "LEGO",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "Mattel",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "Hasbro",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "Mamas & Papas",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "JoJo Maman Bebe",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "Frugi",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "PlayStation UK",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "Xbox UK",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "Nintendo UK",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "GAME",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "CeX",
+   "sector": "Toys, kids & gaming"
+  },
+  {
+   "name": "Waterstones",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "WHSmith",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "The Works",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Hobbycraft",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Paperchase",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Moonpig",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Funky Pigeon",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Card Factory",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "notonthehighstreet",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Etsy",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Prezzybox",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Firebox",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Menkind",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "IWOOT",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Virgin Experience Days",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Buyagift",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Red Letter Days",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Photobox",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Snapfish",
+   "sector": "Books, gifts & cards"
+  },
+  {
+   "name": "Pandora",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Goldsmiths",
+   "sector": "Jewellery & watches",
+   "id": "369815513040048",
+   "pageName": "Goldsmiths"
+  },
+  {
+   "name": "Ernest Jones",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "H.Samuel",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Beaverbrooks",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Mappin & Webb",
+   "sector": "Jewellery & watches",
+   "id": "261055027239238",
+   "pageName": "Mappin & Webb"
+  },
+  {
+   "name": "Watches of Switzerland",
+   "sector": "Jewellery & watches",
+   "id": "134808179934137",
+   "pageName": "Watches of Switzerland Official"
+  },
+  {
+   "name": "Missoma",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Monica Vinader",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Abbott Lyon",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Astrid & Miyu",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Swarovski",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Daniel Wellington",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Thomas Sabo",
+   "sector": "Jewellery & watches"
+  },
+  {
+   "name": "Tesco",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Sainsbury's",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Asda",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Morrisons",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Waitrose",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Aldi UK",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Lidl GB",
+   "sector": "Food, drink & grocery",
+   "id": "155239327867227",
+   "pageName": "Lidl GB"
+  },
+  {
+   "name": "Iceland Foods",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Co-op",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Ocado",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Hotel Chocolat",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Thorntons",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Cadbury",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Lindt",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Fortnum & Mason",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Gousto",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "HelloFresh",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Mindful Chef",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Majestic Wine",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Virgin Wines",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Laithwaites",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Naked Wines",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Beer52",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Graze",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Bloom & Wild",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Patch Plants",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Serenata Flowers",
+   "sector": "Food, drink & grocery"
+  },
+  {
+   "name": "Holland & Barrett",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Myprotein",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Bulk",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Huel",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Grenade",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Pets at Home",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Zooplus UK",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Lily's Kitchen",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Butternut Box",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Tails.com",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "The Gym Group",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "PureGym",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Peloton",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Fitbit",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "WHOOP",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Oura",
+   "sector": "Health, fitness & pets"
+  },
+  {
+   "name": "Jet2holidays",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "TUI UK",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "easyJet",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "British Airways",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Ryanair",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Booking.com",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Airbnb",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Trainline",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Eurostar",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Center Parcs",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Haven Holidays",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Butlin's",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Merlin Annual Pass",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Ticketmaster UK",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Premier Inn",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Travelodge",
+   "sector": "Travel & experiences"
+  },
+  {
+   "name": "Sky",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "Virgin Media",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "BT",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "EE",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "Vodafone UK",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "O2",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "Three UK",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "giffgaff",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "iD Mobile",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "Netflix",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "Disney+",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "Spotify",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "Audible",
+   "sector": "Telecoms & subscriptions"
+  },
+  {
+   "name": "NOW",
+   "sector": "Telecoms & subscriptions"
+  }
+ ]
+}
