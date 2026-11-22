@@ -163,12 +163,12 @@ type Item = {id: string; pageId: string; pageName: string; title: string; copy: 
 const copyKey = (a: Arch) => (a.c || a.t || '').toLowerCase().replace(/\s+/g, ' ').slice(0, 90);
 const runDays = (a: Arch) => { const s = Date.parse(a.s + 'T00:00:00Z'); return Number.isFinite(s) ? Math.max(0, Math.floor((a.l - s) / DAY)) : 0; };
 const toItem = (a: Arch, now: number, extra: Partial<Item> = {}): Item => ({id: a.i, pageId: a.p, pageName: a.n, title: a.t === 'Ad creative' ? '' : a.t, copy: (a.c === 'No ad copy provided by Meta.' ? '' : a.c).slice(0, 320), start: a.s, days: days(a.s), run: runDays(a), reach: a.r, live: now - a.l < LIVE_WINDOW, lastSeen: new Date(a.l).toISOString().slice(0, 10), ...extra});
-// One ad per distinct message, at most two per brand.
+// One ad per advertiser: their strongest by this list's measure.
 function shortlist(sorted: Arch[], now: number, n = 12, extra?: (a: Arch) => Partial<Item>) {
   const seen = new Set<string>(), perBrand = new Map<string, number>(), out: Item[] = [];
   for (const a of sorted) {
     const k = a.p + '|' + copyKey(a); if (seen.has(k)) continue; seen.add(k);
-    const c = perBrand.get(a.p) || 0; if (c >= 2) continue; perBrand.set(a.p, c + 1);
+    const c = perBrand.get(a.p) || 0; if (c >= 1) continue; perBrand.set(a.p, c + 1);
     out.push(toItem(a, now, extra?.(a))); if (out.length >= n) break;
   }
   return out;
