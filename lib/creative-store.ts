@@ -49,7 +49,7 @@ export async function readSnapshot(name:string):Promise<string|null>{
  try{const r=await r2('GET',`directory/snapshots/${name}.json`);return r.ok?await r.text():null;}catch{return null;}
 }
 export async function writeSnapshot(name:string,json:string){
- if(!storeReady||!/^[a-z0-9-]{1,40}$/.test(name)||json.length>2_000_000)return;
+ if(!storeReady||!/^[a-z0-9-]{1,40}$/.test(name)||json.length>(name.includes('seasonal-archive')?8_000_000:2_000_000))return;
  try{await r2('PUT',`directory/snapshots/${name}.json`,Buffer.from(json),'application/json');}catch{}
 }
 

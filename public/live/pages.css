@@ -120,3 +120,13 @@ button{font:inherit}
 .legal table{width:100%;border-collapse:collapse;font-size:14px;margin:0 0 18px}
 .legal th,.legal td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:10px 14px 10px 0}
 .legal th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700}
+/* Seasonal collection: "best" list switcher */
+.col-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 10px}
+.col-tabs button{padding:8px 15px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:14px;font-weight:600;cursor:pointer}
+.col-tabs button:hover{border-color:#c7c7cc}
+.col-tabs button[aria-selected="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.col-why{font-size:14px;color:var(--muted);margin:0 0 18px;max-width:760px}
+.ad-reason{font-size:13.5px;margin:0;padding:9px 11px;border-radius:12px;background:#fff8e1;color:#5c4400}
+.chip.live{background:#e8f7ee;color:#1d6b3a}
+.chip.ended{background:#f2f2f5;color:var(--soft)}
+@media (max-width:520px){.col-tabs{flex-wrap:nowrap;overflow-x:auto;margin-right:-16px;padding-right:16px;scrollbar-width:none}.col-tabs button{flex:none}}
