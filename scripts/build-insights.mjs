@@ -92,7 +92,7 @@ function parseAngle(file) {
     if (!/^https:\/\/media\.adsnoop\.co\.uk\//.test(e.image)) fail(`angle ${slug}: example images must come from media.adsnoop.co.uk`);
   }
   const brands = new Set(meta.examples.map(e => e.page)).size;
-  return { ...meta, slug, body: m[2], brands, url: `/insights/angles/${slug}` };
+  return { ...meta, slug, body: m[2], brands, url: `/angles/${slug}` };
 }
 const allAngles = fs.existsSync(ANGLES_DIR) ? fs.readdirSync(ANGLES_DIR).filter(f => f.endsWith('.md') && !f.startsWith('_')).map(f => parseAngle(path.join(ANGLES_DIR, f))) : [];
 const angles = allAngles.filter(a => a.status === 'published' || SHOW_DRAFTS).sort((a, b) => b.brands - a.brands || a.name.localeCompare(b.name));
@@ -181,12 +181,15 @@ if (!headerSrc || !footerSrc || !consentSrc) fail('could not read the shared hea
 if (!headerSrc.includes('href="/insights"')) fail('the site header has no Insights link; add it to public/live/*.html first');
 const header = headerSrc
   .replace(/<a class="nav-btn" href="\/insights"[^>]*>/, '<a class="nav-btn active" href="/insights" aria-current="page">');
+const headerAngles = headerSrc
+  .replace(/<a class="nav-btn" href="\/angles"[^>]*>/, '<a class="nav-btn active" href="/angles" aria-current="page">');
+if (!headerSrc.includes('href="/angles"')) fail('the site header has no Angles link; add it to public/live/*.html first');
 const footer = footerSrc;
 
 const cssFile = path.join(ASSETS, 'insights.css'), jsFile = path.join(ASSETS, 'insights.js');
 const cssV = hash(fs.readFileSync(cssFile, 'utf8')), jsV = hash(fs.readFileSync(jsFile, 'utf8'));
 
-function page({ title, description, canonical, ogImage, ogType = 'website', jsonLd = [], body, noindex, pageData, extraHead = '' }) {
+function page({ title, description, canonical, ogImage, ogType = 'website', jsonLd = [], body, noindex, pageData, extraHead = '', nav = 'insights' }) {
   return `<!doctype html><html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090e20">
 <title>${esc(title)}</title><meta name="description" content="${esc(description)}">
 <link rel="canonical" href="${SITE}${canonical}"><meta name="robots" content="${noindex ? 'noindex, follow' : 'index, follow, max-image-preview:large'}">
@@ -199,7 +202,7 @@ function page({ title, description, canonical, ogImage, ogType = 'website', json
 ${jsonLd.map(o => `<script type="application/ld+json">${json(o)}</script>`).join('')}
 </head><body${pageData ? ` data-ins='${esc(JSON.stringify(pageData))}'` : ''}>
 <a href="#main" class="ins-skip">Skip to content</a>
-${header}
+${nav === 'angles' ? headerAngles : header}
 ${body}
 ${footer}
 ${consentSrc}
@@ -282,7 +285,6 @@ function hubPage() {
 ${categoryNav(null)}
 </div></section>
 ${featured ? `<section class="ins-wrap ins-featured" aria-labelledby="featured-h"><h2 id="featured-h" class="sr-only">Featured</h2><div class="ins-featured-grid">${card(featured, { size: 'lg', eager: true, placement: 'featured' })}<div class="ins-featured-side">${side.map(a => card(a, { size: 'sm', placement: 'featured' })).join('')}</div></div></section>` : ''}
-${anglesHubSection()}
 <section class="ins-wrap ins-all" aria-labelledby="all-h"><div class="ins-section-head"><h2 id="all-h">More insights</h2><p class="ins-results" aria-live="polite" id="ins-results"></p></div>
 <div class="ins-grid" id="ins-grid">${articles.map(a => card(a, { dup: featured && (a === featured || side.includes(a)) && articles.length > 3 })).join('')}</div>
 <div class="ins-empty" id="ins-empty" hidden><p><strong>No articles match that search yet.</strong></p><p>Try a broader term, browse a topic below, or search competitor ads directly with AdSnoop.</p></div></section>
@@ -349,7 +351,7 @@ function anglesHubSection() {
 <div class="ang-head"><div><p class="ins-eyebrow">Angles worth testing · Week of ${fmtDate(angleWeek.week).replace(/ \d{4}$/, '')}</p>
 <h2 id="ang-h">${esc(angleWeek.headline || 'Creative angles worth testing this week')}</h2>
 <p class="ang-sub">${esc(angleWeek.intro || `Spotted across ${brandCount} UK brands running ads right now, picked by the AdSnoop team.`)}</p></div>
-<a class="ang-more" href="/insights/angles" data-ang="library" data-ang-place="hub">Explore all ${angles.length} angles <span aria-hidden="true">→</span></a></div>
+<a class="ang-more" href="#lib-h" data-ang="library" data-ang-place="hub">See all ${angles.length} angles <span aria-hidden="true">↓</span></a></div>
 <div class="ang-grid">${featured.map(a => angleFeatureCard(a, 'hub')).join('')}</div>
 ${rest.length ? `<div class="ang-strip">${rest.map(a => angleTile(a, 'hub_strip')).join('')}</div>` : ''}
 ${col && col.angle && angles.find(a => a.slug === col.angle) ? (() => { const ca = angles.find(a => a.slug === col.angle); return `<div class="ang-collection"><div><p class="ins-eyebrow">Collection of the week</p><h3>${esc(col.title)}</h3><p>${esc(col.text)}</p><a class="ins-btn ang-btn" href="${ca.url}" data-ang="${ca.slug}" data-ang-place="collection">View collection <span aria-hidden="true">→</span></a></div><div class="ang-stack">${ca.examples.slice(0, 3).map(e => angleShot(e)).join('')}</div></div>`; })() : ''}
@@ -359,18 +361,19 @@ ${col && col.angle && angles.find(a => a.slug === col.angle) ? (() => { const ca
 function anglesLibraryPage() {
   const sectors = [...new Set(angles.flatMap(a => a.sectors || []))].sort();
   const body = `<main id="main" class="ins-hub">
-<section class="ins-hero ins-hero-cat" style="--c:#8b5cf6"><div class="ins-wrap ins-hero-in"><nav class="ins-crumbs ins-crumbs-dark" aria-label="Breadcrumb"><ol><li><a href="/insights">Insights</a></li><li aria-current="page">Angles worth testing</li></ol></nav>
+<section class="ins-hero ins-hero-cat" style="--c:#8b5cf6"><div class="ins-wrap ins-hero-in"><p class="ins-eyebrow">AdSnoop Angles</p>
 <h1>Creative angles worth testing</h1><p class="ins-lede">Formats and hooks that UK brands are running on Facebook and Instagram right now, with live examples and a note on how to test each one.</p>
 ${sectors.length > 1 ? `<nav class="ins-catnav ang-filter" aria-label="Filter angles by sector"><button type="button" aria-pressed="true" data-ang-sector="">All sectors</button>${sectors.map(s => `<button type="button" aria-pressed="false" data-ang-sector="${esc(s)}"><i aria-hidden="true"></i>${esc(s)}</button>`).join('')}</nav>` : ''}
 </div></section>
-<section class="ins-wrap ins-all" aria-label="All angles"><div class="ang-library" id="ang-library">${angles.map(a => `<article class="ang-lib-card" data-sectors="${esc((a.sectors || []).join('|'))}"><a href="${a.url}" data-ang="${a.slug}" data-ang-place="library"><div class="ang-lib-media">${a.examples.slice(0, 2).map(e => angleShot(e)).join('')}</div><div class="ang-lib-body">${angleMeta(a)}<h2>${esc(a.name)}</h2><p>${esc(a.summary)}</p></div></a></article>`).join('')}</div>
+${anglesHubSection()}
+<section class="ins-wrap ins-all" aria-labelledby="lib-h"><div class="ins-section-head"><h2 id="lib-h">All angles</h2></div><div class="ang-library" id="ang-library">${angles.map(a => `<article class="ang-lib-card" data-sectors="${esc((a.sectors || []).join('|'))}"><a href="${a.url}" data-ang="${a.slug}" data-ang-place="library"><div class="ang-lib-media">${a.examples.slice(0, 2).map(e => angleShot(e)).join('')}</div><div class="ang-lib-body">${angleMeta(a)}<h2>${esc(a.name)}</h2><p>${esc(a.summary)}</p></div></a></article>`).join('')}</div>
 <p class="ang-note">Examples are UK ads that were live when we reviewed them. Counts show how many brands we found using each angle in our sample, not across all of Meta.</p></section></main>
 ${productBand('angles')}`;
   const ld = [
-    { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Creative angles worth testing | AdSnoop Insights', url: `${SITE}/insights/angles`, inLanguage: 'en-GB', publisher: ORG },
-    crumbs([['Insights', '/insights'], ['Angles worth testing', '/insights/angles']]),
+    { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Creative angles worth testing | AdSnoop', url: `${SITE}/angles`, inLanguage: 'en-GB', publisher: ORG },
+    crumbs([['Angles worth testing', '/angles']]),
   ];
-  return page({ title: 'Meta Ad Creative Angles Worth Testing, With UK Examples | AdSnoop', description: 'Creative formats and hooks UK brands are running on Facebook and Instagram now, with live ad examples and how to test each angle.', canonical: '/insights/angles', ogImage: '/insights-og/hub', jsonLd: ld, body, noindex: !liveAngles.length, pageData: { type: 'angles' } });
+  return page({ title: 'Meta Ad Creative Angles Worth Testing, With UK Examples | AdSnoop', description: 'Creative formats and hooks UK brands are running on Facebook and Instagram now, with live ad examples and how to test each angle.', canonical: '/angles', ogImage: '/insights-og/hub', jsonLd: ld, body, noindex: !liveAngles.length, pageData: { type: 'angles' }, nav: 'angles' });
 }
 
 function anglePage(a) {
@@ -378,7 +381,7 @@ function anglePage(a) {
   const html = new Marked({ gfm: true }).parse(a.body || '');
   const body = `<main id="main" class="ins-hub ang-page">
 ${a.status === 'draft' ? '<div class="ins-draft-bar" role="note">Draft preview: this angle is not published, not indexed and is hidden on the live site.</div>' : ''}
-<header class="ins-wrap ang-page-head"><nav class="ins-crumbs" aria-label="Breadcrumb"><ol><li><a href="/insights">Insights</a></li><li><a href="/insights/angles">Angles worth testing</a></li></ol></nav>
+<header class="ins-wrap ang-page-head"><nav class="ins-crumbs" aria-label="Breadcrumb"><ol><li><a href="/angles">Angles worth testing</a></li></ol></nav>
 <div class="ang-page-top"><div>${angleMeta(a)}<h1>${esc(a.name)}</h1><p class="ins-dek">${esc(a.summary)}</p>
 <div class="ang-why"><p class="ang-lbl">Why it works</p><p>${esc(a.why)}</p></div></div>
 <a class="ang-ad ang-ad-lg" href="${searchLink(a.examples[0])}" data-ins-cta="angle_page_hero">${angleShot(a.examples[0], { eager: true })}<span class="ang-ad-brand">${esc(a.examples[0].brand)}</span></a></div></header>
@@ -386,14 +389,14 @@ ${html.trim() ? `<section class="ins-wrap"><div class="ins-prose ang-test">${htm
 <section class="ins-wrap ang-examples" aria-labelledby="ex-h"><div class="ins-section-head"><h2 id="ex-h">${a.examples.length} live UK example${a.examples.length === 1 ? '' : 's'}</h2></div>
 <div class="ang-ex-grid">${a.examples.map(e => `<a class="ang-ex" href="${searchLink(e)}" data-ins-cta="angle_example">${angleShot(e)}<span class="ang-ex-cap"><b>${esc(e.brand)}</b><small>${[e.sector, daysText(e.days)].filter(Boolean).map(esc).join(' · ')}</small>${e.note ? `<small class="ang-ex-note">${esc(e.note)}</small>` : ''}</span></a>`).join('')}</div>
 <p class="ang-note">Click an example to see everything that brand is running now. Examples were live when we reviewed them${a.updatedAt ? ` on ${fmtDate(a.updatedAt)}` : ''} and may since have stopped.</p></section>
-${others.length ? `<section class="ins-wrap ang-others" aria-labelledby="oth-h"><div class="ins-section-head"><h2 id="oth-h">More angles to test</h2><a href="/insights/angles" class="ins-more">All angles <span aria-hidden="true">→</span></a></div><div class="ang-strip">${others.map(o => angleTile(o, 'related')).join('')}</div></section>` : ''}
+${others.length ? `<section class="ins-wrap ang-others" aria-labelledby="oth-h"><div class="ins-section-head"><h2 id="oth-h">More angles to test</h2><a href="/angles" class="ins-more">All angles <span aria-hidden="true">→</span></a></div><div class="ang-strip">${others.map(o => angleTile(o, 'related')).join('')}</div></section>` : ''}
 </main>
 ${productBand('angle')}`;
   const ld = [
     { '@context': 'https://schema.org', '@type': 'WebPage', name: `${a.name}: Meta ad angle with UK examples`, description: a.summary, url: SITE + a.url, inLanguage: 'en-GB', publisher: ORG },
-    crumbs([['Insights', '/insights'], ['Angles worth testing', '/insights/angles'], [a.name, a.url]]),
+    crumbs([['Angles worth testing', '/angles'], [a.name, a.url]]),
   ];
-  return page({ title: `${a.name}: Meta Ad Angle With UK Examples | AdSnoop`, description: `${a.summary}`.slice(0, 160), canonical: a.url, ogImage: '/insights-og/hub', jsonLd: ld, body, noindex: a.status === 'draft', pageData: { type: 'angle', slug: a.slug } });
+  return page({ title: `${a.name}: Meta Ad Angle With UK Examples | AdSnoop`, description: `${a.summary}`.slice(0, 160), canonical: a.url, ogImage: '/insights-og/hub', jsonLd: ld, body, noindex: a.status === 'draft', pageData: { type: 'angle', slug: a.slug }, nav: 'angles' });
 }
 
 function rss() {
@@ -414,7 +417,7 @@ function sitemap(catIndexable) {
       lastmod: latestContentDate(live.filter(a => a.category === c.slug)),
     })),
     ...live.map(a => ({ loc: a.url, lastmod: a.updatedAt || a.publishedAt })),
-    ...(liveAngles.length ? [{ loc: '/insights/angles', lastmod: liveAngles.map(a => a.updatedAt).filter(Boolean).sort().at(-1) }] : []),
+    ...(liveAngles.length ? [{ loc: '/angles', lastmod: liveAngles.map(a => a.updatedAt).filter(Boolean).sort().at(-1) }] : []),
     ...liveAngles.map(a => ({ loc: a.url, lastmod: a.updatedAt }))];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(u => `  <url>\n    <loc>${SITE}${u.loc}</loc>${u.lastmod ? `\n    <lastmod>${isoDate(u.lastmod)}</lastmod>` : ''}\n  </url>`).join('\n')}\n</urlset>\n`;
 }
