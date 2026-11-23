@@ -24,10 +24,10 @@ const SCHEMA={
  type:'object',additionalProperties:false,required:['headline','points','testIdea'],
  properties:{
   headline:{type:'string',description:'One sentence, at most 20 words: the main thing this brand is pushing in its live ads right now.'},
-  points:{type:'array',minItems:2,maxItems:4,items:{type:'object',additionalProperties:false,required:['label','text','adIds'],properties:{
+  points:{type:'array',description:'2 to 4 points.',items:{type:'object',additionalProperties:false,required:['label','text','adIds'],properties:{
    label:{type:'string',description:'2 to 4 words, e.g. "Leading offer", "Main hook", "Audience", "Proof".'},
    text:{type:'string',description:'One sentence, at most 25 words, specific to these ads.'},
-   adIds:{type:'array',items:{type:'string'},maxItems:3,description:'IDs of ads that show this, copied exactly from the input.'}}}},
+   adIds:{type:'array',items:{type:'string'},description:'Up to 3 IDs of ads that show this, copied exactly from the input.'}}}},
   testIdea:{type:'string',description:'One sentence: a concrete creative test a competitor could run in response.'}}};
 
 const SYSTEM=`You help UK marketers understand a competitor's live Meta (Facebook and Instagram) ads.
