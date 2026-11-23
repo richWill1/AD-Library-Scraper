@@ -36,7 +36,7 @@
   }
   function roundRect(x, y, ww, hh, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + ww, y, x + ww, y + hh, r); ctx.arcTo(x + ww, y + hh, x, y + hh, r); ctx.arcTo(x, y + hh, x, y, r); ctx.arcTo(x, y, x + ww, y, r); ctx.closePath(); }
   function brand() {
-    const m = (document.getElementById("loadbarText")?.textContent || "").match(/Collecting (.+?)’s creatives/);
+    const m = (document.getElementById("loadbarText")?.textContent || "").match(/Loading (.+?)’s ads/);
     return m ? m[1] : "";
   }
   function caption() {

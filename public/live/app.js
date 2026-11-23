@@ -74,8 +74,8 @@ function searchClient(query){
 // Ad-text mentions are never treated as that Page.
 async function resolveByName(q){
  const rid=++requestNumber;
- error("");busy(true);state.rows=[];state.identity=null;state.adsFailed=false;renderCards();
- feedback("Checking the brand’s website and the Ad Library for “"+q+"”…");
+ error("");busy(true,q);state.rows=[];state.identity=null;state.adsFailed=false;renderCards();
+ feedback("");
  let d=null,ok=false;
  try{
   const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(25000)});
@@ -102,7 +102,7 @@ async function resolveByName(q){
 // every advertiser using them by UK reach (for example "blinds" lists the big
 // blinds retailers). A multi-word search that clearly names one of them opens it.
 async function discoverAdvertisers(q,rid,fallback,open,extra=[]){
- busy(true);feedback("Finding every advertiser running ads about “"+q+"”…");
+ busy(true,q);feedback("");
  let d=null;
  try{const r=await fetch("/api/discover?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(70000)});if(r.ok)d=await r.json()}catch{}
  if(rid!==requestNumber)return;
@@ -122,7 +122,20 @@ const formatDate=s=>{if(!s)return "Unknown";const d=new Date(s.length===10?s+"T1
 const reach=n=>typeof n==="number"&&Number.isFinite(n)?n.toLocaleString("en-GB"):"Not available";
 function error(msg){const el=$("error");el.textContent=msg;el.hidden=!msg;}
 function feedback(message){const el=$("feedback");el.textContent=message;el.hidden=!message;}
-function busy(v){state.loading=v;const stage=$("as-search-stage");if(stage){stage.hidden=!v;if(v){const label=$("as-stage-query");if(label)label.textContent="Scanning "+(state.brand||state.query||"competitor")+"…";}}if(v)setBar("search");else if(!state.rows.length)setBar("hide");else updateReveal(true);$("searchGo").disabled=v;$("searchGo").textContent=v?"Searching…":"Search ↗";}
+function busy(v,lookup=""){state.loading=v;const stage=$("as-search-stage");if(stage){stage.hidden=!v;stageMessages(v,lookup)}if(v)setBar("search");else if(!state.rows.length)setBar("hide");else updateReveal(true);$("searchGo").disabled=v;$("searchGo").textContent=v?"Searching…":"Search ↗";}
+// While ads are being found, say plainly what is happening and keep the message moving on long waits.
+let stageTimer=0;
+function stageMessages(on,lookup){
+ clearInterval(stageTimer);stageTimer=0;if(!on)return;
+ const who=lookup||state.brand||state.query||"this advertiser",where=state.coverage==="GB"?"the UK":"the selected countries",start=Date.now();
+ const title=$("as-stage-query");if(title)title.textContent=lookup?"Finding “"+who+"”…":state.page?"Loading ads for "+who+"…":"Finding "+who+"’s ads…";
+ const lines=lookup?[[0,"Matching the brand’s website to its Facebook Page, so we load the right advertiser’s ads."],[8,"Checking which advertisers are running ads about “"+who+"”."],[25,"Still searching. Meta’s Ad Library is slower than usual right now."],[50,"Nearly there, thanks for waiting. Meta is taking its time today."]]:[[0,state.page?"Asking Meta’s Ad Library for every ad "+who+" is running in "+where+".":"Looking up advertisers called “"+who+"” in Meta’s Ad Library."],[6,"Reading each ad’s copy, format, start date and reach."],[13,"Bigger advertisers can have hundreds of ads, so this can take up to 30 seconds."],[26,"Still loading. Meta’s Ad Library is slower than usual right now."],[50,"Nearly there, thanks for waiting. Meta is taking its time today."]];
+ const tick=()=>{const s=Math.floor((Date.now()-start)/1000),hint=$("as-stage-hint"),time=$("as-stage-time");
+  let line=lines[0][1];for(const [at,t] of lines)if(s>=at)line=t;
+  if(hint&&hint.textContent!==line)hint.textContent=line;
+  if(time)time.textContent=s>=3?s+"s":"";};
+ tick();stageTimer=setInterval(tick,1000);
+}
 function safeMedia(input){try{const u=new URL(input);return u.protocol==="https:"&&(u.hostname.endsWith(".fbcdn.net")||u.hostname==="media.adsnoop.co.uk")&&!u.username&&!u.password&&!u.searchParams.has("access_token")?u.href:null}catch{return null}}
 function save(){try{localStorage.setItem(storeKey,JSON.stringify(Array.from(state.saved.values()).slice(0,300)))}catch(e){feedback("Saved research cannot be written to this browser. Use a local download for a backup.");}}
 function allRows(){return state.view==="saved"?Array.from(state.saved.values()):state.rows}
@@ -210,7 +223,8 @@ function showHeader(){
  $("comparisonBar").classList.toggle("show",state.compare.size>0);
  $("compareCount").textContent=state.compare.size+" of 3 selected";
 }
-function loadingCards(){return ""}
+function skelCard(i){return '<div class="tile-skel ad-skel" aria-hidden="true" style="animation-delay:'+(i%3)*.15+'s"><div class="ask-img"><span class="ls-spin"></span>Loading ad…</div><div class="ask-body"><i style="width:45%"></i><i style="width:92%"></i><i style="width:78%"></i><i style="width:58%"></i></div></div>'}
+function loadingCards(){return Array.from({length:6},(_,i)=>skelCard(i)).join("")}
 // Numbers count up the first time a brand loads, then update quietly.
 function countTo(el,to){
  if(!el)return;const key=state.page+"|"+state.view,prev=Number(el.dataset.v||0);
@@ -460,7 +474,7 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
   state.rows=[];state.cursor=null;state.needsPageStart=false;
   renderCards();
  }
- feedback(moreBrands?"Looking for more advertiser pages…":"Loading active ads from Meta…");
+ feedback(moreBrands?"Looking for more advertiser pages…":"");
  if(page)state.pick=null;
  const params=new URLSearchParams({q:q||page,coverage:state.coverage});
  if(page)params.set("page",page);
@@ -653,7 +667,8 @@ let revealTimer=null;
 function updateReveal(instant=false){
  if(state.view==="intel"){renderIntel();return}
  const tiles=[...document.querySelectorAll("#cards .adcard")];
- document.querySelectorAll("#cards .tile-skel").forEach(e=>e.remove());
+ // Keep the placeholder ads while the search itself is still running.
+ if(tiles.length||!state.loading)document.querySelectorAll("#cards .tile-skel").forEach(e=>e.remove());
  if(!tiles.length){$("pager").style.display="";if(!state.loading)setBar("hide");return}
  const ids=tiles.map(t=>t.querySelector("[data-media]").dataset.media);
  let k=0;while(k<ids.length&&tileResolved(ids[k]))k++;
@@ -668,7 +683,7 @@ function updateReveal(instant=false){
  const ready=ids.filter(id=>mediaCache.has(id)||mediaState.get(id)?.status==="failed").length;
  const complete=upTo===ids.length;
  // Placeholder row where the next three tiles will appear.
- if(!complete){const grid=$("cards");for(let i=0;i<Math.min(3,ids.length-upTo);i++)grid.insertAdjacentHTML("beforeend",'<div class="tile-skel" aria-hidden="true" style="animation-delay:'+i*.15+'s"></div>')}
+ if(!complete){const grid=$("cards");for(let i=0;i<Math.min(3,ids.length-upTo);i++)grid.insertAdjacentHTML("beforeend",skelCard(i))}
  $("pager").style.display=complete?"":"none";
  if(complete&&ready===ids.length)setBar("done",ids.length,ids.length,ids);
  else if(complete)setBar("hide");
@@ -710,7 +725,7 @@ function setBar(mode,ready=0,total=0,ids=null){
  bar.hidden=false;bar.classList.toggle("indeterminate",mode==="search");bar.classList.toggle("complete",mode==="done");
  const who=state.brand||state.query||"this advertiser";
  const fill=bar.querySelector(".loadbar-fill"),rider=$("loadbarRider"),hint=$("loadbarHint");
- if(mode==="search"){stopGame();fill.style.width="";rider.style.left="";$("loadbarText").textContent="Snooping on "+who+"’s live ads…";hint.textContent="Asking Meta’s Ad Library for everything running in the UK.";$("loadbarAll").hidden=true;paintStrip(null);barRun={key:"",start:0,r0:0};return}
+ if(mode==="search"){stopGame();fill.style.width="";rider.style.left="";$("loadbarText").textContent="Loading "+who+"’s ads…";hint.textContent="";$("loadbarAll").hidden=true;paintStrip(null);barRun={key:"",start:0,r0:0};bar.hidden=!!($("as-search-stage")&&!$("as-search-stage").hidden);return}
  const key=state.page+"|"+total;if(barRun.key!==key)barRun={key,start:Date.now(),r0:ready};
  const pct=total?Math.max(6,Math.round(ready/total*100)):0;
  fill.style.width=pct+"%";rider.style.left="calc("+pct+"% - "+(pct>=100?19:0)+"px)";
@@ -720,13 +735,13 @@ function setBar(mode,ready=0,total=0,ids=null){
  paintStrip(ids);
  if(mode==="done"){
   const quick=Date.now()-barRun.start<2500;
-  $("loadbarText").textContent="All "+total+" creatives ready";
+  $("loadbarText").textContent="All "+total+" ads loaded";
   const gameLine=game&&game.running?game.finish():"";clearTimeout(gameTimer);gameTimer=0;
   hint.textContent=(gameLine?gameLine+" · ":"")+(quick?"Loaded instantly from the AdSnoop library.":"Saved to the AdSnoop library, so next time they’re instant.");
   barTimer=setTimeout(()=>{bar.hidden=true;paintStrip(null);stopGame()},game&&game.running?3200:2200);return}
  const eta=barEta(ready,total);
- $("loadbarText").textContent="Collecting "+who+"’s creatives · "+ready+" of "+total+(eta?" · "+eta:"");
- hint.textContent=ready<total&&(Date.now()-barRun.start>2500)?"A first look at a brand takes a moment: each creative is collected from Meta once, then saved so it’s instant for everyone.":"";
+ $("loadbarText").textContent="Loading "+who+"’s ads · "+ready+" of "+total+" ready"+(eta?" · "+eta:"");
+ hint.textContent=ready<total&&(Date.now()-barRun.start>2500)?"Ads appear below as their previews arrive. Each one is fetched from Meta once, then saved so it’s instant next time.":"Ads appear below as their previews arrive.";
 }
 // ---- Pinned competitors, your brand and the comparison view ----
 const PIN_MAX=COMP_MAX;
