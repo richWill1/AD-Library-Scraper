@@ -65,7 +65,9 @@
   },
   {
    "name": "eBay UK",
-   "sector": "Department stores & marketplaces"
+   "sector": "Department stores & marketplaces",
+   "id": "102597117269",
+   "pageName": "eBay.co.uk"
   },
   {
    "name": "Temu",
@@ -77,7 +79,9 @@
   },
   {
    "name": "B&M",
-   "sector": "Department stores & marketplaces"
+   "sector": "Department stores & marketplaces",
+   "id": "143733879038782",
+   "pageName": "B&M Stores"
   },
   {
    "name": "The Range",
@@ -95,7 +99,9 @@
   },
   {
    "name": "AO.com",
-   "sector": "Electricals & tech"
+   "sector": "Electricals & tech",
+   "id": "108506697584",
+   "pageName": "AO"
   },
   {
    "name": "Samsung UK",
@@ -119,11 +125,21 @@
   },
   {
    "name": "Shark",
-   "sector": "Electricals & tech"
+   "sector": "Electricals & tech",
+   "id": "165951190268408",
+   "pageName": "Shark Home UK"
+  },
+  {
+   "name": "Shark Beauty UK",
+   "sector": "Electricals & tech",
+   "id": "109520141916379",
+   "pageName": "Shark Beauty UK"
   },
   {
    "name": "Ninja Kitchen",
-   "sector": "Electricals & tech"
+   "sector": "Electricals & tech",
+   "id": "516372968508625",
+   "pageName": "Ninja Kitchen UK"
   },
   {
    "name": "Philips",
@@ -163,7 +179,9 @@
   },
   {
    "name": "Box.co.uk",
-   "sector": "Electricals & tech"
+   "sector": "Electricals & tech",
+   "id": "140009542702640",
+   "pageName": "Box.co.uk"
   },
   {
    "name": "Scan Computers",
