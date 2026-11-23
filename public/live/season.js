@@ -36,22 +36,29 @@ function render(d){
   '<section class="pg-sec"><div class="pg-cta"><p>See every live ad from any of these brands, with their messaging and testing patterns.</p><a class="btn" href="/">Research a brand</a></div></section>'+
   '<p class="pg-note">How this works: Meta’s Ad Library can only be searched by keyword or by advertiser, so there is no complete list of every ad. Each refresh searches for '+esc(d.name)+' phrases, checks the ads of every brand on our curated list of UK advertisers (about once a day each), and keeps only ads whose text actually refers to '+esc(d.name)+'. Every match is saved for the season, so ads stay here after they stop running'+(d.coverage&&d.coverage.since?' (collecting since '+new Date(d.coverage.since).toLocaleDateString("en-GB",{day:"numeric",month:"long"})+')':'')+'. The main lists only include tracked brands; everyone else appears under Independents once an ad passes '+num(d.minReach||10000)+' estimated UK reach. That means thousands of UK ads, but not every one: an ad that never mentions '+esc(d.name)+' from a brand we don’t track can’t be found. Reach is Meta’s own estimate and isn’t available for every ad. “Still running” means we saw it live in the last 30 hours. Tactics are detected from ad text. None of this measures sales or performance. Not affiliated with Meta.</p>';
  if(!LISTS.length){loadMedia(d.top.map(a=>a.id));return}
- let cur=LISTS[0][0],sector="";
+ let cur=LISTS[0][0],sector="";const skip=new Set();
  const show=k=>{cur=k;const L=LISTS.find(x=>x[0]===k)||LISTS[0];document.querySelectorAll(".col-tabs button[data-list]").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.list===L[0])));
   document.querySelectorAll(".col-sectors").forEach(el=>el.hidden=L[0]==="challengers");
-  const items=d.lists[L[0]].filter(a=>L[0]==="challengers"||!sector||a.sector===sector).slice(0,12);
+  const pool=d.lists[L[0]].filter(a=>(L[0]==="challengers"||!sector||a.sector===sector)&&!skip.has(a.id)),items=pool.slice(0,12);
   $("col-why").textContent=L[2]+(sector&&L[0]!=="challengers"?" Showing "+sector+".":"");
-  $("col-grid").innerHTML=items.length?items.map(card).join(""):'<p class="sub">No '+esc(sector)+' ads in this list yet.</p>';loadMedia(items.map(a=>a.id))};
+  const grid=$("col-grid");grid.innerHTML=items.length?items.map(card).join(""):'<p class="sub">No '+esc(sector)+' ads in this list yet.</p>';
+  let next=items.length;
+  // Catalogue ads are confirmed once their creative loads: drop them and bring the next ad up.
+  const refill=id=>{skip.add(id);const el=grid.querySelector('[data-media="'+id+'"]')?.closest(".ad");if(!el)return;el.remove();
+   while(next<pool.length&&skip.has(pool[next].id))next++;
+   if(next<pool.length){const a=pool[next++];grid.insertAdjacentHTML("beforeend",card(a,0));loadMedia([a.id],refill)}
+   grid.querySelectorAll(".ad-rank").forEach((r,i)=>r.textContent="#"+(i+1))};
+  loadMedia(items.map(a=>a.id),refill)};
  document.querySelector(".col-tabs").addEventListener("click",e=>{const b=e.target.closest("button[data-list]");if(b)show(b.dataset.list)});
  const secs=document.querySelector(".col-sectors");
  if(secs)secs.addEventListener("click",e=>{const b=e.target.closest("button[data-sector]");if(!b)return;sector=b.dataset.sector;secs.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));show(cur)});
  show(cur);
 }
 const mediaCache=new Map();
-async function loadMedia(ids){
+async function loadMedia(ids,onCatalogue){
  let i=0;
  const worker=async()=>{while(i<ids.length){const id=ids[i++];const box=document.querySelector('[data-media="'+id+'"]');if(!box)continue;
-  try{if(!mediaCache.has(id))mediaCache.set(id,fetch("/api/media?id="+encodeURIComponent(id),{signal:AbortSignal.timeout(90000)}).then(r=>r.json()));const m=await mediaCache.get(id);if(!box.isConnected)continue;const it=(m.items||[]).find(x=>x.kind==="image")||(m.items||[])[0];
+  try{if(!mediaCache.has(id))mediaCache.set(id,fetch("/api/media?id="+encodeURIComponent(id),{signal:AbortSignal.timeout(90000)}).then(r=>r.json()));const m=await mediaCache.get(id);if(!box.isConnected)continue;if(onCatalogue&&String(m.displayFormat||"").toUpperCase()==="DPA"){onCatalogue(id);continue}const it=(m.items||[]).find(x=>x.kind==="image")||(m.items||[])[0];
    const rank=box.querySelector(".ad-rank").outerHTML;
    if(it&&it.kind==="video")box.innerHTML=rank+'<video muted playsinline loop preload="metadata" '+(it.poster?'poster="'+esc(it.poster)+'"':'')+' src="'+esc(it.url)+'"></video>';
    else if(it)box.innerHTML=rank+'<img alt="Ad creative" loading="lazy" referrerpolicy="no-referrer" src="'+esc(it.url)+'">';

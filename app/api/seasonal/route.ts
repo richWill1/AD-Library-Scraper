@@ -105,7 +105,8 @@ async function resolveBrands(max = 10) {
       let hit: {id: string; name: string} | undefined;
       for (const q of variants) {
         let result: DiscoveryResult | null = null;
-        try { result = await discoverTradingName(q, {token: directToken, directory: await directorySearch(q)}); } catch {}
+        // A lookup that hangs would block every later one, so each gets 90 seconds.
+        try { result = await Promise.race([discoverTradingName(q, {token: directToken, directory: await directorySearch(q)}), sleep(90000).then(() => null)]); } catch {}
         if (!result || result.status === 'lookup_failed') { stopped = true; break; } // probably rate-limited: try again next refresh
         hit = result.advertisers.find(a => /^\d{3,30}$/.test(a.id) && a.confidence === 'verified' && (result!.status === 'resolved' || norm(a.name) === norm(b.name)))
           || (result.status === 'choose' ? result.advertisers.find(a => /^\d{3,30}$/.test(a.id) && norm(a.name) === norm(b.name) && (a.adCount || 0) >= 3) : undefined);
@@ -224,6 +225,8 @@ async function pageAds(id: string, n: number) {
 }
 
 type Item = {id: string; pageId: string; pageName: string; title: string; copy: string; start: string; days: number | null; run: number; reach: number | null; live: boolean; lastSeen: string; versions?: number; sector: string};
+// Catalogue (dynamic product) ads carry product templates; they show whatever product Meta picks, not a crafted ad.
+const CATALOGUE = /\{\{\s*product\.[a-z_]+\s*\}\}/i;
 const copyKey = (a: Arch) => (a.c || a.t || '').toLowerCase().replace(/\s+/g, ' ').slice(0, 90);
 const runDays = (a: Arch) => { const s = Date.parse(a.s + 'T00:00:00Z'); return Number.isFinite(s) ? Math.max(0, Math.floor((a.l - s) / DAY)) : 0; };
 const toItem = (a: Arch, now: number, extra: Partial<Item> = {}): Item => ({id: a.i, pageId: a.p, pageName: a.n, title: a.t === 'Ad creative' ? '' : a.t, copy: (a.c === 'No ad copy provided by Meta.' ? '' : a.c).slice(0, 240), start: a.s, days: days(a.s), run: runDays(a), reach: a.r, live: now - a.l < LIVE_WINDOW, lastSeen: new Date(a.l).toISOString().slice(0, 10), sector: BRAND_BY_ID.get(a.p)?.sector || '', ...extra});
@@ -272,7 +275,8 @@ async function build(key: string) {
   // The "best" lists. Meta gives no spend or results for commercial ads, so each list is a different, stated signal.
   // Main lists use the curated brands; everyone else competes in "Independents" with a minimum reach.
   const curated = (a: Arch) => BRAND_BY_ID.has(a.p) || a.p in MAJOR_IDS;
-  const main = ads.filter(curated);
+  const crafted = ads.filter(a => !CATALOGUE.test(`${a.t}\n${a.c}`));
+  const main = crafted.filter(curated);
   const groups = new Map<string, Arch[]>();
   for (const a of main) { const k = a.p + '|' + copyKey(a); const g = groups.get(k) || []; g.push(a); groups.set(k, g); }
   const versions = (a: Arch) => groups.get(a.p + '|' + copyKey(a))?.length || 1;
@@ -281,7 +285,7 @@ async function build(key: string) {
     reach: shortlist([...main].sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now),
     longest: shortlist(main.filter(a => runDays(a) >= 7).sort((x, y) => runDays(y) - runDays(x) || (y.r || 0) - (x.r || 0)), now),
     tested: shortlist(tested, now, 12, a => ({versions: versions(a)})),
-    challengers: shortlist(ads.filter(a => !curated(a) && (a.r || 0) >= MIN_REACH).sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now)
+    challengers: shortlist(crafted.filter(a => !curated(a) && (a.r || 0) >= MIN_REACH).sort((x, y) => (y.r || 0) - (x.r || 0) || runDays(y) - runDays(x)), now)
   };
   // Launches per day, last 42 days, across the whole archive
   const timeline: number[] = new Array(42).fill(0);
