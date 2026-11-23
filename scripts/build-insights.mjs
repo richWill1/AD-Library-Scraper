@@ -323,7 +323,7 @@ ${productBand('category')}`;
 const searchLink = e => `/?page=${e.page}&name=${encodeURIComponent(e.brand)}`;
 const daysText = d => d ? `${d} day${d === 1 ? '' : 's'} live` : '';
 const angleShot = (e, { eager = false, cls = '' } = {}) => `<img class="ang-shot${cls}" src="${esc(e.image)}" alt="${esc(`${e.brand} ad using this angle`)}" width="400" height="500" ${eager ? '' : 'loading="lazy" '}decoding="async">`;
-const angleMeta = a => `<div class="ang-meta"><span class="pill pill-brands">${a.brands} UK brand${a.brands === 1 ? '' : 's'} in our sample</span>${(a.sectors || []).slice(0, 1).map(s => `<span class="pill">${esc(s)}</span>`).join('')}${a.format ? `<span class="pill">${esc(a.format)}</span>` : ''}${a.status === 'draft' ? '<span class="ins-draft-badge">Draft</span>' : ''}</div>`;
+const angleMeta = a => `<div class="ang-meta"><span class="pill pill-brands">${esc(a.countLabel || `${a.brands} UK brand${a.brands === 1 ? '' : 's'} in our sample`)}</span>${(a.sectors || []).slice(0, 1).map(s => `<span class="pill">${esc(s)}</span>`).join('')}${a.format ? `<span class="pill">${esc(a.format)}</span>` : ''}${a.status === 'draft' ? '<span class="ins-draft-badge">Draft</span>' : ''}</div>`;
 
 function angleFeatureCard(a, place) {
   const e = a.examples[0];
@@ -336,7 +336,7 @@ function angleFeatureCard(a, place) {
 <div class="ang-actions"><a class="ins-btn ang-btn" href="${a.url}" data-ang="${a.slug}" data-ang-place="${place}">See ${a.examples.length} examples <span aria-hidden="true">→</span></a><a class="ins-btn ang-btn ang-btn-line" href="${searchLink(e)}" data-ins-cta="angle_${place}">View ${esc(e.brand)} ads</a></div>
 </div></article>`;
 }
-const angleTile = (a, place) => `<a class="ang-tile" href="${a.url}" data-ang="${a.slug}" data-ang-place="${place}" data-sectors="${esc((a.sectors || []).join('|'))}"><img src="${esc(a.examples[0].image)}" alt="" width="88" height="110" loading="lazy" decoding="async"><span><b>${esc(a.name)}</b><small>${a.brands} brand${a.brands === 1 ? '' : 's'} · ${esc((a.sectors || [])[0] || '')}</small></span></a>`;
+const angleTile = (a, place) => `<a class="ang-tile" href="${a.url}" data-ang="${a.slug}" data-ang-place="${place}" data-sectors="${esc((a.sectors || []).join('|'))}"><img src="${esc(a.examples[0].image)}" alt="" width="88" height="110" loading="lazy" decoding="async"><span><b>${esc(a.name)}</b><small>${esc(a.countShort || `${a.brands} brand${a.brands === 1 ? '' : 's'}`)} · ${esc((a.sectors || [])[0] || '')}</small></span></a>`;
 
 function anglesHubSection() {
   if (!angleWeek || !angles.length) return '';
