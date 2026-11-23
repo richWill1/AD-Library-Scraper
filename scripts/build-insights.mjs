@@ -72,6 +72,37 @@ const live = articles.filter(a => a.status === 'published');
 const bySlug = new Map(articles.map(a => [a.slug, a]));
 for (const a of articles) for (const r of a.related || []) if (!all.some(x => x.slug === r)) fail(`${a.slug}: related article "${r}" does not exist`);
 
+// ---------- angles worth testing ----------
+// content/insights/angles/*.md: one creative angle each (frontmatter + "how to test" body).
+// content/insights/angles/_week.yml: which two angles lead this week, plus the optional collection.
+const ANGLES_DIR = path.join(CONTENT, 'angles');
+function parseAngle(file) {
+  const raw = fs.readFileSync(file, 'utf8');
+  const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  if (!m) fail(`${file}: missing YAML frontmatter`);
+  const meta = YAML.parse(m[1]);
+  const slug = path.basename(file, '.md');
+  for (const k of ['name', 'summary', 'why', 'status', 'examples']) if (!meta[k]) fail(`angle ${slug}: frontmatter is missing "${k}"`);
+  if (!['draft', 'published'].includes(meta.status)) fail(`angle ${slug}: status must be draft or published`);
+  for (const k of ['updatedAt']) if (meta[k] instanceof Date) meta[k] = meta[k].toISOString().slice(0, 10);
+  for (const e of meta.examples) {
+    for (const k of ['ad', 'page', 'brand', 'image']) if (!e[k]) fail(`angle ${slug}: an example is missing "${k}"`);
+    e.ad = String(e.ad); e.page = String(e.page);
+    if (!/^\d{1,30}$/.test(e.ad) || !/^\d{1,30}$/.test(e.page)) fail(`angle ${slug}: ad and page must be numeric IDs`);
+    if (!/^https:\/\/media\.adsnoop\.co\.uk\//.test(e.image)) fail(`angle ${slug}: example images must come from media.adsnoop.co.uk`);
+  }
+  const brands = new Set(meta.examples.map(e => e.page)).size;
+  return { ...meta, slug, body: m[2], brands, url: `/insights/angles/${slug}` };
+}
+const allAngles = fs.existsSync(ANGLES_DIR) ? fs.readdirSync(ANGLES_DIR).filter(f => f.endsWith('.md') && !f.startsWith('_')).map(f => parseAngle(path.join(ANGLES_DIR, f))) : [];
+const angles = allAngles.filter(a => a.status === 'published' || SHOW_DRAFTS).sort((a, b) => b.brands - a.brands || a.name.localeCompare(b.name));
+const liveAngles = angles.filter(a => a.status === 'published');
+const angleWeek = fs.existsSync(path.join(ANGLES_DIR, '_week.yml')) ? YAML.parse(fs.readFileSync(path.join(ANGLES_DIR, '_week.yml'), 'utf8')) : null;
+if (angleWeek) {
+  if (angleWeek.week instanceof Date) angleWeek.week = angleWeek.week.toISOString().slice(0, 10);
+  for (const s of angleWeek.featured || []) if (!allAngles.some(a => a.slug === s)) fail(`_week.yml: featured angle "${s}" does not exist`);
+}
+
 // ---------- markdown ----------
 function renderMarkdown(article) {
   const toc = [];
@@ -251,6 +282,7 @@ function hubPage() {
 ${categoryNav(null)}
 </div></section>
 ${featured ? `<section class="ins-wrap ins-featured" aria-labelledby="featured-h"><h2 id="featured-h" class="sr-only">Featured</h2><div class="ins-featured-grid">${card(featured, { size: 'lg', eager: true, placement: 'featured' })}<div class="ins-featured-side">${side.map(a => card(a, { size: 'sm', placement: 'featured' })).join('')}</div></div></section>` : ''}
+${anglesHubSection()}
 <section class="ins-wrap ins-all" aria-labelledby="all-h"><div class="ins-section-head"><h2 id="all-h">More insights</h2><p class="ins-results" aria-live="polite" id="ins-results"></p></div>
 <div class="ins-grid" id="ins-grid">${articles.map(a => card(a, { dup: featured && (a === featured || side.includes(a)) && articles.length > 3 })).join('')}</div>
 <div class="ins-empty" id="ins-empty" hidden><p><strong>No articles match that search yet.</strong></p><p>Try a broader term, browse a topic below, or search competitor ads directly with AdSnoop.</p></div></section>
@@ -287,6 +319,83 @@ ${productBand('category')}`;
   return { html: page({ title: `${c.name}: Meta Ads Insights | AdSnoop`, description: c.description.slice(0, 160), canonical: `/insights/category/${c.slug}`, ogImage: '/insights-og/hub', jsonLd: ld, body, noindex: empty, pageData: { type: 'category', category: c.slug } }), indexable: !empty };
 }
 
+// ---------- angle components and pages ----------
+const searchLink = e => `/?page=${e.page}&name=${encodeURIComponent(e.brand)}`;
+const daysText = d => d ? `${d} day${d === 1 ? '' : 's'} live` : '';
+const angleShot = (e, { eager = false, cls = '' } = {}) => `<img class="ang-shot${cls}" src="${esc(e.image)}" alt="${esc(`${e.brand} ad using this angle`)}" width="400" height="500" ${eager ? '' : 'loading="lazy" '}decoding="async">`;
+const angleMeta = a => `<div class="ang-meta"><span class="pill pill-brands">${a.brands} UK brand${a.brands === 1 ? '' : 's'} in our sample</span>${(a.sectors || []).slice(0, 1).map(s => `<span class="pill">${esc(s)}</span>`).join('')}${a.format ? `<span class="pill">${esc(a.format)}</span>` : ''}${a.status === 'draft' ? '<span class="ins-draft-badge">Draft</span>' : ''}</div>`;
+
+function angleFeatureCard(a, place) {
+  const e = a.examples[0];
+  return `<article class="ang-card">
+<a class="ang-ad" href="${a.url}" data-ang="${a.slug}" data-ang-place="${place}">${angleShot(e)}<span class="ang-ad-brand">${esc(e.brand)}</span></a>
+<div class="ang-body">${angleMeta(a)}
+<h3><a href="${a.url}" data-ang="${a.slug}" data-ang-place="${place}">${esc(a.name)}</a></h3>
+<p class="ang-what">${esc(a.summary)}</p>
+<div class="ang-why"><p class="ang-lbl">Why it works</p><p>${esc(a.why)}</p></div>
+<div class="ang-actions"><a class="ins-btn ang-btn" href="${a.url}" data-ang="${a.slug}" data-ang-place="${place}">See ${a.examples.length} examples <span aria-hidden="true">→</span></a><a class="ins-btn ang-btn ang-btn-line" href="${searchLink(e)}" data-ins-cta="angle_${place}">View ${esc(e.brand)} ads</a></div>
+</div></article>`;
+}
+const angleTile = (a, place) => `<a class="ang-tile" href="${a.url}" data-ang="${a.slug}" data-ang-place="${place}" data-sectors="${esc((a.sectors || []).join('|'))}"><img src="${esc(a.examples[0].image)}" alt="" width="88" height="110" loading="lazy" decoding="async"><span><b>${esc(a.name)}</b><small>${a.brands} brand${a.brands === 1 ? '' : 's'} · ${esc((a.sectors || [])[0] || '')}</small></span></a>`;
+
+function anglesHubSection() {
+  if (!angleWeek || !angles.length) return '';
+  const featured = (angleWeek.featured || []).map(s => angles.find(a => a.slug === s)).filter(Boolean);
+  if (!featured.length) return '';
+  const rest = angles.filter(a => !featured.includes(a)).slice(0, 4);
+  const brandCount = new Set(featured.flatMap(a => a.examples.map(e => e.page))).size;
+  const col = angleWeek.collection;
+  return `<section class="ins-wrap ang" aria-labelledby="ang-h">
+<div class="ang-head"><div><p class="ins-eyebrow">Angles worth testing · Week of ${fmtDate(angleWeek.week).replace(/ \d{4}$/, '')}</p>
+<h2 id="ang-h">${esc(angleWeek.headline || 'Creative angles worth testing this week')}</h2>
+<p class="ang-sub">${esc(angleWeek.intro || `Spotted across ${brandCount} UK brands running ads right now, picked by the AdSnoop team.`)}</p></div>
+<a class="ang-more" href="/insights/angles" data-ang="library" data-ang-place="hub">Explore all ${angles.length} angles <span aria-hidden="true">→</span></a></div>
+<div class="ang-grid">${featured.map(a => angleFeatureCard(a, 'hub')).join('')}</div>
+${rest.length ? `<div class="ang-strip">${rest.map(a => angleTile(a, 'hub_strip')).join('')}</div>` : ''}
+${col && col.angle && angles.find(a => a.slug === col.angle) ? (() => { const ca = angles.find(a => a.slug === col.angle); return `<div class="ang-collection"><div><p class="ins-eyebrow">Collection of the week</p><h3>${esc(col.title)}</h3><p>${esc(col.text)}</p><a class="ins-btn ang-btn" href="${ca.url}" data-ang="${ca.slug}" data-ang-place="collection">View collection <span aria-hidden="true">→</span></a></div><div class="ang-stack">${ca.examples.slice(0, 3).map(e => angleShot(e)).join('')}</div></div>`; })() : ''}
+</section>`;
+}
+
+function anglesLibraryPage() {
+  const sectors = [...new Set(angles.flatMap(a => a.sectors || []))].sort();
+  const body = `<main id="main" class="ins-hub">
+<section class="ins-hero ins-hero-cat" style="--c:#8b5cf6"><div class="ins-wrap ins-hero-in"><nav class="ins-crumbs ins-crumbs-dark" aria-label="Breadcrumb"><ol><li><a href="/insights">Insights</a></li><li aria-current="page">Angles worth testing</li></ol></nav>
+<h1>Creative angles worth testing</h1><p class="ins-lede">Formats and hooks that UK brands are running on Facebook and Instagram right now, with live examples and a note on how to test each one.</p>
+${sectors.length > 1 ? `<nav class="ins-catnav ang-filter" aria-label="Filter angles by sector"><button type="button" aria-pressed="true" data-ang-sector="">All sectors</button>${sectors.map(s => `<button type="button" aria-pressed="false" data-ang-sector="${esc(s)}"><i aria-hidden="true"></i>${esc(s)}</button>`).join('')}</nav>` : ''}
+</div></section>
+<section class="ins-wrap ins-all" aria-label="All angles"><div class="ang-library" id="ang-library">${angles.map(a => `<article class="ang-lib-card" data-sectors="${esc((a.sectors || []).join('|'))}"><a href="${a.url}" data-ang="${a.slug}" data-ang-place="library"><div class="ang-lib-media">${a.examples.slice(0, 2).map(e => angleShot(e)).join('')}</div><div class="ang-lib-body">${angleMeta(a)}<h2>${esc(a.name)}</h2><p>${esc(a.summary)}</p></div></a></article>`).join('')}</div>
+<p class="ang-note">Examples are UK ads that were live when we reviewed them. Counts show how many brands we found using each angle in our sample, not across all of Meta.</p></section></main>
+${productBand('angles')}`;
+  const ld = [
+    { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'Creative angles worth testing | AdSnoop Insights', url: `${SITE}/insights/angles`, inLanguage: 'en-GB', publisher: ORG },
+    crumbs([['Insights', '/insights'], ['Angles worth testing', '/insights/angles']]),
+  ];
+  return page({ title: 'Meta Ad Creative Angles Worth Testing, With UK Examples | AdSnoop', description: 'Creative formats and hooks UK brands are running on Facebook and Instagram now, with live ad examples and how to test each angle.', canonical: '/insights/angles', ogImage: '/insights-og/hub', jsonLd: ld, body, noindex: !liveAngles.length, pageData: { type: 'angles' } });
+}
+
+function anglePage(a) {
+  const others = angles.filter(x => x !== a).slice(0, 4);
+  const html = new Marked({ gfm: true }).parse(a.body || '');
+  const body = `<main id="main" class="ins-hub ang-page">
+${a.status === 'draft' ? '<div class="ins-draft-bar" role="note">Draft preview: this angle is not published, not indexed and is hidden on the live site.</div>' : ''}
+<header class="ins-wrap ang-page-head"><nav class="ins-crumbs" aria-label="Breadcrumb"><ol><li><a href="/insights">Insights</a></li><li><a href="/insights/angles">Angles worth testing</a></li></ol></nav>
+<div class="ang-page-top"><div>${angleMeta(a)}<h1>${esc(a.name)}</h1><p class="ins-dek">${esc(a.summary)}</p>
+<div class="ang-why"><p class="ang-lbl">Why it works</p><p>${esc(a.why)}</p></div></div>
+<a class="ang-ad ang-ad-lg" href="${searchLink(a.examples[0])}" data-ins-cta="angle_page_hero">${angleShot(a.examples[0], { eager: true })}<span class="ang-ad-brand">${esc(a.examples[0].brand)}</span></a></div></header>
+${html.trim() ? `<section class="ins-wrap"><div class="ins-prose ang-test">${html}</div></section>` : ''}
+<section class="ins-wrap ang-examples" aria-labelledby="ex-h"><div class="ins-section-head"><h2 id="ex-h">${a.examples.length} live UK example${a.examples.length === 1 ? '' : 's'}</h2></div>
+<div class="ang-ex-grid">${a.examples.map(e => `<a class="ang-ex" href="${searchLink(e)}" data-ins-cta="angle_example">${angleShot(e)}<span class="ang-ex-cap"><b>${esc(e.brand)}</b><small>${[e.sector, daysText(e.days)].filter(Boolean).map(esc).join(' · ')}</small>${e.note ? `<small class="ang-ex-note">${esc(e.note)}</small>` : ''}</span></a>`).join('')}</div>
+<p class="ang-note">Click an example to see everything that brand is running now. Examples were live when we reviewed them${a.updatedAt ? ` on ${fmtDate(a.updatedAt)}` : ''} and may since have stopped.</p></section>
+${others.length ? `<section class="ins-wrap ang-others" aria-labelledby="oth-h"><div class="ins-section-head"><h2 id="oth-h">More angles to test</h2><a href="/insights/angles" class="ins-more">All angles <span aria-hidden="true">→</span></a></div><div class="ang-strip">${others.map(o => angleTile(o, 'related')).join('')}</div></section>` : ''}
+</main>
+${productBand('angle')}`;
+  const ld = [
+    { '@context': 'https://schema.org', '@type': 'WebPage', name: `${a.name}: Meta ad angle with UK examples`, description: a.summary, url: SITE + a.url, inLanguage: 'en-GB', publisher: ORG },
+    crumbs([['Insights', '/insights'], ['Angles worth testing', '/insights/angles'], [a.name, a.url]]),
+  ];
+  return page({ title: `${a.name}: Meta Ad Angle With UK Examples | AdSnoop`, description: `${a.summary}`.slice(0, 160), canonical: a.url, ogImage: '/insights-og/hub', jsonLd: ld, body, noindex: a.status === 'draft', pageData: { type: 'angle', slug: a.slug } });
+}
+
 function rss() {
   const items = live.slice(0, 30).map(a => `<item><title>${esc(a.title)}</title><link>${SITE}${a.url}</link><guid isPermaLink="true">${SITE}${a.url}</guid><pubDate>${new Date(a.publishedAt + 'T08:00:00Z').toUTCString()}</pubDate><category>${esc(catBySlug.get(a.category).name)}</category><description>${esc(a.description)}</description></item>`).join('');
   return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>AdSnoop Insights</title><link>${SITE}/insights</link><atom:link href="${SITE}/insights/feed.xml" rel="self" type="application/rss+xml"/><description>Practical Meta advertising insights for paid media teams.</description><language>en-gb</language>${items}</channel></rss>`;
@@ -304,7 +413,9 @@ function sitemap(catIndexable) {
       loc: `/insights/category/${c.slug}`,
       lastmod: latestContentDate(live.filter(a => a.category === c.slug)),
     })),
-    ...live.map(a => ({ loc: a.url, lastmod: a.updatedAt || a.publishedAt }))];
+    ...live.map(a => ({ loc: a.url, lastmod: a.updatedAt || a.publishedAt })),
+    ...(liveAngles.length ? [{ loc: '/insights/angles', lastmod: liveAngles.map(a => a.updatedAt).filter(Boolean).sort().at(-1) }] : []),
+    ...liveAngles.map(a => ({ loc: a.url, lastmod: a.updatedAt }))];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(u => `  <url>\n    <loc>${SITE}${u.loc}</loc>${u.lastmod ? `\n    <lastmod>${isoDate(u.lastmod)}</lastmod>` : ''}\n  </url>`).join('\n')}\n</urlset>\n`;
 }
 
@@ -319,6 +430,10 @@ write(path.join(ART_OUT, 'hub.svg'), renderArt('rings', '#2f7bf6'));
 write(path.join(OUT, 'index.html'), hubPage());
 const catIndexable = {};
 for (const c of categories) { const r = categoryPage(c); catIndexable[c.slug] = r.indexable; write(path.join(OUT, 'category', `${c.slug}.html`), r.html); }
+if (angles.length) {
+  write(path.join(OUT, 'angles', 'index.html'), anglesLibraryPage());
+  for (const a of angles) write(path.join(OUT, 'angles', `${a.slug}.html`), anglePage(a));
+}
 write(path.join(OUT, 'feed.xml'), rss());
 write(path.join(ROOT, 'public/sitemap.xml'), sitemap(catIndexable));
 write(path.join(ASSETS, 'manifest.json'), JSON.stringify({
@@ -326,4 +441,4 @@ write(path.join(ASSETS, 'manifest.json'), JSON.stringify({
   ...Object.fromEntries(articles.map(a => [a.slug, { title: a.title, category: catBySlug.get(a.category).name, colour: catBySlug.get(a.category).colour, art: a.slug }])),
 }, null, 1));
 
-console.log(`[insights] built ${articles.length} article(s) (${live.length} published${SHOW_DRAFTS ? ', drafts shown' : ''}), ${categories.length} categories`);
+console.log(`[insights] built ${articles.length} article(s) (${live.length} published${SHOW_DRAFTS ? ', drafts shown' : ''}), ${categories.length} categories, ${angles.length} angle(s) (${liveAngles.length} published)`);

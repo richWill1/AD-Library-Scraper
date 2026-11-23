@@ -1536,6 +1536,28 @@ function topLandings(rows){
  for(const a of rows){const c=mediaCache.get(a.id)?.cta;if(!c||!c.url)continue;base++;const k=ctaPath(c.url);const e=m.get(k)||{path:k,url:c.url,n:0};e.n++;m.set(k,e)}
  return {base,list:[...m.values()].sort((a,b)=>b.n-a.n).slice(0,4)};
 }
+// "What they're testing": a short Claude-written read of the brand's live ads.
+// The server fetches the ads itself and caches each brand for a day; when no
+// API key is configured it answers 204 and nothing is shown.
+const aiSum={page:"",status:"",data:null};
+function aiSummaryHTML(){
+ if(!state.page||aiSum.page!==state.page||aiSum.status==="none")return '<div class="ai-sum" data-ai-sum hidden></div>';
+ if(aiSum.status!=="ready")return '<div class="ai-sum is-loading" data-ai-sum aria-busy="true"><p class="ai-k"><span class="ai-spark" aria-hidden="true"></span>What '+esc(state.brand||"they")+' are testing</p><div class="ai-skel"><i></i><i></i><i></i></div></div>';
+ const s=aiSum.data;
+ const ad=id=>{const n=state.rows.findIndex(a=>a.id===id);return n<0?"":'<button type="button" class="ai-ad" data-action="detail" data-id="'+esc(id)+'">Ad '+(n+1)+'</button>'};
+ return '<div class="ai-sum" data-ai-sum><p class="ai-k"><span class="ai-spark" aria-hidden="true"></span>What '+esc(state.brand||"they")+' are testing</p><p class="ai-head">'+esc(s.headline)+'</p><ul class="ai-points">'+s.points.map(p=>'<li><b>'+esc(p.label)+'</b><span>'+esc(p.text)+(p.adIds.length?' <span class="ai-ads">'+p.adIds.map(ad).join("")+'</span>':'')+'</span></li>').join("")+'</ul>'+(s.testIdea?'<p class="ai-test"><b>Test idea</b> '+esc(s.testIdea)+'</p>':'')+'<p class="ai-foot">Written by AI from the text of '+s.adsRead+' live ads · '+new Date(s.generatedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"})+'. Check the ads before acting on it.</p></div>';
+}
+function paintAiSummary(){const el=document.querySelector("[data-ai-sum]");if(!el)return;const t=document.createElement("template");t.innerHTML=aiSummaryHTML();el.replaceWith(t.content.firstChild)}
+async function loadAiSummary(){
+ const page=state.page;if(!page||aiSum.page===page)return;
+ Object.assign(aiSum,{page,status:"loading",data:null});paintAiSummary();
+ try{
+  const r=await fetch("/api/brand-summary?page="+encodeURIComponent(page)+"&name="+encodeURIComponent(state.brand||""));
+  if(aiSum.page!==page)return;
+  if(r.status===200){const d=await r.json();if(d&&d.summary){Object.assign(aiSum,{status:"ready",data:d.summary});paintAiSummary();return}}
+ }catch{}
+ if(aiSum.page===page){aiSum.status="none";paintAiSummary()}
+}
 // Evidence-first overview drawn from existing ad records and deterministic classifiers.
 function intelligenceOverview(ads){
  const total=ads.length, themes=messagingThemes(ads).filter(t=>t.category!=="actions");
@@ -1553,7 +1575,7 @@ function intelligenceOverview(ads){
  const partial=!!(state.cursor||state.needsPageStart);
  const checked=state.lastSearchAt?new Date(state.lastSearchAt).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"this session";
  const idea=main?main.test:"Explore recently launched ads and test one new message against your current creative.";
- return '<section class="intel-overview" aria-labelledby="intel-overview-title"><div class="io-heading"><div><p class="io-eyebrow">ADSNOOP INTELLIGENCE</p><h3 id="intel-overview-title">What matters about '+esc(state.brand||"this advertiser")+'</h3><p class="io-intro">The signals worth checking before you scroll through the ads.</p></div><button class="io-button" type="button" data-view="insights">Explore messaging →</button></div><div class="io-grid">'+tiles+'</div><div class="io-direction"><strong>Creative test to consider</strong><p>'+esc(idea)+'</p></div><p class="io-method">'+total+" loaded active ads · "+(state.coverage==="GB"?"UK":"UK + EU")+" coverage · Checked "+esc(checked)+". "+(partial?"Partial sample: more Meta pages may be available. ":"")+"Themes and suggested tests are editorial research signals, not verified ROAS or performance.</p></section>";
+ return '<section class="intel-overview" aria-labelledby="intel-overview-title"><div class="io-heading"><div><p class="io-eyebrow">ADSNOOP INTELLIGENCE</p><h3 id="intel-overview-title">What matters about '+esc(state.brand||"this advertiser")+'</h3><p class="io-intro">The signals worth checking before you scroll through the ads.</p></div><button class="io-button" type="button" data-view="insights">Explore messaging →</button></div>'+aiSummaryHTML()+'<div class="io-grid">'+tiles+'</div><div class="io-direction"><strong>Creative test to consider</strong><p>'+esc(idea)+'</p></div><p class="io-method">'+total+" loaded active ads · "+(state.coverage==="GB"?"UK":"UK + EU")+" coverage · Checked "+esc(checked)+". "+(partial?"Partial sample: more Meta pages may be available. ":"")+"Themes and suggested tests are editorial research signals, not verified ROAS or performance.</p></section>";
 }
 
 const mixFormats={...formatLabel,static:"Static Image"};
@@ -1695,6 +1717,7 @@ function renderIntel(){
  }
  updateCreativeMix(mix,rows);if(state.view==="intel")mixPeek(mix);
  hydrateThumbs();
+ loadAiSummary();
 }
 function findAd(id){return state.rows.find(a=>a.id===id)||state.saved.get(id)||state.compare.get(id)}
 function modal(title,content){$("modalTitle").textContent=title;$("modalContent").innerHTML=content;$("modalOverlay").classList.add("open");$("closeModal").focus();}

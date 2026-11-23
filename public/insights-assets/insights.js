@@ -34,6 +34,8 @@ if(data.type==="article")track("insights_article_view",{});
 
 document.addEventListener("click",function(e){
  var t=e.target.closest&&e.target.closest("a,button");if(!t)return;
+ var ang=t.getAttribute("data-ang");
+ if(ang)track("angles_click",{angle:ang,placement:t.getAttribute("data-ang-place")||""});
  var cta=t.getAttribute("data-ins-cta");
  if(cta){
   var dest=t.getAttribute("href")||"";
@@ -103,4 +105,8 @@ if(!reduce&&"IntersectionObserver" in window){
  var ro=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){en.target.classList.add("is-in");ro.unobserve(en.target)}})},{rootMargin:"0px 0px -40px 0px"});
  items.forEach(function(el,i){if(el.getBoundingClientRect().top>innerHeight){el.classList.add("ins-reveal");el.style.transitionDelay=(i%3)*60+"ms";ro.observe(el)}});
 }
+
+// Angles library: filter by sector.
+var filters=document.querySelectorAll("[data-ang-sector]");
+if(filters.length){filters.forEach(function(b){b.addEventListener("click",function(){var v=b.getAttribute("data-ang-sector");filters.forEach(function(x){x.setAttribute("aria-pressed",x===b?"true":"false")});document.querySelectorAll(".ang-lib-card").forEach(function(c){c.hidden=!!v&&("|"+(c.getAttribute("data-sectors")||"")+"|").indexOf("|"+v+"|")<0});if(v)track("angles_library_filter",{sector:v})})})}
 })();

@@ -62,6 +62,8 @@ const nextConfig: NextConfig = {
       { source: "/insights", destination: "/insights-pages/index.html" },
       { source: "/insights/feed.xml", destination: "/insights-pages/feed.xml" },
       { source: "/insights/category/:category", destination: "/insights-pages/category/:category.html" },
+      { source: "/insights/angles", destination: "/insights-pages/angles/index.html" },
+      { source: "/insights/angles/:slug", destination: "/insights-pages/angles/:slug.html" },
       { source: "/insights/:slug", destination: "/insights-pages/:slug.html" },
     ];
     // A service with its own Meta token uses its own API routes; a preview
