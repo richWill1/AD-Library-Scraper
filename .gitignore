@@ -11,3 +11,6 @@ node_modules
 public/insights-pages/
 public/insights-art/
 public/insights-assets/manifest.json
+
+# Packed Chrome extension
+adsnoop-extension*.zip

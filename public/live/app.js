@@ -2026,7 +2026,9 @@ document.addEventListener("click",trkClick);document.addEventListener("input",tr
 renderCards();if(TRACKER&&(!tracker().brands.length||!activeBrand()?.competitors.length))trkFocus();if(!TRACKER)health();
 // Deep links from other pages: /?page=PAGE_ID&name=Brand or /?q=brand
 {const p=new URLSearchParams(location.search),pg=p.get("page")||"",nm=(p.get("name")||"").slice(0,120),q=(p.get("q")||"").slice(0,120);
- if(/^\d{1,30}$/.test(pg)){state.brand=nm;state.page=pg;state.query=nm||pg;state.choices.set(pg,{id:pg,name:nm||"Advertiser",count:0});if(nm)rememberPageId(nm,pg);void runSearch(nm||pg,pg);setTimeout(()=>$("cards")?.scrollIntoView({behavior:"smooth"}),300)}
+ if(/^\d{1,30}$/.test(pg)){state.brand=nm;state.page=pg;state.query=nm||pg;state.choices.set(pg,{id:pg,name:nm||"Advertiser",count:0});if(nm)rememberPageId(nm,pg);void runSearch(nm||pg,pg);setTimeout(()=>$("cards")?.scrollIntoView({behavior:"smooth"}),300)
+  // From the Chrome extension: "Pin as a competitor" (do=pin) pins once sign-in has been checked.
+  if(p.get("do")==="pin"){let n=0;const go=()=>{if(typeof auth!=="undefined"&&auth.checking&&n++<40){setTimeout(go,250);return}if(state.page===pg&&!isFollowed(pg))toggleFollow()};setTimeout(go,600)}}
  else if(q){const i=$("searchInput");if(i)i.value=q;searchClient(q)}
  const vw=p.get("view");if(!pg&&!q&&(vw==="saved"||vw==="insights"))setView(vw);
  if(pg||q||vw)history.replaceState(null,"",location.pathname);}

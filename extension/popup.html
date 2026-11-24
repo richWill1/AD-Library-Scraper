@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>AdSnoop</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<header class="top">
+  <img src="icons/32.png" width="20" height="20" alt="">
+  <span class="word">AdSnoop</span>
+  <span class="env" id="env" hidden>Preview</span>
+</header>
+<main id="main" aria-live="polite">
+  <div class="loading" id="loading">
+    <span class="ring" aria-hidden="true"></span>
+    <p><b>Finding this brand's ads…</b><br><span id="loadingSite">Checking the site</span></p>
+  </div>
+</main>
+<script src="config.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
