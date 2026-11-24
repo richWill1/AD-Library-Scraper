@@ -386,7 +386,7 @@ function card(a){
  const platforms=(a.platforms||[]).join(", ")||"Platform not reported";
  const format=a.format&&a.format!=="Unknown"?a.format:"Format to be verified";
  const isSaved=state.saved.has(a.id),isCompared=state.compare.has(a.id);
- return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false">'+badges+'<span class="fmtbadge" data-fmt="'+esc(a.id)+'"></span><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span class="adbrand">'+logoHTML(a.pageId,a.pageName||state.brand,"sm")+esc(a.pageName||state.brand||"Advertiser")+'</span>'+(a.format&&a.format!=="Unknown"?'<span class="tag">'+esc(a.format)+'</span>':'')+'</div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span'+(gm&&gm.n>1&&gm.head&&!gm.open?' title="Sum of each ad\'s reach. People who saw more than one are counted more than once."':'')+'>'+esc(reachText)+'</span></div>'+ctaLineHTML(a.id)+'<div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
+ return '<article class="adcard tile-hidden"><div class="live-visual" data-media="'+esc(a.id)+'" data-loaded="false">'+badges+'<span class="fmtbadge" data-fmt="'+esc(a.id)+'"></span><div class="creative-recovery"><span class="loadingring" aria-hidden="true"></span><strong>Preparing creative preview</strong><small>Loading only when this card is in view.</small></div></div><div class="adbody"><div class="admeta"><span class="adbrand">'+logoHTML(a.pageId,a.pageName||state.brand,"sm")+esc(a.pageName||state.brand||"Advertiser")+'</span>'+(a.format&&a.format!=="Unknown"?'<span class="tag">'+esc(a.format)+'</span>':'')+'</div><h3 class="adtitle">'+esc(a.title||"Ad creative")+'</h3><p class="adcopy adtext">'+esc(a.copy||"No copy provided by Meta.")+'</p><div class="metadata"><span>'+esc(formatDate(a.start))+'</span><span>'+esc(platforms)+'</span><span'+(gm&&gm.n>1&&gm.head&&!gm.open?' title="Sum of each ad\'s reach. People who saw more than one are counted more than once."':'')+'>'+esc(reachText)+'</span></div>'+ctaLineHTML(a.id)+'<div class="adbottom"><button class="linkbutton" data-action="detail" data-id="'+esc(a.id)+'">View ad details ↗</button><div class="smallactions"><button class="remixbtn" data-action="remix" data-id="'+esc(a.id)+'" data-rpage="'+esc(a.pageId||state.page||"")+'" data-name="'+esc(a.pageName||state.brand||"")+'" title="AI: a prompt to recreate this ad’s style, plus copy for your brand">✦ Remix</button><button class="square '+(isSaved?"on":"")+'" data-action="save" data-id="'+esc(a.id)+'" aria-label="'+(isSaved?"Remove saved ad":"Save ad")+'">'+(isSaved?"♥":"♡")+'</button><button class="square '+(isCompared?"on":"")+'" data-action="compare" data-id="'+esc(a.id)+'" aria-label="Compare ad">'+(isCompared?"✓":"⊕")+'</button></div></div></div></article>';
 }
 function renderCards(){
  if(observer)observer.disconnect();
@@ -834,7 +834,7 @@ function renderAccountUI(){
  if(auth.signedIn){if(!el.dataset.mounted){el.innerHTML='<div id="acctBtn"></div>';try{auth.clerk.mountUserButton($("acctBtn"))}catch{}el.dataset.mounted="1"}}
  else{delete el.dataset.mounted;el.innerHTML='<button type="button" class="acct-in" data-acct="signin">Sign in</button>'}
 }
-document.addEventListener("click",e=>{const b=e.target.closest("[data-acct]");if(!b||!auth.clerk)return;if(b.dataset.acct==="signin")auth.clerk.openSignIn({});if(b.dataset.acct==="signup")auth.clerk.openSignUp({})});
+document.addEventListener("click",e=>{const b=e.target.closest("[data-acct]");if(!b||!auth.clerk)return;if(b.closest("#modalOverlay"))$("modalOverlay").classList.remove("open");if(b.dataset.acct==="signin")auth.clerk.openSignIn({});if(b.dataset.acct==="signup")auth.clerk.openSignUp({})});
 // Show the value before asking for an account. All example figures are illustrative.
 function radarExampleBannerHTML(prefix){
  if(prefix!=="homeRadarExample")return '<div class="trk-example-head"><div><p class="eyebrow">A look inside the radar</p><h3 id="'+prefix+'Title">Find your next creative test.</h3><p>Compare your brand with up to five competitors, then see where your ads could try something different.</p></div><span class="trk-example-label">Illustrative example</span></div>';
@@ -1165,7 +1165,7 @@ function brandStrip(cols){
  }).join("")+'</div>';
 }
 function tabsHTML(){
- const t=[["overview","Overview"],["mix","Creative mix"],["activity","Creative activity"],["messaging","Messaging"]];
+ const t=[["overview","Overview"],["mix","Creative mix"],["activity","Creative activity"],["messaging","Messaging"],["remix","Remix ads ✦"]];
  return '<div class="cmp-tabs" role="tablist" aria-label="Comparison sections">'+t.map(([k,l])=>'<button role="tab" aria-selected="'+(cmp.tab===k)+'" class="'+(cmp.tab===k?'on':'')+'" data-action="cmptab" data-tab="'+k+'">'+l+'</button>').join("")+'</div>';
 }
 function evidenceHTML(ev){
@@ -1266,7 +1266,7 @@ function compareHTML(){
  const cols=brands.map(b=>{const c={...b,d:cmp.data.get(b.id)};c.b=bench(c);return c});
  {let k=0;cmp.colors=new Map(cols.map(c=>[c.id,c.mine?"#0071e3":BRAND_PAL[k++%BRAND_PAL.length]]))}
  const hint=!mine?'<p class="cmp-hint">Add your brand in <a href="/tracker">My competitors</a> to unlock the Opportunity Radar.</p>':'';
- const pane=cmp.tab==="mix"?mixHTML(cols):cmp.tab==="activity"?activityHTML(cols):cmp.tab==="messaging"?messagingCmpHTML(cols):overviewHTML(cols);
+ const pane=cmp.tab==="remix"?remixTabHTML(cols):cmp.tab==="mix"?mixHTML(cols):cmp.tab==="activity"?activityHTML(cols):cmp.tab==="messaging"?messagingCmpHTML(cols):overviewHTML(cols);
  const when=cols.map(c=>c.b&&c.b.generatedAt).filter(Boolean).sort()[0];
  const anim=cmp.anim;cmp.anim=false;
  return '<div class="cmp-wrap cmp2">'+hint+brandStrip(cols)+tabsHTML()+'<div class="cmp-pane'+(anim?' in':'')+'" role="tabpanel">'+pane+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh</button><span class="intel-sub">All accessible active '+(state.coverage==="GB"?"UK":"UK + EU")+' ads per brand from Meta’s Ad Library'+(when?', collected '+new Date(when).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):'')+'. Activity and format signals aren’t measures of performance or spend.</span></div></div>';
@@ -1719,11 +1719,65 @@ function renderIntel(){
  hydrateThumbs();
  loadAiSummary();
 }
+// ---- Remix this ad: Claude writes a style prompt and copy for your brand (signed-in users) ----
+const remix={busy:"",last:null};
+function remixTabHTML(cols){
+ const comps=cols.filter(c=>!c.mine);
+ if(!comps.length)return '<div class="op-empty">Add competitors to remix their ads.</div>';
+ const head=c=>'<h4>'+logoHTML(c.id,c.name,"")+'<span>'+esc(c.name)+'</span></h4>';
+ const groups=comps.map(c=>{
+  if(!c.d||c.d.status!=="ready")return '<div class="rx-group">'+head(c)+'<p class="intel-sub">'+(c.d&&c.d.status==="error"?'Couldn’t load this brand’s ads.':'<span class="cmp-wait"></span> Loading ads…')+'</p></div>';
+  const seen=new Set(),ads=[...c.d.rows].filter(a=>(a.copy&&a.copy!=="No ad copy provided by Meta.")||a.title).sort(byReach).filter(a=>{const k=groupKey(a);if(seen.has(k))return false;seen.add(k);return true}).slice(0,4);
+  if(!ads.length)return '<div class="rx-group">'+head(c)+'<p class="intel-sub">No live ads with copy to remix.</p></div>';
+  return '<div class="rx-group">'+head(c)+'<div class="rx-grid">'+ads.map(a=>{
+   const d=daysRunning(a),copy=a.copy&&a.copy!=="No ad copy provided by Meta."?a.copy:"";
+   return '<div class="rx-ad">'+thumbHTML(a.id,"rx-th",true)+'<div class="rx-body"><b>'+esc((a.title||copy).slice(0,70))+'</b>'+(a.title&&copy?'<small>'+esc(copy.slice(0,110)+(copy.length>110?"…":""))+'</small>':'')+'<span class="rx-meta">'+[a.reach?'UK reach '+compactNumber(a.reach):'',d!=null?d+' days live':''].filter(Boolean).join(' · ')+'</span><button class="remixbtn" data-action="remix" data-id="'+esc(a.id)+'" data-rpage="'+esc(c.id)+'" data-name="'+esc(c.name)+'">✦ Remix this ad</button></div></div>'}).join("")+'</div></div>';
+ }).join("");
+ const me=myBrand();
+ return '<div class="rx-intro"><h3>Turn their ads into your next test.</h3><p>Pick a competitor ad. AdSnoop’s AI breaks down how it’s built, writes a prompt to recreate the style in ChatGPT, Midjourney or Canva, and rewrites the copy for '+(me?esc(me.name):'your brand')+'.</p></div>'+groups;
+}
+function remixGateHTML(){
+ return '<div class="rx-gate"><p class="rx-lead">Turn any competitor ad into your own version: a ready-to-paste image prompt, new copy in the same structure, and a line on why the ad works.</p><ol class="trk-join-steps"><li>Pick an ad</li><li>Paste the prompt into your image tool</li><li>Edit the copy and launch your test</li></ol><div class="modal-acts"><button class="pill" data-acct="signup">Create a free account →</button><button class="ghost" data-acct="signin">Sign in</button></div><p class="notice">Remix is free with an AdSnoop account.</p></div>';
+}
+async function openRemix(ad){
+ if(!/^\d{1,30}$/.test(ad.id||"")||!/^\d{1,30}$/.test(ad.page||"")){toast("This ad can’t be remixed.");return}
+ if(auth.checking){toast("Checking your account…");return}
+ if(!auth.enabled){modal("Remix this ad",'<p>Sign-in is unavailable right now, so Remix is switched off. Please try again later.</p>');return}
+ if(!auth.signedIn){modal("Remix this ad",remixGateHTML());return}
+ const ab=activeBrand(),brand=ab&&ab.id!==ad.page?ab.name:"";
+ remix.busy=ad.id;
+ modal("Remix this ad",'<div class="rx-loading"><span class="loadingring" aria-hidden="true"></span><p><b>Reading '+esc(ad.name?ad.name+'’s':'the')+' ad…</b><br>Breaking down the hook, structure and visual style. This usually takes 10 to 20 seconds.</p></div>');
+ let d=null,err="";
+ try{
+  const tok=await authToken();if(!tok)throw Error("Please sign in again.");
+  const r=await fetch("/api/remix",{method:"POST",headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"},body:JSON.stringify({id:ad.id,page:ad.page,name:ad.name,brand}),signal:AbortSignal.timeout(90000)});
+  d=await r.json().catch(()=>null);if(!r.ok||!d||!d.remix)err=(d&&d.error)||"The remix couldn’t be written just now. Please try again.";
+ }catch(e){err=e&&e.name!=="TimeoutError"&&e.name!=="AbortError"&&e.message?e.message:"The remix took too long. Please try again."}
+ if(remix.busy!==ad.id||!$("modalOverlay").classList.contains("open"))return;
+ remix.busy="";
+ if(err){$("modalContent").innerHTML='<p class="errmsg">'+esc(err)+'</p>';return}
+ remix.last=d.remix;$("modalContent").innerHTML=remixResultHTML(d.remix,ad,brand,d.left);hydrateThumbs();
+}
+function remixResultHTML(x,ad,brand,left){
+ const block=(k,label,body,copy)=>'<section class="rx-sec"><div class="rx-sec-h"><span class="eyebrow">'+label+'</span>'+(copy?'<button class="ghost rx-copy" data-action="remixcopy" data-k="'+k+'">Copy</button>':'')+'</div>'+body+'</section>';
+ const c=x.copy||{};
+ return '<div class="rx-src">'+thumbHTML(ad.id,"rx-th",true)+'<p>Remixed from an ad by <b>'+esc(ad.name||"a competitor")+'</b>'+(brand?' for <b>'+esc(brand)+'</b>':'')+'.'+(x.usedImage?'':' The image wasn’t available, so the visual prompt is based on the text.')+'</p></div>'+
+  block("why","Why it works",'<p class="rx-why">'+esc(x.whyItWorks)+'</p>'+(x.structure&&x.structure.length?'<ol class="rx-steps">'+x.structure.map(s=>'<li>'+esc(s)+'</li>').join("")+'</ol>':''),false)+
+  block("prompt","Image prompt",'<div class="modalquote rx-q adtext" data-rx="prompt">'+esc(x.imagePrompt)+'</div><p class="rx-hint">Paste into ChatGPT, Midjourney or Canva.</p>',true)+
+  block("copy","Your copy, same structure",'<div class="modalquote rx-q adtext" data-rx="copy"><b>'+esc(c.headline)+'</b>\n\n'+esc(c.primaryText)+(c.cta?'\n\n['+esc(c.cta)+']':'')+'</div>',true)+
+  '<p class="notice">Written by AI from the ad’s public text'+(x.usedImage?' and image':'')+'. Fill in the [placeholders], check every claim, and don’t reuse a competitor’s logo, people or trademarks.'+(left!=null?' '+left+' remix'+(left===1?'':'es')+' left today.':'')+'</p>';
+}
+async function copyRemix(b){
+ const x=remix.last;if(!x)return;
+ const c=x.copy||{},text=b.dataset.k==="prompt"?x.imagePrompt:[c.headline,c.primaryText,c.cta].filter(Boolean).join("\n\n");
+ try{await navigator.clipboard.writeText(text);b.textContent="Copied ✓";setTimeout(()=>{if(b.isConnected)b.textContent="Copy"},1800)}
+ catch{const q=document.querySelector('[data-rx="'+b.dataset.k+'"]');if(q){const r=document.createRange();r.selectNodeContents(q);const s=getSelection();s.removeAllRanges();s.addRange(r)}toast("Press Ctrl+C (or ⌘C) to copy.")}
+}
 function findAd(id){return state.rows.find(a=>a.id===id)||state.saved.get(id)||state.compare.get(id)}
 function modal(title,content){$("modalTitle").textContent=title;$("modalContent").innerHTML=content;$("modalOverlay").classList.add("open");$("closeModal").focus();}
 function adDetails(id){
  const a=findAd(id);if(!a)return;
- modal(a.pageName||"Ad creative",'<p>'+esc(a.title||"Meta advertising record")+'</p><div class="modalquote adtext">'+esc(a.copy||"No copy provided.")+'</div><div class="modal-row"><span>Meta Library ID</span><strong>'+esc(a.id)+'</strong></div><div class="modal-row"><span>Running since</span><strong>'+esc(formatDate(a.start))+'</strong></div><div class="modal-row"><span>Publisher platforms</span><strong>'+esc((a.platforms||[]).join(", ")||"Unknown")+'</strong></div><div class="modal-row"><span>UK reach</span><strong>'+esc(reach(a.reach))+'</strong></div>'+(()=>{const c=mediaCache.get(a.id)?.cta;if(!c)return '';return (ctaLabel(c)?'<div class="modal-row"><span>Button</span><strong>'+esc(ctaLabel(c))+'</strong></div>':'')+(c.url?'<div class="modal-row"><span>Landing page</span><strong><a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(ctaPath(c.url).slice(0,60))+' ↗</a></strong></div>':'')})()+(()=>{const gm=state.groupMeta?.get(a.id);return gm&&gm.n>1?'<div class="modal-row"><span>Same copy runs as</span><strong>'+gm.n+' ads</strong></div>':''})()+'<div class="modal-row"><span>Creative format</span><strong>'+esc(a.format||"Unknown")+'</strong></div><p class="notice">UK reach is reported when provided by the API and is not ad spend or performance.</p><a class="pill" href="'+metaUrl(a.id)+'" target="_blank" rel="noopener noreferrer">View on Meta ↗</a>');
+ modal(a.pageName||"Ad creative",'<p>'+esc(a.title||"Meta advertising record")+'</p><div class="modalquote adtext">'+esc(a.copy||"No copy provided.")+'</div><div class="modal-row"><span>Meta Library ID</span><strong>'+esc(a.id)+'</strong></div><div class="modal-row"><span>Running since</span><strong>'+esc(formatDate(a.start))+'</strong></div><div class="modal-row"><span>Publisher platforms</span><strong>'+esc((a.platforms||[]).join(", ")||"Unknown")+'</strong></div><div class="modal-row"><span>UK reach</span><strong>'+esc(reach(a.reach))+'</strong></div>'+(()=>{const c=mediaCache.get(a.id)?.cta;if(!c)return '';return (ctaLabel(c)?'<div class="modal-row"><span>Button</span><strong>'+esc(ctaLabel(c))+'</strong></div>':'')+(c.url?'<div class="modal-row"><span>Landing page</span><strong><a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(ctaPath(c.url).slice(0,60))+' ↗</a></strong></div>':'')})()+(()=>{const gm=state.groupMeta?.get(a.id);return gm&&gm.n>1?'<div class="modal-row"><span>Same copy runs as</span><strong>'+gm.n+' ads</strong></div>':''})()+'<div class="modal-row"><span>Creative format</span><strong>'+esc(a.format||"Unknown")+'</strong></div><p class="notice">UK reach is reported when provided by the API and is not ad spend or performance.</p><div class="modal-acts"><button class="pill" data-action="remix" data-id="'+esc(a.id)+'" data-rpage="'+esc(a.pageId||state.page||"")+'" data-name="'+esc(a.pageName||state.brand||"")+'">✦ Remix this ad</button><a class="ghost" href="'+metaUrl(a.id)+'" target="_blank" rel="noopener noreferrer">View on Meta ↗</a></div>');
 }
 function compareView(){
  const items=Array.from(state.compare.values());if(!items.length)return;
@@ -1940,6 +1994,8 @@ document.addEventListener("click",e=>{
  b=e.target.closest("[data-action]");if(!b)return;
  const {action,id}=b.dataset;
  if(action==="detail")adDetails(id);
+ if(action==="remix"){openRemix({id,page:b.dataset.rpage||"",name:b.dataset.name||""});return}
+ if(action==="remixcopy"){copyRemix(b);return}
  if(action==="save"){const a=findAd(id);if(a){const was=state.saved.has(id);if(was)state.saved.delete(id);else state.saved.set(id,a);save();renderCards();toast(was?"Removed from saved ideas":"Saved to your ideas ♥");if(!was)document.querySelectorAll('[data-action="save"][data-id="'+id+'"]').forEach(el=>{el.classList.add("pop");setTimeout(()=>el.classList.remove("pop"),500)});}}
  if(action==="follow")toggleFollow();
  if(action==="mybrand")toggleMine();
