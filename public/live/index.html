@@ -817,10 +817,24 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 .bm-h small{display:block;font-size:12px;color:#86868b;margin-top:2px}
 .bm-f{margin:12px 0 0;font-size:12px;color:#6e6e73;line-height:1.45}
 .bm-f b{color:#1d1d1f}
-.bm.spend-tile{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 18px}
-.spend-tile h3{margin:0;font-size:15px;font-weight:600;text-transform:none;color:#1d1d1f}
-.spend-tile p{margin:2px 0 0;font-size:12px;color:#6e6e73}
-.spend-tile strong{font-size:24px;font-weight:650;line-height:1.1;letter-spacing:-.035em;color:#1d1d1f;white-space:nowrap}
+.spend-card{margin:0 0 18px;padding:19px 22px 15px;border-radius:20px;color:#f6f7ff;background:radial-gradient(ellipse at top left,#33315e 0%,transparent 55%),linear-gradient(120deg,#1d2039,#171a2e);border:1px solid #393d5f}
+.spend-card-head,.spend-card-foot{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px 18px}
+.spend-card-head h3{margin:0;font-size:14px;font-weight:650;letter-spacing:.015em;text-transform:none;color:#f0efff}
+.spend-card-head>span,.spend-card-foot{font-size:12px;color:#c2c4dc}
+.spend-card-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:clamp(22px,5vw,70px);align-items:center;padding:16px 0}
+.spend-takeaway{font-size:clamp(21px,2.7vw,30px);line-height:1.18;letter-spacing:-.035em;font-weight:650;overflow-wrap:anywhere}
+.spend-bars{display:grid;gap:11px}
+.spend-bar>div:first-child{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:4px}
+.spend-bar>div:first-child>span{min-width:0;color:#e4e5f5;font-size:13px;font-weight:550;overflow-wrap:anywhere}
+.spend-bar strong{font-size:15px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.spend-track{height:6px;border-radius:9px;background:#444866;overflow:hidden}
+.spend-track span{display:block;height:100%;border-radius:inherit;background:#a9a5fe}
+.spend-bar.own .spend-track span{background:#71dbc9}
+.spend-card-foot{padding-top:9px;border-top:1px solid #464a65}
+.spend-method summary{cursor:pointer;color:#e5e2ff;font-weight:600}
+.spend-method summary:focus-visible{outline:2px solid #c8c4ff;outline-offset:3px}
+.spend-method p{max-width:550px;line-height:1.5;margin:7px 0 0}
+@media(max-width:640px){.spend-card{padding:15px 16px 12px}.spend-card-body{grid-template-columns:1fr;gap:12px;padding:12px 0}.spend-takeaway{font-size:21px}}
 .rb{display:flex;flex-direction:column;gap:7px}
 .rb-row{display:grid;grid-template-columns:minmax(80px,120px) 1fr auto;align-items:center;gap:10px;font-size:13px}
 .rb-n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#424245}
@@ -1270,7 +1284,7 @@ body.tracker-mode main#research{padding-top:8px!important}
 <section id="radarDemo" class="trk-home-demo" aria-label="Try the competitor radar" hidden></section><footer class="foot space-foot" data-space="footer"><div class="space-bg" aria-hidden="true"><canvas class="space-canvas"></canvas><div class="foot-glow"></div></div><div class="footin"><div class="foot-brand"><img src="/brand/adsnoop-wordmark-light.svg" alt="AdSnoop" width="132" height="34"><p>See what your competitors are putting out there.</p></div><nav class="foot-links" aria-label="Footer"><button data-view="discover">Discover</button><button data-view="saved">Saved ideas</button><a href="/tracker">My competitors</a><a href="/christmas-ads">Christmas ads</a><a href="/black-friday-ads">Black Friday ads</a><a href="/meta-updates">Meta ads updates</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><button type="button" id="analytics-settings" hidden>Analytics settings</button><a href="#top" data-scrolltop>Back to top ↑</a></nav><p class="foot-note">Data from Meta’s public Ad Library. Not affiliated with Meta. UK reach figures are Meta’s own estimates. Spend, conversions and verified creative performance aren’t available for commercial ads. Previews depend on the source media collector, and format and funnel labels may be inferred.</p></div></footer>
 <div id="modalOverlay" class="overlay"><div role="dialog" aria-modal="true" aria-labelledby="modalTitle" class="modal"><div class="modalhead"><div><p class="eyebrow">Creative research</p><h2 id="modalTitle"></h2></div><button class="close" id="closeModal" aria-label="Close details">×</button></div><div id="modalContent"></div></div></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div><div id="comparisonBar" class="cmpbar"><span id="compareCount">0 of 3 selected</span><button class="pill sm" id="compareOpen">Compare ads</button><button class="square" id="compareClear" aria-label="Clear comparison" style="background:#333338;color:white;border-color:#555">×</button></div>
-<script src="/brand/eyes-interaction.js" defer></script><script src="/brand/hero-space.js" defer></script><script src="/brand/messaging-story.js" defer></script><script src="/brand/loadstory.js"></script><script src="/live/spend.js" defer></script><script src="/live/app.js" defer></script><aside id="analytics-choice" aria-labelledby="analytics-heading" hidden style="position:fixed;bottom:12px;left:12px;z-index:9999;width:min(390px,calc(100% - 24px));background:white;color:#222;border:1px solid #bbb;border-radius:12px;padding:16px;box-shadow:0 4px 20px #0002;font-size:14px">
+<script src="/brand/eyes-interaction.js" defer></script><script src="/brand/hero-space.js" defer></script><script src="/brand/messaging-story.js" defer></script><script src="/brand/loadstory.js"></script><script src="/live/spend.js?v=30d" defer></script><script src="/live/app.js?v=30d" defer></script><aside id="analytics-choice" aria-labelledby="analytics-heading" hidden style="position:fixed;bottom:12px;left:12px;z-index:9999;width:min(390px,calc(100% - 24px));background:white;color:#222;border:1px solid #bbb;border-radius:12px;padding:16px;box-shadow:0 4px 20px #0002;font-size:14px">
 <strong id="analytics-heading">Analytics cookies</strong>
 <p>With your permission, AdSnoop uses Google Analytics cookies to measure page visits and interactions. You can change your choice in the footer. <a style="text-decoration:underline" href="https://policies.google.com/technologies/partner-sites">How Google uses this data</a></p>
 <button class="ghost" type="button" id="analytics-decline">Decline</button> <button class="ghost" type="button" id="analytics-allow">Allow analytics</button>

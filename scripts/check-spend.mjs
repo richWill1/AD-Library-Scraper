@@ -46,26 +46,41 @@ assert.equal(avg.value,estimate.value/2);
 assert.equal(model.average([{id:'me',mine:true,estimate}]).value,null);
 assert.equal(model.average([{id:'us',estimate:{...estimate,benchmark:model.category('fashion-us')}}]).count,0);
 
-// The tracker uses the same blended benchmark even for legacy selections with saved categories.
+// A 60-day ad contributes half its reach. A five-day ad contributes all its reach.
+const dates=data([row('1',60000,'2026-09-27'),row('2',5000,'2026-11-21')]);
+const rolling=model.estimate(dates,'average','GB',{last30:true});
+assert.equal(rolling.reach,35000);
+assert.equal(rolling.value,770);
+assert.equal(model.estimate(data([row('1',60000,'2026-11-01')]),'average','GB',{last30:true}).reach,60000);
+assert.equal(model.estimate(data([{...row('1',60000,'2026-09-27'),stop:'2026-10-10'}]),'average','GB',{last30:true}).reach,0);
+const aligned=model.compare30Days([
+ {id:'mine',mine:true,d:data([row('1',31000,'2026-10-27')],{generatedAt:'2026-11-26T01:00:00Z'})},
+ {id:'rival',d:data([row('2',30000,'2026-10-27')])}
+],'GB');
+assert.equal(aligned.through,'2026-11-25');
+assert.equal(aligned.from,'2026-10-27');
+assert.equal(aligned.own.reach,30000);
+assert.equal(aligned.avg.value,660);
+
 const app=fs.readFileSync('public/live/app.js','utf8');
-context.state={coverage:'GB'};
+Object.assign(context,{state:{coverage:'GB'},esc:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')});
 vm.runInContext(app.slice(app.indexOf('const spendMoney='),app.indexOf('function overviewHTML(')),context);
-const html=context.spendHTML([
- {id:'10',mine:true,d:data([row('1',900000)])},
- {id:'20',name:'Strachan',spendCategory:'furniture',d:strachan},
- {id:'30',d:data(strachan.rows,{complete:false})}
-]);
-assert.ok(html.includes('≈£7.1k'));
-assert.ok(html.includes('1 of 2 competitors'));
-assert.ok(!html.includes('Strachan'));
+const own={id:'10',mine:true,d:data([row('1',100000,'2026-11-01')])};
+const rival={id:'20',name:'CareCo <test>',spendCategory:'furniture',d:data([row('1',730600,'2026-11-01')])};
+const html=context.spendHTML([own,rival]);
+assert.ok(html.includes('≈£16.1k'));
+assert.ok(html.includes('≈£2.2k'));
+assert.ok(html.includes('below CareCo &lt;test&gt;'));
+assert.ok(html.includes('27 Oct'));
 assert.ok(!html.includes('<select'));
+assert.ok(context.spendHTML([own,rival,{id:'30',d:data(strachan.rows,{complete:false})}]).includes('1 of 2 competitors'));
 assert.ok(context.spendHTML([{id:'20',d:data([row('1',0)])}]).includes('≈£0'));
-assert.ok(context.spendHTML([{id:'20',d:{status:'running'}}]).includes('Collecting ad data'));
-assert.ok(context.spendHTML([{id:'20',d:data([row('1',null)])}]).includes('Insufficient reach data'));
-assert.equal(context.spendHTML([{id:'10',mine:true,d:strachan}]),'');
+assert.ok(context.spendHTML([{id:'20',d:{status:'running'}}]).includes('Collecting ads'));
+assert.ok(context.spendHTML([{id:'20',d:data([row('1',null)])}]).includes('Insufficient data'));
+assert.equal(context.spendHTML([own]),'');
 context.state.coverage='EU_UK';
-assert.ok(context.spendHTML([{id:'20',d:strachan}]).includes('Choose UK coverage'));
-assert.ok(!context.spendHTML([{id:'20',d:strachan}]).includes('≈£7.1k'));
+assert.ok(context.spendHTML([own,rival]).includes('Choose UK coverage'));
+assert.ok(!context.spendHTML([own,rival]).includes('≈£16.1k'));
 
 // Round-trip the real account sanitizer without contacting Clerk.
 const account=fs.readFileSync('app/api/account/route.ts','utf8');
@@ -75,4 +90,4 @@ assert.equal(clean.brands[0].spendCategory,'furniture');
 assert.equal(clean.brands[0].competitors[0].spendCategory,'kitchens');
 assert.equal('spendCategory' in clean.brands[0].competitors[1],false);
 assert.equal('spendCategory' in context.clean({brands:[{id:'10',name:'Legacy'}]}).brands[0],false);
-console.log('Spend checks passed: Strachan calibration, category maths, missing/zero reach, deduplication, coverage, dates, currency separation, competitor averages, compact tile rendering and legacy account settings.');
+console.log('Spend checks passed: Strachan calibration, category maths, missing/zero reach, deduplication, coverage, dates, currency separation, competitor averages, 30-day window, aligned snapshots, comparison rendering and legacy account settings.');

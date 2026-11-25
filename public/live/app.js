@@ -1262,27 +1262,57 @@ function positionLine(cols,val,unit){unit=unit||"";
  return 'You rank <b>#'+pos+' of '+r.length+'</b>'+(avg!=null?' · competitor average '+fmtN(avg)+unit:'');
 }
 const spendMoney=value=>new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP",notation:value>=1000?"compact":"standard",maximumFractionDigits:value>=1000?1:0}).format(value).replace("K","k");
+const spendWindow = new Intl.DateTimeFormat("en-GB",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
 function spendHTML(cols){
  const model=globalThis.AdSnoopSpend;
  const rivals=cols.filter(c=>!c.mine);
- if(!model||!rivals.length)return "";
- const items=rivals.map(c=>({id:c.id,estimate:model.estimate(c.d,"average",state.coverage)}));
- const avg=model.average(items);
- const value=avg.count?"≈"+spendMoney(avg.value):"—";
- let detail;
- if(avg.count){
-  const count=avg.count===avg.total?String(avg.count):avg.count+" of "+avg.total;
-  detail="UK active ads to date · "+count+" competitor"+(avg.total===1?"":"s");
- }else if(state.coverage!=="GB"){
-  detail="Choose UK coverage to see an estimate";
- }else if(rivals.some(c=>!c.d||c.d.status==="running"||c.d.status==="queued")){
-  detail="Collecting ad data";
- }else{
-  detail="Insufficient reach data for an estimate";
+ if(!model?.compare30Days||!rivals.length)return "";
+
+ const {own,avg,from,through}=model.compare30Days(cols,state.coverage);
+ const mine=own?.eligible?own.value:null;
+ const max=Math.max(mine??0,avg.value??0,1);
+ const rivalLabel=rivals.length===1?rivals[0].name:"Tracked competitor average";
+ const collecting=cols.some(c=>!c.d||c.d.status==="running"||c.d.status==="queued");
+ const noEstimate=collecting?"Collecting ads":"Insufficient data";
+ const coverage=avg.count===avg.total?avg.count:avg.count+" of "+avg.total;
+ const period=through?spendWindow.formatRange(new Date(from),new Date(through)):"Last 30 days";
+
+ let takeaway="Spend comparison unavailable";
+ if(state.coverage!=="GB"){
+  takeaway="Choose UK coverage to compare spend";
+ }else if(mine!==null&&avg.value!==null){
+  const gap=mine-avg.value;
+  if(Math.abs(gap)<Math.max(1,max*0.1)){
+   takeaway="Similar estimated spend";
+  }else{
+   const against=rivals.length===1?rivalLabel:"the competitor average";
+   takeaway="Your brand is ≈"+spendMoney(Math.abs(gap))+(gap>0?" above ":" below ")+against;
+  }
+ }else if(collecting){
+  takeaway="Collecting ads for the comparison";
+ }else if(avg.count){
+  takeaway="Competitor estimate available";
  }
- return `<section class="bm spend-tile" aria-labelledby="spendTitle">
-  <div><h3 id="spendTitle">Modelled avg. competitor spend</h3><p>${detail}</p></div>
-  <strong aria-live="polite">${value}</strong>
+
+ function bar(label,value,side){
+  const amount=value===null?noEstimate:"≈"+spendMoney(value);
+  const track=value===null?"":'<div class="spend-track" aria-hidden="true"><span style="width:'+value/max*100+'%"></span></div>';
+  return '<div class="spend-bar '+side+'"><div><span>'+esc(label)+'</span><strong>'+amount+'</strong></div>'+track+'</div>';
+ }
+
+ return `<section class="spend-card" aria-labelledby="spendTitle">
+  <div class="spend-card-head">
+   <h3 id="spendTitle">30-day Meta ad spend</h3>
+   <span>${esc(period)}</span>
+  </div>
+  <div class="spend-card-body">
+   <div class="spend-takeaway" aria-live="polite">${esc(takeaway)}</div>
+   <div class="spend-bars">${bar("Your brand",mine,"own")}${bar(rivalLabel,avg.value,"rival")}</div>
+  </div>
+  <div class="spend-card-foot">
+   <span>Modelled from active UK ads${avg.count?" · "+coverage+" competitor"+(avg.total===1?"":"s"):""}</span>
+   <details class="spend-method"><summary>How it’s estimated</summary><p>AdSnoop spreads each active ad’s reported reach evenly over its observed lifetime, then applies £${model.rollingBenchmark.perThousand} per 1,000 ad-level reach to the portion inside the 30-day window. Delivery can vary day to day. Stopped ads are outside this view.</p></details>
+  </div>
  </section>`;
 }
 function overviewHTML(cols){
@@ -1291,7 +1321,7 @@ function overviewHTML(cols){
  const vid=kpiCard("Video share","% of ads with a known format",rankBars(cols,b=>b.classified?fpct(b,"v"):null,b=>fpct(b,"v")+"% video ("+b.fmt.v+" of "+fmtN(b.classified)+" classified)",b=>fpct(b,"v")+"%"),positionLine(cols,b=>b.classified?fpct(b,"v"):null,"%"));
  const fresh=kpiCard("Launched in 30 days","Active ads that started in the last 30 days",rankBars(cols,b=>b.n30,b=>b.n30+" ads ("+pctOf(b.n30,b.total)+"% of active) · "+b.n7+" in the last 7 days",b=>b.n30+' <small>'+pctOf(b.n30,b.total)+'%</small>'),positionLine(cols,b=>b.n30));
  const age=kpiCard("Median ad age","Days since launch, active ads",rankBars(cols,b=>b.median,b=>"Median "+b.median+" days · "+b.long+" ads running 90+ days",b=>b.median+'d'),"Longer isn’t better or worse: long-running ads aren’t proof of performance.");
- return radarHTML(cols)+spendHTML(cols)+'<div class="bm-grid">'+vol+vid+fresh+age+'</div>';
+ return spendHTML(cols)+radarHTML(cols)+'<div class="bm-grid">'+vol+vid+fresh+age+'</div>';
 }
 function mixHTML(cols){
  const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';

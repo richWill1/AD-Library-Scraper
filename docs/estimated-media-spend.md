@@ -2,9 +2,11 @@
 
 ## Product behaviour
 
-The My competitors overview shows one rounded average for the selected competitors with eligible UK data. It gives each competitor equal weight and excludes the user's own brand. Every estimate uses the same blended benchmark. Previously saved category settings do not affect this tile.
+The My competitors overview compares the user's brand with a named tracked competitor or the average across multiple tracked competitors. Both sides use the same 30 calendar days and one shared UK model. Previously saved category settings do not change the comparison.
 
-The estimate covers cumulative spend associated with observed active ads. Advertisers can cover different launch dates, which limits interpretation of their average.
+For each observed active ad, the model spreads its lifetime reach evenly over the days it has run and allocates the portion inside the 30-day window. Ads launched within the window contribute their observed reach without extrapolation. When snapshots are from different days, the window ends on the oldest eligible snapshot's date. Stopped ads outside the active collection are missing.
+
+The model applies a provisional £22 per 1,000 ad-level reach. The legacy category blend was £40.87644. The revised rate is a rounded calibration choice based on a small number of spot-checks. Matching date ranges and UK-only Meta spend from authorised Ads Manager exports would provide stronger validation.
 
 ## Supplied benchmarks
 
@@ -17,20 +19,20 @@ The estimate covers cumulative spend associated with observed active ads. Advert
 | Kitchens | GBP | 15.65 | 4.05 | 63.3825 |
 | Other | GBP | 7.76 | 2.77 | 21.4952 |
 
-The blended benchmark is the arithmetic mean of the five GBP **combined multipliers**: £40.87644 per 1,000 reach. It is not the product of the separate average CPM and average frequency. It gives each category equal weight, rather than weighting by the benchmark sample's spend. Supplied sample spend totals are not competitor budgets.
+The previous blended benchmark was the arithmetic mean of the five GBP **combined multipliers**: £40.87644 per 1,000 reach. It is not the product of the separate average CPM and average frequency. It gives each category equal weight, rather than weighting by the benchmark sample's spend. Supplied sample spend totals are not competitor budgets.
 
 The UK benchmark excludes US rates. The UK & ROW fashion benchmark also includes markets beyond the UK.
 
 ```
-modelled spend = sum(reported per-ad UK reach) / 1,000 × £40.87644
+modelled spend = sum(allocated 30-day UK reach per ad) / 1,000 × £22
 competitor average = sum(eligible competitor estimates) / eligible competitor count
 ```
 
-The result is a modelled estimate of cumulative spend across the active ads observed.
+The calculation models spend for the active ads observed during the window.
 
 ## Initial calibration
 
-On 25 November 2026, Strachan's complete active-ad dataset contained 58 ads with reach for all 58, totalling 174,518 per-ad UK reach. Earliest launch: 26 October 2026. Applying furniture frequency 3.80 and CPM £12.86 gave £8,528.35 in the initial category-specific test. The blended rate gives approximately £7.1k for the same dataset.
+On 25 November 2026, Strachan's complete active-ad dataset contained 58 ads with reach for all 58, totalling 174,518 per-ad UK reach. Earliest launch: 26 October 2026. Applying furniture frequency 3.80 and CPM £12.86 gave £8,528.35 in the initial category-specific test. The previous blended rate gave about £7.1k across the observed ads. The provisional 30-day rate gives about £3.7k, which shows the sensitivity to the assumed rate.
 
 An initial operator spot-check was encouraging, but the actual reporting period and campaign coverage were not independently matched. One advertiser does not establish accuracy across categories. Operator-supplied actual budgets remain private and are not used to fit an accuracy interval.
 
@@ -55,6 +57,6 @@ For monthly budget estimates, obtain period-matched delivery and frequency. Hist
 ## Implementation and checks
 
 - `public/live/spend.js`: standalone benchmark/calculation model, loaded before the main app.
-- `public/live/app.js`: compact average tile.
+- `public/live/app.js`: 30-day comparison card.
 - `app/api/account/route.ts`: optional category validation and persistence.
 - `scripts/check-spend.mjs`: run with Node 22.13+; verifies Strachan, coverage gates, missing/zero reach, duplicates, dates, currencies, averages, rendering and account sanitisation.
