@@ -31,7 +31,7 @@ export type DiscoveryResult = {
 type PageRef = {id?: string; handle?: string};
 type AdPage = {id: string; name: string; adCount: number; ownDomain: boolean};
 type SiteHit = {host: string; names: string[]; category?: string; pages: PageRef[]; domainConfirmed: boolean; image?: string};
-type DirectoryPage = {id: string; name: string; alias?: string; category?: string};
+type DirectoryPage = {id: string; name: string; alias?: string; category?: string; /** The tracked brand name, when the Page is on the curated UK brand list. */ curated?: string};
 
 const DROP = new Set(['uk', 'ltd', 'limited', 'plc', 'inc', 'llp', 'co', 'official', 'online', 'gb']);
 const REJECT_PATH = new Set(['sharer', 'share', 'share.php', 'dialog', 'plugins', 'login', 'login.php', 'help', 'privacy', 'policies', 'settings', 'watch', 'reel', 'photo', 'photos', 'stories', 'groups', 'events', 'hashtag', 'marketplace', 'flx', 'ajax', 'tr', 'l.php', 'gaming', 'home', 'profile.php', 'ads']);
@@ -184,6 +184,27 @@ export function nameMatch(query: string, name: string): 'exact' | 'variant' | 'n
   return 'none';
 }
 
+/** The Page name starts with the whole trading name and adds words after it:
+ * "247 Blinds" -> "247 Blinds and Curtains", "Strachan" -> "Strachan Fitted Furniture".
+ * A different business that merely contains the name ("Cameron Strachan Golf") does not lead with it. */
+export function leadMatch(query: string, name: string): boolean {
+  const keys = new Set<string>();
+  const add = (v: string) => { const c = compactName(v); if (c.length >= 4) keys.add(c); };
+  add(query);
+  const host = typedHost(query);
+  if (host) add(hostLabel(host));
+  for (const s of slugForms(query)) if (!s.includes('-')) add(s);
+  const words = name.toLowerCase().replace(/&/g, ' and ').split(/[^a-z0-9]+/).filter(Boolean);
+  while (words.length > 1 && words[0] === 'the') words.shift();
+  let lead = '';
+  for (let i = 0; i < words.length - 1; i++) {
+    lead += words[i];
+    if (keys.has(lead)) return true;
+    if (lead.length > 60) break;
+  }
+  return false;
+}
+
 export function parseFacebookUrl(input: string): PageRef | null {
   let url: URL;
   try { url = new URL(input); } catch { return null; }
@@ -322,6 +343,8 @@ type Draft = {
   website?: string;
   category?: string;
   level: 'exact' | 'variant' | 'site';
+  /** Matched only because the Page name leads with the trading name. */
+  lead?: boolean;
   adCount: number | null;
   ownDomain: boolean;
   domainConfirmed: boolean;
@@ -358,9 +381,12 @@ export function decide(query: string, input: {
     for (const b of patch.bits || []) if (!cur.bits.includes(b)) cur.bits.push(b);
   };
   for (const ad of input.ads) {
-    const level = nameMatch(query, ad.name);
-    if (level === 'none') { if (ad.adCount) mentions.push({id: ad.id, name: ad.name, count: ad.adCount}); continue; }
+    const named = nameMatch(query, ad.name);
+    const lead = named === 'none' && leadMatch(query, ad.name);
+    if (named === 'none' && !lead) { if (ad.adCount) mentions.push({id: ad.id, name: ad.name, count: ad.adCount}); continue; }
+    const level = named === 'none' ? 'variant' : named;
     upsert(ad.id, {name: ad.name, level, adCount: ad.adCount, ownDomain: ad.ownDomain, bits: [level === 'exact' ? `Meta Ad Library names this Page “${ad.name}”` : `Meta lists a Page named “${ad.name}”`, ad.ownDomain ? 'its ads link to this brand’s domain' : ''].filter(Boolean)});
+    if (lead) { const d = drafts.get(ad.id)!; if (d.level === 'variant') d.lead = true; }
   }
   for (const page of input.directory || []) {
     const level = nameMatch(query, page.name);
@@ -403,10 +429,14 @@ export function decide(query: string, input: {
       if (site.category && !draft.bits.includes(site.category)) draft.bits.push(site.category);
     }
   }
+  const hasExact = [...drafts.values()].some(d => (d.id || d.handle) && d.level === 'exact');
   const advertisers: FoundAdvertiser[] = [...drafts.values()].filter(d => d.id || d.handle).map(d => {
     // Exact Page name, or the brand domain's own Facebook link, can be verified.
     // A suffix such as "UK", or a handle that does not belong to the name, cannot.
-    const confidence: FoundAdvertiser['confidence'] = d.linkFits && (d.level === 'exact' || d.domainConfirmed || (d.level === 'variant' && d.ownDomain)) ? 'verified' : 'probable';
+    // A Page that only leads with the name is verified by its ads linking to the brand's domain,
+    // and never while a Page with the exact name is also in the running.
+    const leadOk = !d.lead || (!hasExact && d.ownDomain);
+    const confidence: FoundAdvertiser['confidence'] = d.linkFits && (d.level === 'exact' || d.domainConfirmed || (d.level === 'variant' && d.ownDomain && leadOk)) ? 'verified' : 'probable';
     const adsBit = d.adCount == null ? '' : d.adCount > 0 ? `${d.adCount} active UK ads in the first results` : '';
     const evidence = [...d.bits, d.handle ? `@${d.handle}` : '', d.category && !d.bits.includes(d.category) ? d.category : '', adsBit].filter(Boolean).join(' · ').slice(0, 280);
     const picture = /^\d{3,30}$/.test(d.id) ? `https://graph.facebook.com/${d.id}/picture?type=square&width=128&height=128` : undefined;
@@ -441,7 +471,7 @@ export function exactIdentity(query: string, directory: DirectoryPage[] = []): F
     }
   }
   for (const page of directory) {
-    if (keys.has(compactName(page.name)) && !hits.has(page.id)) hits.set(page.id, {id: page.id, name: page.name, category: page.category, picture: `https://graph.facebook.com/${page.id}/picture?type=square&width=128&height=128`, evidence: 'This Page name matches the trading name exactly.', confidence: 'verified', activeAds: null});
+    if ((keys.has(compactName(page.name)) || (!!page.curated && keys.has(compactName(page.curated)))) && !hits.has(page.id)) hits.set(page.id, {id: page.id, name: page.name, category: page.category, picture: `https://graph.facebook.com/${page.id}/picture?type=square&width=128&height=128`, evidence: 'This Page name matches the trading name exactly.', confidence: 'verified', activeAds: null});
   }
   return hits.size === 1 ? [...hits.values()][0] : null;
 }
@@ -506,7 +536,7 @@ async function fetchSite(host: string, request: typeof fetch): Promise<{reached:
   return {reached: true, html: '', finalHost: host};
 }
 
-type AdRow = {adId: string; pageId: string; pageName: string; captions: string[]};
+type AdRow = {adId: string; pageId: string; pageName: string; captions: string[]; viaHost?: boolean};
 
 async function adsFromGraph(term: string, token: string, pageId: string, request: typeof fetch, cursor = ''): Promise<{ok: boolean; rows: AdRow[]; cursor: string}> {
   const params = new URLSearchParams({ad_reached_countries: '["GB"]', ad_type: 'ALL', ad_active_status: 'ACTIVE', limit: pageId ? '5' : '50', fields: 'id,page_id,page_name,ad_creative_link_captions'});
@@ -542,7 +572,7 @@ function groupAds(rows: AdRow[], slugs: string[]): AdPage[] {
     if (row.adId && !cur.ads.has(row.adId)) { cur.ads.add(row.adId); cur.adCount++; }
     if (!row.adId) cur.adCount = Math.max(cur.adCount, 1);
     if (row.pageName.length > cur.name.length) cur.name = row.pageName;
-    if (row.captions.some(c => slugs.includes(hostLabel(c.replace(/^https?:\/\//, '').split('/')[0])))) cur.ownDomain = true;
+    if (row.viaHost || row.captions.some(c => slugs.includes(hostLabel(c.replace(/^https?:\/\//, '').split('/')[0])))) cur.ownDomain = true;
     map.set(row.pageId, cur);
   }
   return [...map.values()].map(({ads: _ads, ...page}) => page);
@@ -570,13 +600,16 @@ export async function discoverTradingName(query: string, opts: {token?: string; 
   const hosts = candidateHosts(query);
   const slugs = slugForms(query).map(s => s.replace(/-/g, ''));
   const adsFor = (term: string, cursor = '') => token ? adsFromGraph(term, token, '', request, cursor) : adsFromBackend(term, '', cursor, request);
+  // Ads found by searching the dotted domain ("247blinds.co.uk") mention or link to that domain.
+  const typed = typedHost(query);
+  const tag = (term: string, rows: AdRow[]) => term === typed && term.includes('.') ? rows.map(r => ({...r, viaHost: true})) : rows;
   const adCalls = terms.map(async term => {
     const first = await adsFor(term);
     if (!first.ok) return first;
     const matched = groupAds(first.rows, slugs).some(p => nameMatch(query, p.name) !== 'none');
-    if (matched || !first.cursor) return first;
+    if (matched || !first.cursor) return {...first, rows: tag(term, first.rows)};
     const second = await adsFor(term, first.cursor);
-    return {ok: first.ok || second.ok, rows: [...first.rows, ...second.rows], cursor: ''};
+    return {ok: first.ok || second.ok, rows: tag(term, [...first.rows, ...second.rows]), cursor: ''};
   });
   const loadSites = (list: string[]) => Promise.all(list.map(async host => ({host, ...(await fetchSite(host, request))})));
   const [adSettled, siteSettled, pageSearch] = await Promise.all([

@@ -10,7 +10,7 @@ fs.writeFileSync(path.join(dir, 'meta-api.mjs'), compile('lib/meta-api.ts'));
 fs.writeFileSync(path.join(dir, 'brand-search.mjs'), compile('lib/brand-search.ts'));
 fs.writeFileSync(path.join(dir, 'advertiser-discovery.mjs'), compile('lib/advertiser-discovery.ts'));
 const lib = await import(path.join(dir, 'advertiser-discovery.mjs'));
-const {candidateHosts, slugForms, searchTerms, nameMatch, exactIdentity, safeAlias, decide, readOfficialSite, discoverTradingName, parseFacebookUrl} = lib;
+const {candidateHosts, slugForms, searchTerms, nameMatch, leadMatch, exactIdentity, safeAlias, decide, readOfficialSite, discoverTradingName, parseFacebookUrl} = lib;
 
 assert.ok(candidateHosts('Complete Care Shop').includes('completecareshop.co.uk'));
 assert.ok(candidateHosts('Good Move').includes('goodmove.co.uk'));
@@ -94,6 +94,36 @@ assert.equal(missing.mentions[0].id, '9');
 const failed = decide('No Such Brand', {adsOk: false, sitesAttempted: 2, sitesReached: 0, ads: [], sites: []});
 assert.equal(failed.status, 'lookup_failed');
 assert.equal(failed.code, 'LOOKUP_FAILED');
+
+// A Page name that leads with the trading name ("247 Blinds and Curtains") is a candidate,
+// verified when its ads point at the brand's domain; a name that only contains it is not.
+assert.equal(leadMatch('247blinds.co.uk', '247 Blinds and Curtains'), true);
+assert.equal(leadMatch('247 Blinds', '247 Blinds and Curtains'), true);
+assert.equal(leadMatch('strachan.co.uk', 'Strachan Fitted Furniture'), true);
+assert.equal(leadMatch('strachan.co.uk', 'Cameron Strachan Golf'), false);
+assert.equal(leadMatch('247blinds.co.uk', '247 Curtains'), false);
+assert.equal(leadMatch('Box', 'Box Hill School'), false);
+const blinds = decide('247blinds.co.uk', {adsOk: true, sitesAttempted: 1, sitesReached: 0, sites: [], ads: [
+  {id: '292094400803364', name: '247 Blinds and Curtains', adCount: 55, ownDomain: true},
+  {id: '106916301968469', name: 'Trend Blinds', adCount: 19, ownDomain: true},
+  {id: '843409002194246', name: '247 Curtains', adCount: 2, ownDomain: true}]});
+assert.equal(blinds.status, 'resolved');
+assert.equal(blinds.advertisers[0].id, '292094400803364');
+const strachan = decide('strachan.co.uk', {adsOk: true, sitesAttempted: 1, sitesReached: 0, sites: [], ads: [
+  {id: '118158294985536', name: 'Strachan Fitted Furniture', adCount: 43, ownDomain: true},
+  {id: '268932890658619', name: 'Cameron Strachan Golf', adCount: 34, ownDomain: true}]});
+assert.equal(strachan.status, 'resolved');
+assert.equal(strachan.advertisers[0].name, 'Strachan Fitted Furniture');
+const spaced = decide('247 Blinds', {adsOk: true, sitesAttempted: 1, sitesReached: 0, sites: [], ads: [{id: '292094400803364', name: '247 Blinds and Curtains', adCount: 55, ownDomain: false}]});
+assert.equal(spaced.status, 'choose');
+assert.equal(spaced.advertisers[0].confidence, 'probable');
+const exactWins = decide('boots.com', {adsOk: true, sitesAttempted: 1, sitesReached: 0, sites: [], ads: [
+  {id: '1', name: 'Boots', adCount: 40, ownDomain: true}, {id: '2', name: 'Boots Repair Shop', adCount: 9, ownDomain: true}]});
+assert.equal(exactWins.advertisers.find(a => a.id === '2').confidence, 'probable');
+assert.equal(exactWins.advertisers[0].id, '1');
+// Curated tracked brands match by their brand name, even when the Page name differs.
+assert.equal(exactIdentity('currys.co.uk', [{id: '282722695080974', name: 'Currys', curated: 'Currys'}]).id, '282722695080974');
+assert.equal(exactIdentity('John Lewis', [{id: '145210795501787', name: 'John Lewis & Partners', curated: 'John Lewis'}]).id, '145210795501787');
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json'}});

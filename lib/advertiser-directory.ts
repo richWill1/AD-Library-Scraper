@@ -1,11 +1,33 @@
-import {readDirectoryObject,writeDirectoryObject,storeReady} from './creative-store';
+import {readDirectoryObject,writeDirectoryObject,readSnapshot,storeReady} from './creative-store';
 import {knownAdvertisers} from './brand-search';
+import brandsFile from '@/content/seasonal/brands.json';
+const idOK = (s:unknown) => typeof s==='string' && /^\d{1,30}$/.test(s);
+
+// The UK brands the seasonal collections track (content/seasonal/brands.json): pinned Page IDs,
+// plus the IDs production has since verified for the rest (R2 snapshot seasonal-brand-pages).
+// These are Pages already checked by hand or by a verified lookup, so search can use them by name.
+type Tracked={id:string;name:string;alias:string};
+const pinned:Tracked[]=((brandsFile as {brands?:{name:string;id?:string;pageName?:string}[]}).brands||[])
+ .filter(b=>idOK(b.id)).map(b=>({id:b.id!,name:b.pageName||b.name,alias:b.name}));
+let tracked:Tracked[]=pinned,trackedAt=0;
+async function trackedBrands(){
+ if(Date.now()-trackedAt<6*3600e3)return tracked;
+ trackedAt=Date.now();
+ try{
+  const saved=JSON.parse((await readSnapshot('seasonal-brand-pages'))||'null');
+  const lookups:Record<string,{id?:string;pageName?:string}>=saved?.lookups||{};
+  const extra=Object.entries(lookups).filter(([,v])=>idOK(v?.id)).map(([name,v])=>({id:v.id!,name:v.pageName||name,alias:name}));
+  const ids=new Set(pinned.map(b=>b.id));
+  tracked=[...pinned,...extra.filter(b=>!ids.has(b.id))];
+ }catch{tracked=pinned;}
+ return tracked;
+}
 
 type Page = {id:string; name:string; alias?:string; category?:string; seen:string[]; lastSeen:number};
 const LIMIT = 1500, SAMPLE = 100;
 let pages = new Map<string,Page>(), pending = new Map<string,Page>();
 let refreshed = 0, task:Promise<void>|undefined, timer:ReturnType<typeof setTimeout>|undefined;
-const idOK = (s:unknown) => typeof s==='string' && /^\d{1,30}$/.test(s);
+
 function merge(map:Map<string,Page>, p:Page) {
  const old=map.get(p.id);
  const latest=old && old.lastSeen>p.lastSeen ? old : p;
@@ -76,7 +98,14 @@ export async function directorySearch(q:string,handle=false){
  if(Date.now()-refreshed>60000)await refresh();
  const combined=new Map(pages);
  for(const p of knownAdvertisers)if(!combined.has(p.pageId))combined.set(p.pageId,{id:p.pageId,name:p.pageName,lastSeen:0,seen:[]});
- return [...combined.values()].map(p=>({id:p.id,name:p.name,alias:p.alias,category:p.category,adCount:p.seen.length,lastSeen:p.lastSeen,
+ const curated=new Map<string,string>();
+ for(const b of await trackedBrands()){
+  curated.set(b.id,b.alias);
+  const cur=combined.get(b.id);
+  if(!cur)combined.set(b.id,{id:b.id,name:b.name,alias:b.alias,lastSeen:0,seen:[]});
+  else if(!cur.alias)combined.set(b.id,{...cur,alias:b.alias});
+ }
+ return [...combined.values()].map(p=>({id:p.id,name:p.name,alias:p.alias,curated:curated.get(p.id),category:p.category,adCount:p.seen.length,lastSeen:p.lastSeen,
   score:handle?Number(p.alias?.toLowerCase()===q.toLowerCase()):Math.max(score(q,p.name),p.alias?score(q,p.alias):0)}))
  .filter(p=>p.score).sort((a,b)=>b.score-a.score||b.lastSeen-a.lastSeen).slice(0,12);
 }
