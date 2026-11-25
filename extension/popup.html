@@ -7,16 +7,18 @@
 </head>
 <body>
 <header class="top">
-  <img src="icons/32.png" width="20" height="20" alt="">
-  <span class="word">AdSnoop</span>
-  <span class="env" id="env" hidden>Preview</span>
-</header>
-<main id="main" aria-live="polite">
-  <div class="loading" id="loading">
-    <span class="ring" aria-hidden="true"></span>
-    <p><b>Finding this brand's ads…</b><br><span id="loadingSite">Checking the site</span></p>
+  <div class="bar">
+    <img class="logo" src="wordmark.svg" height="20" alt="AdSnoop">
+    <span class="env" id="env" hidden>Preview</span>
+    <button class="openapp" id="openapp" type="button">Open AdSnoop <span aria-hidden="true">↗</span></button>
   </div>
-</main>
+  <div class="tab" id="tab" hidden>
+    <span class="fav" id="fav" aria-hidden="true"></span>
+    <div class="tabtext"><b id="tabhost"></b><span id="tabtitle"></span></div>
+  </div>
+</header>
+<main id="main" aria-live="polite"></main>
+<footer class="dock" id="dock" hidden></footer>
 <script src="config.js"></script>
 <script src="popup.js"></script>
 </body>

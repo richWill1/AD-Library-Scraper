@@ -1,8 +1,9 @@
 # AdSnoop Chrome extension
 
 On a brand's own website, click the AdSnoop icon to see the ads that brand is
-running in the UK: how many are live, how many launched this week, the AI
-summary and the top four ads by UK reach. Buttons open adsnoop.co.uk on that
+running in the UK: the matched brand and how we know it's theirs, how many
+ads are live (and on which platforms), how many launched this week, the AI
+summary and a grid of their nine biggest ads by UK reach. Buttons open adsnoop.co.uk on that
 brand (see all ads, pin as a competitor, remix).
 
 - Only runs when you click it. The one permission is `activeTab`, so it can
