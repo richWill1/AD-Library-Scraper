@@ -188,4 +188,16 @@ const named = await discoverTradingName('Example Brand', {token: 'search-token',
 assert.equal(named.advertisers.find(a => a.id === '555')?.name, 'Example Brand');
 assert.match(named.advertisers.find(a => a.id === '555').picture, /555\/picture/);
 
+// With Meta access, a namesake whose ads link elsewhere is not verified by the domain search alone.
+{
+  const rows = [{id: 'a1', page_id: '118158294985536', page_name: 'Strachan Fitted Furniture', ad_creative_link_captions: ['strachan.co.uk']},
+    {id: 'a2', page_id: '123565314184481', page_name: 'Strachan Vets Heaton', ad_creative_link_captions: ['strachanvets.co.uk']}];
+  const mock = async url => String(url).includes('ads_archive') ? json({data: rows}) : new Response('', {status: 404});
+  const r = await discoverTradingName('strachan.co.uk', {token: 'graph-token', fetch: mock});
+  assert.equal(r.status, 'choose');
+  assert.equal(r.advertisers[0].name, 'Strachan Fitted Furniture');
+  assert.equal(r.advertisers[0].confidence, 'verified');
+  assert.equal(r.advertisers.find(a => a.id === '123565314184481').confidence, 'probable');
+}
+
 console.log('Advertiser discovery checks passed: general names and domains, no cross-brand auto-open, picker when ambiguous, lookup failure kept separate.');

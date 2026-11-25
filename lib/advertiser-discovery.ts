@@ -441,7 +441,7 @@ export function decide(query: string, input: {
     const evidence = [...d.bits, d.handle ? `@${d.handle}` : '', d.category && !d.bits.includes(d.category) ? d.category : '', adsBit].filter(Boolean).join(' · ').slice(0, 280);
     const picture = /^\d{3,30}$/.test(d.id) ? `https://graph.facebook.com/${d.id}/picture?type=square&width=128&height=128` : undefined;
     return {id: d.id, name: d.name, handle: d.handle, website: d.website, category: d.category?.slice(0, 60), picture, logo: d.image, evidence, confidence, activeAds: d.adCount == null ? null : d.adCount > 0, adCount: d.adCount ?? undefined};
-  }).sort((a, b) => Number(b.confidence === 'verified') - Number(a.confidence === 'verified') || Number(b.activeAds === true) - Number(a.activeAds === true) || a.name.localeCompare(b.name));
+  }).sort((a, b) => Number(b.confidence === 'verified') - Number(a.confidence === 'verified') || Number(b.activeAds === true) - Number(a.activeAds === true) || (b.adCount || 0) - (a.adCount || 0) || a.name.localeCompare(b.name));
   const pool = advertisers.filter(a => a.id || a.handle);
   const sources = [input.sites.length ? 'official-website' : '', input.ads.length ? 'ad-library' : '', (input.directory || []).length ? 'directory' : ''].filter(Boolean);
   const source = sources.join('+') || 'none';
@@ -600,9 +600,11 @@ export async function discoverTradingName(query: string, opts: {token?: string; 
   const hosts = candidateHosts(query);
   const slugs = slugForms(query).map(s => s.replace(/-/g, ''));
   const adsFor = (term: string, cursor = '') => token ? adsFromGraph(term, token, '', request, cursor) : adsFromBackend(term, '', cursor, request);
-  // Ads found by searching the dotted domain ("247blinds.co.uk") mention or link to that domain.
+  // An ad that shows its link domain is judged by that domain, because Meta's keyword search for
+  // "strachan.co.uk" also returns namesakes ("Strachan Vets"). An ad with no link domain (or no Meta
+  // access) counts as pointing at the brand when searching the dotted domain found it.
   const typed = typedHost(query);
-  const tag = (term: string, rows: AdRow[]) => term === typed && term.includes('.') ? rows.map(r => ({...r, viaHost: true})) : rows;
+  const tag = (term: string, rows: AdRow[]) => term === typed && term.includes('.') ? rows.map(r => ({...r, viaHost: !r.captions.length})) : rows;
   const adCalls = terms.map(async term => {
     const first = await adsFor(term);
     if (!first.ok) return first;
