@@ -286,6 +286,35 @@ function setCompetitor(brandId,comp,on){
  if(!on&&has)list.splice(list.findIndex(c=>c.id===comp.id),1);
  saveTracker(t);return "ok";
 }
+function replaceCompetitor(brandId,oldId,comp){
+ if(!validB(comp)||!comp.name.trim())return "invalid";
+ const t=tracker(),b=t.brands.find(x=>x.id===brandId),at=b?.competitors.findIndex(c=>c.id===oldId)??-1;
+ if(at<0)return "missing";
+ if(comp.id===b.id)return "self";
+ if(b.competitors.some(c=>c.id===comp.id))return "exists";
+ b.competitors[at]={id:comp.id,name:comp.name};saveTracker(t);return "ok";
+}
+function replaceTrackedBrand(brandId,brand){
+ if(!validB(brand)||!brand.name.trim())return "invalid";
+ const t=tracker(),at=t.brands.findIndex(b=>b.id===brandId);if(at<0)return "missing";
+ if(t.brands.some(b=>b.id===brand.id))return "exists";
+ // Changing the selected brand uses the same plan slot and keeps the chosen
+ // competitors. Its old category is not an assumption about the new brand.
+ t.brands[at]={id:brand.id,name:brand.name,competitors:t.brands[at].competitors.filter(c=>c.id!==brand.id)};
+ t.active=brand.id;saveTracker(t);return "ok";
+}
+function removeTrackedCompetitor(brandId,id){
+ const t=tracker(),b=t.brands.find(x=>x.id===brandId),at=b?.competitors.findIndex(c=>c.id===id)??-1;
+ if(at<0)return "missing";
+ trk.removed={brandId,competitor:{...b.competitors[at]},at};b.competitors.splice(at,1);saveTracker(t);return "ok";
+}
+function undoTrackedCompetitor(){
+ const last=trk.removed;if(!last)return "missing";
+ const t=tracker(),b=t.brands.find(x=>x.id===last.brandId);if(!b)return "missing";
+ if(b.competitors.some(c=>c.id===last.competitor.id)||b.id===last.competitor.id)return "exists";
+ if(b.competitors.length>=COMP_MAX)return "full";
+ b.competitors.splice(Math.min(last.at,b.competitors.length),0,last.competitor);saveTracker(t);trk.removed=null;return "ok";
+}
 function addBrand(b){
  const t=tracker();if(t.brands.some(x=>x.id===b.id)){t.active=b.id;saveTracker(t);return "exists"}
  if(t.brands.length>=PLAN.brands)return "limit";
@@ -399,7 +428,7 @@ function renderCards(){
  if(intel){setBar("hide");renderPinbar();return}
  const all=state.view==="discover"||state.view==="saved"?shownRows():[],rows=all.slice(0,state.limit),hidden=all.length-rows.length;
  if(state.view==="insights"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";renderPinbar();return}
- if(state.view==="tracker"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+trackerHTML()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
+ if(state.view==="tracker"){const focused=document.activeElement,search=focused?.matches('#trkBrandQ,#trkCompQ')?{id:focused.id,start:focused.selectionStart,end:focused.selectionEnd}:null;setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+trackerHTML()+'</div>';if(search){const input=$(search.id);if(input){input.focus({preventScroll:true});if(search.start!=null)input.setSelectionRange(search.start,search.end)}}hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
  if(state.view==="compare"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
  const blank=state.view==="saved"?empty("No saved ads yet.","Save a creative from an advertiser search to find it here."):state.adsFailed&&state.page?empty("Meta lookup failed","The Page was identified, but its ads could not be loaded. Try again in a moment.",identityLinks()):state.page&&/^\d{1,30}$/.test(state.page)?empty("Page found, no active UK ads","Meta has no active ads for this Page in the selected countries. It can still be the right advertiser.",identityLinks()):empty("No ads to display.",state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():blank);
@@ -883,47 +912,63 @@ if(!TRACKER&&$("radarDemo")){
  home.hidden=false;
 }
 // ---- Tracker page (/tracker): brand switcher, onboarding and the dashboard ----
-const trk={mode:null,timer:0,seq:0,lookups:new Map()};
+const trk={mode:null,target:"",query:"",results:null,searching:false,removed:null,timer:0,seq:0,lookups:new Map()};
 function trackerHTML(){
  if(auth.checking)return '<div class="trk"><div class="op-empty"><span class="cmp-wait"></span> Checking your account…</div></div>';
  if(auth.enabled&&!auth.signedIn)return trackerGateHTML();
  const t=tracker(),active=activeBrand();
  const note=auth.signedIn?'<div class="trk-note"><span aria-hidden="true">✓</span><span>Saved to your account'+(account.user&&account.user.email?' ('+esc(account.user.email)+')':'')+'. Your brands follow you to any device.</span></div>':'<div class="trk-note"><span aria-hidden="true">🔒</span><span><b>Preview:</b> your brands are saved on this device. Sign-in with email or Google is on the way, and this setup will move into your account.</span></div>';
  if(!t.brands.length||trk.mode==="add")return '<div class="trk">'+(t.brands.length?switcherHTML(t):'')+onboardBrandHTML(t)+note+'</div>';
- const body=trk.mode==="edit"||!active.competitors.length?editorHTML(active):compareHTML();
- return '<div class="trk">'+switcherHTML(t)+body+note+'</div>';
+ const changing=["changebrand","changecomp","addcomp"].includes(trk.mode);
+ const body=changing&&!active.competitors.length?trackerPickerHTML(active):trk.mode==="edit"||!active.competitors.length?editorHTML(active):compareHTML();
+ const undo=trk.removed?.brandId===active.id?'<div class="trk-undo" role="status"><span>'+esc(trk.removed.competitor.name)+' removed from your competitors.</span><button type="button" data-tk="undo">Undo</button></div>':'';
+ return '<div class="trk">'+switcherHTML(t)+undo+body+note+'</div>';
 }
 function switcherHTML(t){
  const atLimit=t.brands.length>=PLAN.brands;
  return '<div class="trk-bar"><div class="trk-brands" role="tablist" aria-label="Your brands">'+t.brands.map(b=>'<button role="tab" aria-selected="'+(b.id===t.active)+'" class="trk-b'+(b.id===t.active?' on':'')+'" data-tk="switch" data-id="'+esc(b.id)+'">'+logoHTML(b.id,b.name,"")+'<span>'+esc(b.name)+'<small>'+b.competitors.length+'/'+COMP_MAX+' competitors</small></span></button>').join("")+
   '<button class="trk-add'+(atLimit?' locked':'')+'" data-tk="newbrand" title="'+(atLimit?esc("The "+PLAN.name+" plan tracks "+PLAN.brands+" brand"+(PLAN.brands===1?"":"s")):"Track another brand")+'">'+(atLimit?'<span aria-hidden="true">🔒</span> ':'+ ')+'Add brand</button></div>'+
-  (trk.mode!=="add"&&t.brands.length?'<div class="trk-acts"><button class="ghost" data-tk="'+(trk.mode==="edit"?'done':'edit')+'">'+(trk.mode==="edit"?'Done':'Edit competitors')+'</button></div>':'')+'</div>';
+  (trk.mode!=="add"&&t.brands.length?'<div class="trk-acts"><button type="button" class="ghost" data-tk="changebrand">Change my brand</button><button class="ghost" data-tk="'+(trk.mode==="edit"?'done':'edit')+'">'+(trk.mode==="edit"?'Done':'Manage competitors')+'</button></div>':'')+'</div>';
+}
+function trkSearchBoxHTML(id,placeholder,label){
+ const kind=trk.mode==="changebrand"?"replacebrand":trk.mode==="changecomp"?"replacecomp":id==="trkBrandQ"?"pick":"add";
+ const results=trk.results?trkResultHTML(trk.results,kind,kind==="pick"?null:activeBrand()):trk.searching?'<p class="intel-sub">Checking the Ad Library…</p>':'';
+ return '<div class="trk-search"><input id="'+id+'" type="search" value="'+esc(trk.query)+'" placeholder="'+esc(placeholder)+'" autocomplete="off" aria-label="'+esc(label)+'"><span class="trk-spin"'+(trk.searching?'':' hidden')+'></span></div><div class="trk-results" id="trkResults" aria-live="polite">'+results+'</div>';
+}
+function trackerPickerHTML(b){
+ if(!["changebrand","changecomp","addcomp"].includes(trk.mode))return "";
+ const mine=trk.mode==="changebrand",old=b.competitors.find(c=>c.id===trk.target);
+ if(trk.mode==="changecomp"&&!old)return "";
+ const title=mine?'Choose your brand':old?'Replace '+old.name:'Add a competitor';
+ const copy=mine?'Your selected competitors will be kept. Your new brand is excluded from the competitor list.':old?old.name+' stays tracked until you choose a replacement.':'Only competitors you select are added to your tracker.';
+ return '<section class="trk-on trk-picker" aria-labelledby="trkPickerTitle"><div class="trk-picker-head"><div><p class="trk-step">'+(mine?'Your brand':'Your selected competitors')+'</p><h3 id="trkPickerTitle">'+esc(title)+'</h3></div><button type="button" class="ghost" data-tk="cancel">Cancel</button></div><p class="intel-sub">'+esc(copy)+'</p>'+trkSearchBoxHTML(mine?'trkBrandQ':'trkCompQ','Search a brand name, website or Facebook Page',mine?'Search for your new brand':'Search for a competitor')+'</section>';
 }
 function onboardBrandHTML(t){
  const first=!t.brands.length;
- return '<section class="trk-on"><p class="trk-step">'+(first?'Step 1 of 2':'New brand')+'</p><h3>Which brand do you advertise for?</h3><p class="intel-sub">Search the advertiser’s name or website. You can track '+(PLAN.brands===1?'one brand':'up to '+PLAN.brands+' brands')+' on the '+esc(PLAN.name)+' plan'+(first&&t.pending.length?'; the '+t.pending.length+' competitor'+(t.pending.length===1?'':'s')+' you already added will carry over':'')+'.</p><div class="trk-search"><input id="trkBrandQ" type="search" placeholder="e.g. 247 Blinds or 247blinds.co.uk" autocomplete="off" aria-label="Search your brand"><span class="trk-spin" hidden></span></div><div class="trk-results" id="trkResults" aria-live="polite"></div>'+(first?'':'<button class="ghost" data-tk="cancel">Cancel</button>')+'</section>';
+ return '<section class="trk-on"><p class="trk-step">'+(first?'Step 1 of 2':'New brand')+'</p><h3>Which brand do you advertise for?</h3><p class="intel-sub">Search the advertiser’s name or website. You can track '+(PLAN.brands===1?'one brand':'up to '+PLAN.brands+' brands')+' on the '+esc(PLAN.name)+' plan'+(first&&t.pending.length?'; the '+t.pending.length+' competitor'+(t.pending.length===1?'':'s')+' you already added will carry over':'')+'.</p>'+trkSearchBoxHTML('trkBrandQ','e.g. 247 Blinds or 247blinds.co.uk','Search your brand')+(first?'':'<button class="ghost" data-tk="cancel">Cancel</button>')+'</section>';
 }
 function editorHTML(b){
  const n=b.competitors.length;
  return '<section class="trk-on"><p class="trk-step">'+(n?'Edit competitors':'Step 2 of 2')+'</p><h3>Who are '+esc(b.name)+'’s competitors?</h3><p class="intel-sub">Pick up to '+COMP_MAX+'. Search a brand, or a product or service you both sell (e.g. “blinds”) to see the advertisers with the most UK reach.</p>'+
-  '<div class="trk-chosen">'+b.competitors.map(c=>'<span class="trk-chip">'+logoHTML(c.id,c.name,"")+esc(c.name)+'<button data-tk="rm" data-id="'+esc(c.id)+'" aria-label="Remove '+esc(c.name)+'">×</button></span>').join("")+Array.from({length:COMP_MAX-n},()=>'<span class="trk-chip empty">Empty slot</span>').join("")+'</div>'+
-  (n<COMP_MAX?'<div class="trk-search"><input id="trkCompQ" type="search" placeholder="Competitor name, website or product (e.g. blinds)" autocomplete="off" aria-label="Search competitors"><span class="trk-spin" hidden></span></div><div class="trk-results" id="trkResults" aria-live="polite"></div>':'<p class="intel-sub">All '+COMP_MAX+' slots are full. Remove one to swap it out.</p>')+
+  '<div class="trk-chosen">'+b.competitors.map(c=>'<span class="trk-chip">'+logoHTML(c.id,c.name,"")+esc(c.name)+'<button type="button" data-tk="changecomp" data-id="'+esc(c.id)+'" aria-label="Change competitor '+esc(c.name)+'">Change</button><button data-tk="rm" data-id="'+esc(c.id)+'" aria-label="Remove '+esc(c.name)+'">×</button></span>').join("")+Array.from({length:COMP_MAX-n},()=>'<span class="trk-chip empty">Empty slot</span>').join("")+'</div>'+
+  (n<COMP_MAX?trkSearchBoxHTML('trkCompQ','Competitor name, website or product (e.g. blinds)','Search competitors'):'<p class="intel-sub">All '+COMP_MAX+' slots are full. Use Change on a competitor card to replace it directly.</p>')+
   '<div class="trk-foot">'+(n?'<button class="pill" data-tk="done">See the comparison →</button>':'')+(tracker().brands.length>1?'<button class="ghost danger" data-tk="delbrand" data-id="'+esc(b.id)+'">Stop tracking '+esc(b.name)+'</button>':'')+'</div></section>';
 }
 function trkResultHTML(list,kind,b){
  if(!list.length)return '<p class="intel-sub">No advertisers found. Try the brand’s website or a different word.</p>';
  return list.map((a,i)=>{
-  const taken=b&&(b.competitors.some(c=>c.id===a.id)||b.id===a.id);
+  const replacingBrand=kind==="replacebrand",taken=replacingBrand?tracker().brands.some(x=>x.id===a.id):b&&(b.competitors.some(c=>c.id===a.id)||b.id===a.id);
   const meta=a.source==="category"?a.count+" ads mention it"+(a.reach?" · UK reach "+compactNumber(a.reach):""):[a.category,a.count?a.count+" ads":""].filter(Boolean).join(" · ")||"Facebook Page";
-  return '<button class="trk-r" style="--i:'+i+'" data-tk="'+kind+'" data-id="'+esc(a.id)+'" data-name="'+esc(a.name)+'"'+(taken?' disabled':'')+'>'+logoHTML(a.id,a.name,"",a.picture,a.logo)+'<span><b>'+esc(a.name)+'</b><small>'+esc(meta)+'</small></span><em>'+(taken?(b.id===a.id?'Your brand':'Added'):kind==="pick"?'This is mine':'+ Add')+'</em></button>';
+  return '<button class="trk-r" style="--i:'+i+'" data-tk="'+kind+'" data-id="'+esc(a.id)+'" data-name="'+esc(a.name)+'"'+(taken?' disabled':'')+'>'+logoHTML(a.id,a.name,"",a.picture,a.logo)+'<span><b>'+esc(a.name)+'</b><small>'+esc(meta)+'</small></span><em>'+(taken?(b?.id===a.id?'Your brand':replacingBrand?'Already tracked':'Added'):kind==="replacebrand"?'Select my brand':kind==="replacecomp"?'Replace competitor':kind==="pick"?'This is mine':'+ Add')+'</em></button>';
  }).join("");
 }
 async function trkSearch(input){
- const q=input.value.trim(),out=$("trkResults"),spin=input.parentElement.querySelector(".trk-spin"),kind=input.id==="trkBrandQ"?"pick":"add",seq=++trk.seq;
- if(q.length<2){out.innerHTML="";return}
- spin.hidden=false;
+ const q=input.value.trim(),kind=trk.mode==="changebrand"?"replacebrand":trk.mode==="changecomp"?"replacecomp":input.id==="trkBrandQ"?"pick":"add",seq=++trk.seq;
+ trk.query=input.value;trk.results=null;trk.searching=q.length>=2;
+ const spin=input.parentElement.querySelector(".trk-spin");if(spin)spin.hidden=!trk.searching;
+ if(q.length<2){const out=$("trkResults");if(out)out.innerHTML="";return}
  const valid=a=>a&&/^\d{3,30}$/.test(a.id||""),list=[],seen=new Set(),add=xs=>{for(const a of xs||[])if(valid(a)&&!seen.has(a.id)){seen.add(a.id);list.push(a)}};
- const show=(pending)=>{if(seq!==trk.seq)return;out.innerHTML=list.length?trkResultHTML(list.slice(0,10),kind,kind==="add"?activeBrand():null):pending?'<p class="intel-sub">Checking the Ad Library for “'+esc(q)+'”…</p>':trkResultHTML([],kind,null)};
+ const show=(pending)=>{if(seq!==trk.seq)return;trk.results=list.length||!pending?list.slice(0,10):null;trk.searching=pending;const out=$("trkResults");if(out)out.innerHTML=list.length?trkResultHTML(trk.results,kind,kind==="pick"?null:activeBrand()):pending?'<p class="intel-sub">Checking the Ad Library for “'+esc(q)+'”…</p>':trkResultHTML([],kind,null);const currentSpin=document.querySelector('.trk-search .trk-spin');if(currentSpin)currentSpin.hidden=!pending};
  // Fast: known advertisers (and, for competitors, advertisers using the word).
  const [named,cat]=await Promise.all([fetchSuggestions(q).catch(()=>[]),fetchCategorySuggestions(q).catch(()=>[])]);
  add(named);add(cat);
@@ -934,24 +979,36 @@ async function trkSearch(input){
   try{const ck=canonicalName(q);let d=trk.lookups.get(ck);if(!d){const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(25000)});d=await r.json();if(trk.lookups.size>50)trk.lookups.clear();trk.lookups.set(ck,d)}if(seq!==trk.seq)return;const found=(Array.isArray(d.advertisers)?d.advertisers:[]).map(a=>({...a,count:a.adCount||0}));list.unshift(...found.filter(a=>valid(a)&&!seen.has(a.id)));found.forEach(a=>valid(a)&&seen.add(a.id));add((Array.isArray(d.mentions)?d.mentions:[]).map(a=>({id:a.id,name:a.name,count:a.count||0,source:"category"})))}catch{}
   show(false);
  }
- if(seq===trk.seq)spin.hidden=true;
+ if(seq===trk.seq){trk.searching=false;const currentSpin=document.querySelector('.trk-search .trk-spin');if(currentSpin)currentSpin.hidden=true;}
 }
-function trkInput(e){const i=e.target;if(!i||(i.id!=="trkBrandQ"&&i.id!=="trkCompQ"))return;clearTimeout(trk.timer);trk.timer=setTimeout(()=>trkSearch(i),350)}
-function trkFocus(){setTimeout(()=>{const i=$("trkCompQ")||$("trkBrandQ");if(i&&!("ontouchstart" in window))i.focus({preventScroll:true})},50)}
+function trkInput(e){const i=e.target;if(!i||(i.id!=="trkBrandQ"&&i.id!=="trkCompQ"))return;clearTimeout(trk.timer);++trk.seq;trk.query=i.value;trk.results=null;trk.searching=i.value.trim().length>=2;trk.timer=setTimeout(()=>{const current=$(i.id);if(current)trkSearch(current)},350)}
+function trkFocus(){setTimeout(()=>{const i=$("trkCompQ")||$("trkBrandQ");if(i){i.scrollIntoView({block:"center",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth"});if(!("ontouchstart" in window))i.focus({preventScroll:true})}},50)}
 function trkClick(e){
  const b=e.target.closest("[data-tk]");if(!b||b.disabled)return;
  const k=b.dataset.tk,id=b.dataset.id,name=b.dataset.name;
+ clearTimeout(trk.timer);++trk.seq;trk.searching=false;
+ const keep=(k==="add"||k==="rm")&&trk.mode==="edit"?trk.query:"";
+ if(!keep){trk.query="";trk.results=null}
  if(k==="switch"){switchBrand(id);trk.mode=null;cmp.anim=true}
  else if(k==="newbrand"){if(tracker().brands.length>=PLAN.brands){toast("The "+PLAN.name+" plan tracks "+PLAN.brands+" brand"+(PLAN.brands===1?"":"s")+". Multi-brand tracking is coming with paid plans.");return}trk.mode="add"}
- else if(k==="cancel")trk.mode=null;
+ else if(k==="cancel"){trk.mode=null;trk.target=""}
+ else if(k==="changebrand"){trk.mode="changebrand";trk.target=""}
+ else if(k==="changecomp"){if(!activeBrand()?.competitors.some(c=>c.id===id))return;trk.mode="changecomp";trk.target=id}
+ else if(k==="addcomp"){if(activeBrand()?.competitors.length>=COMP_MAX){toast("All competitor slots are full. Use Change competitor to replace one.");return}trk.mode="addcomp";trk.target=""}
+ else if(k==="replacecomp"||k==="replacebrand"){
+  const ab=activeBrand();if(!ab)return;
+  const r=k==="replacebrand"?replaceTrackedBrand(ab.id,{id,name}):replaceCompetitor(ab.id,trk.target,{id,name});
+  if(r!=="ok"){toast(r==="self"?"That’s your brand.":r==="exists"?"That advertiser is already selected.":"The selection changed. Please try again.");return}
+  trk.mode=null;trk.target="";trk.removed=null;cmp.anim=true;toast(k==="replacebrand"?"Your brand is now "+name:"Now tracking "+name);
+ }
  else if(k==="pick"){const r=addBrand({id,name});if(r==="limit"){toast("The "+PLAN.name+" plan tracks "+PLAN.brands+" brand"+(PLAN.brands===1?"":"s")+".");return}trk.mode=activeBrand()?.competitors.length?null:"edit"}
- else if(k==="add"){const ab=activeBrand();const r=setCompetitor(ab.id,{id,name},true);if(r==="full"){toast("Up to "+COMP_MAX+" competitors per brand.");return}if(r==="self"){toast("That’s your brand.");return}trk.mode="edit";toast("Added "+name)}
- else if(k==="rm"){setCompetitor(activeBrand().id,{id,name:""},false);trk.mode="edit"}
+ else if(k==="add"){const ab=activeBrand();const r=setCompetitor(ab.id,{id,name},true);if(r==="full"){toast("Up to "+COMP_MAX+" competitors per brand.");return}if(r==="self"){toast("That’s your brand.");return}trk.mode=trk.mode==="addcomp"?null:"edit";toast("Added "+name)}
+ else if(k==="rm"){removeTrackedCompetitor(activeBrand().id,id);if(trk.mode!=="edit")trk.mode=null}
+ else if(k==="undo"){const r=undoTrackedCompetitor();if(r!=="ok"){toast(r==="full"?"Remove a competitor to make room before undoing.":"That competitor is already selected or the brand changed.");return}trk.mode=null}
  else if(k==="edit")trk.mode="edit";
  else if(k==="done"){trk.mode=null;cmp.anim=true}
  else if(k==="delbrand"){if(!confirmStop(b))return;removeBrand(id);trk.mode=null}
  else return;
- const keep=(k==="add"||k==="rm")&&$("trkCompQ")?$("trkCompQ").value:"";
  renderCards();
  if(keep){const i=$("trkCompQ");if(i){i.value=keep;trkSearch(i);i.focus({preventScroll:true})}}
  else if(trk.mode)trkFocus();
@@ -960,8 +1017,8 @@ function trkClick(e){
 function confirmStop(b){if(b.dataset.armed){return true}b.dataset.armed="1";b.textContent="Click again to stop tracking";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed}},4000);return false}
 // ---- Compare: your brand against up to five competitors ----
 // Data: /api/compare collects every accessible active ad per advertiser (no media),
-// cached on the server. Messaging reuses messagingThemes(); nothing here invents
-// performance, spend or refresh data.
+// cached on the server. Messaging reuses messagingThemes(); spend is a separate,
+// explicitly labelled category benchmark model, never observed performance.
 const cmp={data:new Map(),running:false,timer:0,tab:"overview",mode:"share",sort:"",anim:true,memo:new WeakMap()};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function compareBrands(){const set=comparisonSet();return (set.mine?[{...set.mine,mine:true}]:[]).concat(set.competitors)}
@@ -986,25 +1043,29 @@ async function loadCompare(force){
  if(cmp.running)return;cmp.running=true;clearTimeout(cmp.timer);
  const brands=compareBrands();if(!brands.length){cmp.running=false;return}
  if(force)for(const b of brands)cmp.data.delete(b.id);
- const started=Date.now();
+ const started=Date.now(),coverage=state.coverage,selection=brands.map(b=>b.id).join(","),current=()=>coverage===state.coverage&&selection===compareBrands().map(b=>b.id).join(",");
  try{
   while(true){
+   if(!current())break;
    const need=brands.filter(b=>{const d=cmp.data.get(b.id);return !d||d.status==="running"||d.status==="queued"});
    if(!need.length)break;
    let st;
-   try{st=await request("/api/compare?"+new URLSearchParams({pages:need.map(b=>b.id).join(","),coverage:state.coverage}))}
+   try{st=await request("/api/compare?"+new URLSearchParams({pages:need.map(b=>b.id).join(","),coverage}))}
    catch(e){
+    if(!current())break;
     // Service unavailable: fall back to the older sample so the page still works.
     for(const b of need){cmp.data.set(b.id,{status:"running",fetched:0,phase:"fallback"});}
     if(state.view==="compare"||state.view==="tracker")renderCards();
-    for(const b of need){try{cmp.data.set(b.id,await loadBrandRowsFallback(b))}catch(err){cmp.data.set(b.id,{status:"error",error:err.message||"Couldn’t load"})}if(state.view==="compare"||state.view==="tracker")renderCards()}
+    for(const b of need){if(!current())break;try{cmp.data.set(b.id,await loadBrandRowsFallback(b))}catch(err){cmp.data.set(b.id,{status:"error",error:err.message||"Couldn’t load"})}if(state.view==="compare"||state.view==="tracker")renderCards()}
     break;
    }
+   if(!current())break;
    for(const b of need){
+    if(!current())break;
     const it=st.items&&st.items[b.id]||{status:"queued"};
     if(it.status==="ready"){
-     try{const d=await request("/api/compare?"+new URLSearchParams({page:b.id,coverage:state.coverage}));
-      if(Array.isArray(d.ads)){cmp.data.set(b.id,{status:"ready",rows:toRows(d),meta:d});recordSnapshot(b.id,d)}
+     try{const d=await request("/api/compare?"+new URLSearchParams({page:b.id,coverage}));
+      if(Array.isArray(d.ads)&&current()){cmp.data.set(b.id,{status:"ready",rows:toRows(d),meta:d});recordSnapshot(b.id,d)}
      }catch(e){cmp.data.set(b.id,{status:"error",error:e.message||"Couldn’t load"})}
     }else if(it.status==="error")cmp.data.set(b.id,{status:"error",error:it.error||"Couldn’t load"});
     else cmp.data.set(b.id,{status:it.status==="running"?"running":"queued",fetched:it.fetched||0,phase:it.phase||"queued"});
@@ -1159,10 +1220,11 @@ function cmpStatusChip(c){
 }
 function brandStrip(cols){
  const ready=cols.filter(c=>c.b),rank=[...ready].sort((x,y)=>y.b.total-x.b.total);
- return '<div class="cb-strip" role="list">'+cols.map(c=>{
+ return '<p class="cb-help">Your selected brands. Use Change to swap a selection; View ads opens a separate tab.</p><div class="cb-strip" role="list">'+cols.map(c=>{
   const r=c.b?rank.indexOf(c)+1:0;
-  return '<div class="cb'+(c.mine?' me':'')+'" role="listitem"><button class="cb-name" data-page="'+esc(c.id)+'" data-name="'+esc(c.name)+'" title="Open '+esc(c.name)+'">'+logoHTML(c.id,c.name,"")+'<span><b>'+esc(c.name)+'</b><small>'+(c.mine?'Your brand':'Competitor')+'</small></span></button><div class="cb-foot">'+cmpStatusChip(c)+(r?'<span class="cb-rank" title="Rank by active ads">#'+r+'</span>':'')+'</div></div>';
- }).join("")+'</div>';
+  const change='<button type="button" data-tk="'+(c.mine?'changebrand':'changecomp')+'" data-id="'+esc(c.id)+'" aria-label="'+esc(c.mine?'Change my brand':'Change competitor '+c.name)+'">'+(c.mine?'Change my brand':'Change competitor')+'</button>';
+  return '<div class="cb'+(c.mine?' me':'')+'" role="listitem"><div class="cb-name">'+logoHTML(c.id,c.name,"")+'<span><b>'+esc(c.name)+'</b><small>'+(c.mine?'Your brand':'Competitor')+'</small></span></div><div class="cb-foot">'+cmpStatusChip(c)+(r?'<span class="cb-rank" title="Rank by active ads">#'+r+'</span>':'')+'</div><div class="cb-actions">'+change+(!c.mine?'<button type="button" class="cb-remove" data-tk="rm" data-id="'+esc(c.id)+'" aria-label="Remove '+esc(c.name)+' from competitors">Remove</button>':'')+'</div><a class="cb-view" href="/?'+new URLSearchParams({page:c.id,name:c.name}).toString()+'" target="_blank" rel="noopener noreferrer" aria-label="View ads for '+esc(c.name)+' in a new tab">View ads ↗</a></div>';
+ }).join("")+(cols.filter(c=>!c.mine).length<COMP_MAX?'<button type="button" class="cb-add" data-tk="addcomp"><span aria-hidden="true">+</span><b>Add competitor</b><small>Choose who to track</small></button>':'')+'</div>';
 }
 function tabsHTML(){
  const t=[["overview","Overview"],["mix","Creative mix"],["activity","Creative activity"],["messaging","Messaging"],["remix","Remix ads ✦"]];
@@ -1199,13 +1261,67 @@ function positionLine(cols,val,unit){unit=unit||"";
  const rv=r.filter(c=>!c.mine).map(c=>val(c.b)),avg=rv.length?Math.round(rv.reduce((s,x)=>s+x,0)/rv.length):null;
  return 'You rank <b>#'+pos+' of '+r.length+'</b>'+(avg!=null?' · competitor average '+fmtN(avg)+unit:'');
 }
+const spendMoney=value=>new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP",notation:value>=1000?"compact":"standard",maximumFractionDigits:value>=1000?1:0}).format(value).replace("K","k");
+const spendWindow = new Intl.DateTimeFormat("en-GB",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
+function spendHTML(cols){
+ const model=globalThis.AdSnoopSpend;
+ const rivals=cols.filter(c=>!c.mine);
+ if(!model?.compare30Days||!rivals.length)return "";
+
+ const {own,avg,from,through}=model.compare30Days(cols,state.coverage);
+ const mine=own?.eligible?own.value:null;
+ const max=Math.max(mine??0,avg.value??0,1);
+ const rivalLabel=rivals.length===1?rivals[0].name:"Tracked competitor average";
+ const collecting=cols.some(c=>!c.d||c.d.status==="running"||c.d.status==="queued");
+ const noEstimate=collecting?"Collecting ads":"Insufficient data";
+ const coverage=avg.count===avg.total?avg.count:avg.count+" of "+avg.total;
+ const period=through?spendWindow.formatRange(new Date(from),new Date(through)):"Last 30 days";
+
+ let takeaway="Spend comparison unavailable";
+ if(state.coverage!=="GB"){
+  takeaway="Choose UK coverage to compare spend";
+ }else if(mine!==null&&avg.value!==null){
+  const gap=mine-avg.value;
+  if(Math.abs(gap)<Math.max(1,max*0.1)){
+   takeaway="Similar estimated spend";
+  }else{
+   const against=rivals.length===1?rivalLabel:"the competitor average";
+   takeaway="Your brand is ≈"+spendMoney(Math.abs(gap))+(gap>0?" above ":" below ")+against;
+  }
+ }else if(collecting){
+  takeaway="Collecting ads for the comparison";
+ }else if(avg.count){
+  takeaway="Competitor estimate available";
+ }
+
+ function bar(label,value,side){
+  const amount=value===null?noEstimate:"≈"+spendMoney(value);
+  const track=value===null?"":'<div class="spend-track" aria-hidden="true"><span style="width:'+value/max*100+'%"></span></div>';
+  return '<div class="spend-bar '+side+'"><div><span>'+esc(label)+'</span><strong>'+amount+'</strong></div>'+track+'</div>';
+ }
+
+ return `<section class="spend-card" aria-labelledby="spendTitle">
+  <div class="spend-card-head">
+   <h3 id="spendTitle">30-day Meta ad spend</h3>
+   <span>${esc(period)}</span>
+  </div>
+  <div class="spend-card-body">
+   <div class="spend-takeaway" aria-live="polite">${esc(takeaway)}</div>
+   <div class="spend-bars">${bar("Your brand",mine,"own")}${bar(rivalLabel,avg.value,"rival")}</div>
+  </div>
+  <div class="spend-card-foot">
+   <span>Modelled from active UK ads${avg.count?" · "+coverage+" competitor"+(avg.total===1?"":"s"):""}</span>
+   <details class="spend-method"><summary>How it’s estimated</summary><p>AdSnoop spreads each active ad’s reported reach evenly over its observed lifetime, then applies £${model.rollingBenchmark.perThousand} per 1,000 ad-level reach to the portion inside the 30-day window. Delivery can vary day to day. Stopped ads are outside this view.</p></details>
+  </div>
+ </section>`;
+}
 function overviewHTML(cols){
  const ready=cols.filter(c=>c.b);
  const vol=kpiCard("Active ad volume","Unique Meta ad IDs live now",rankBars(cols,b=>b.total,b=>fmtN(b.total)+" active ads · "+fmtN(b.creatives)+" distinct creatives (identical copy and headline grouped)"),positionLine(cols,b=>b.total));
  const vid=kpiCard("Video share","% of ads with a known format",rankBars(cols,b=>b.classified?fpct(b,"v"):null,b=>fpct(b,"v")+"% video ("+b.fmt.v+" of "+fmtN(b.classified)+" classified)",b=>fpct(b,"v")+"%"),positionLine(cols,b=>b.classified?fpct(b,"v"):null,"%"));
  const fresh=kpiCard("Launched in 30 days","Active ads that started in the last 30 days",rankBars(cols,b=>b.n30,b=>b.n30+" ads ("+pctOf(b.n30,b.total)+"% of active) · "+b.n7+" in the last 7 days",b=>b.n30+' <small>'+pctOf(b.n30,b.total)+'%</small>'),positionLine(cols,b=>b.n30));
  const age=kpiCard("Median ad age","Days since launch, active ads",rankBars(cols,b=>b.median,b=>"Median "+b.median+" days · "+b.long+" ads running 90+ days",b=>b.median+'d'),"Longer isn’t better or worse: long-running ads aren’t proof of performance.");
- return radarHTML(cols)+'<div class="bm-grid">'+vol+vid+fresh+age+'</div>';
+ return spendHTML(cols)+radarHTML(cols)+'<div class="bm-grid">'+vol+vid+fresh+age+'</div>';
 }
 function mixHTML(cols){
  const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';
@@ -1269,7 +1385,7 @@ function compareHTML(){
  const pane=cmp.tab==="remix"?remixTabHTML(cols):cmp.tab==="mix"?mixHTML(cols):cmp.tab==="activity"?activityHTML(cols):cmp.tab==="messaging"?messagingCmpHTML(cols):overviewHTML(cols);
  const when=cols.map(c=>c.b&&c.b.generatedAt).filter(Boolean).sort()[0];
  const anim=cmp.anim;cmp.anim=false;
- return '<div class="cmp-wrap cmp2">'+hint+brandStrip(cols)+tabsHTML()+'<div class="cmp-pane'+(anim?' in':'')+'" role="tabpanel">'+pane+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh</button><span class="intel-sub">All accessible active '+(state.coverage==="GB"?"UK":"UK + EU")+' ads per brand from Meta’s Ad Library'+(when?', collected '+new Date(when).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):'')+'. Activity and format signals aren’t measures of performance or spend.</span></div></div>';
+ return '<div class="cmp-wrap cmp2">'+hint+brandStrip(cols)+trackerPickerHTML(activeBrand())+tabsHTML()+'<div class="cmp-pane'+(anim?' in':'')+'" role="tabpanel">'+pane+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh</button><span class="intel-sub">All accessible active '+(state.coverage==="GB"?"UK":"UK + EU")+' ads per brand from Meta’s Ad Library'+(when?', collected '+new Date(when).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):'')+'. Activity and format signals aren’t measures of performance.</span></div></div>';
 }
 // Messaging tab: what is rising, what lasts, and how it compares with your brand.
 // Messaging map: deterministic rules applied to loaded ad copy. Ported from
@@ -1960,7 +2076,7 @@ $("searchForm").addEventListener("submit",e=>{
  searchClient($("searchInput").value);
  $("research").scrollIntoView({behavior:"smooth"});
 });
-$("coverage").addEventListener("change",e=>{state.coverage=e.target.value;if(state.query)searchClient(state.query)});
+$("coverage").addEventListener("change",e=>{state.coverage=e.target.value;if(state.view==="tracker"||state.view==="compare")renderCards();else if(state.query)searchClient(state.query)});
 $("sort").value=state.sort;
 $("sort").addEventListener("change",e=>{state.sort=e.target.value;state.limit=25;renderCards()});
 document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest(".viewtab");if(!t||!["ArrowLeft","ArrowRight"].includes(e.key))return;const tabs=[...document.querySelectorAll(".viewtab")];const next=tabs[(tabs.indexOf(t)+(e.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];if(next){e.preventDefault();setView(next.dataset.view);requestAnimationFrame(()=>document.querySelector('.viewtab[aria-selected="true"]')?.focus())}});
@@ -2001,7 +2117,7 @@ document.addEventListener("click",e=>{
  if(action==="mybrand")toggleMine();
  if(action==="unpin")unpin(b.dataset.id);
  if(action==="cmpreload"){cmp.data.clear();loadCompare(true)}
- if(action==="cmptab"){const t=b.dataset.tab;if(t&&t!==cmp.tab){cmp.tab=t;cmp.anim=true;if(state.view!=="compare"){state.view="compare"}renderCards();document.querySelector(".cmp-tabs")?.scrollIntoView({block:"nearest",behavior:"smooth"})}}
+ if(action==="cmptab"){const t=b.dataset.tab;if(t&&t!==cmp.tab){cmp.tab=t;cmp.anim=true;state.view=TRACKER?"tracker":"compare";renderCards();document.querySelector(".cmp-tabs")?.scrollIntoView({block:"nearest",behavior:"smooth"})}}
  if(action==="cmpmode"){cmp.mode=b.dataset.mode==="count"?"count":"share";renderCards()}
  if(action==="cmpsort"){const k=b.dataset.sort;cmp.sort=cmp.sort===k?"":k;renderCards()}
  if(action==="compare"){const a=findAd(id);if(a){if(state.compare.has(id))state.compare.delete(id);else if(state.compare.size<3)state.compare.set(id,a);else{error("Select up to three ads to compare.");return}renderCards();}}

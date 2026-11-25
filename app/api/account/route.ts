@@ -8,12 +8,14 @@ export const dynamic='force-dynamic';
 const KEY='adsnoop_tracker';
 const MAX_BRANDS=10,MAX_COMP=5;
 const ID=/^\d{1,30}$/;
+const SPEND_CATEGORIES=new Set(['average','fashion','mobility','furniture','kitchens','other']);
+const spendCategory=(v:unknown)=>typeof v==='string'&&SPEND_CATEGORIES.has(v)?{spendCategory:v}:{};
 const name=(v:unknown)=>typeof v==='string'?v.replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,80):'';
 function clean(input:any){
  if(!input||typeof input!=='object'||!Array.isArray(input.brands))return null;
  const brands=input.brands.filter((b:any)=>b&&ID.test(String(b.id))&&name(b.name)).slice(0,MAX_BRANDS).map((b:any)=>({
-  id:String(b.id),name:name(b.name),
-  competitors:(Array.isArray(b.competitors)?b.competitors:[]).filter((c:any)=>c&&ID.test(String(c.id))&&String(c.id)!==String(b.id)&&name(c.name)).slice(0,MAX_COMP).map((c:any)=>({id:String(c.id),name:name(c.name)}))
+  id:String(b.id),name:name(b.name),...spendCategory(b.spendCategory),
+  competitors:(Array.isArray(b.competitors)?b.competitors:[]).filter((c:any)=>c&&ID.test(String(c.id))&&String(c.id)!==String(b.id)&&name(c.name)).slice(0,MAX_COMP).map((c:any)=>({id:String(c.id),name:name(c.name),...spendCategory(c.spendCategory)}))
  }));
  const active=brands.some((b:any)=>b.id===String(input.active))?String(input.active):brands[0]?.id||'';
  return {v:1,active,brands,updatedAt:new Date().toISOString()};
