@@ -10,19 +10,32 @@ const $ = (tag, attrs = {}, ...kids) => {
   return el;
 };
 const main = document.getElementById('main');
+const dock = document.getElementById('dock');
 const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'm' : n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
 const UTM = 'utm_source=chrome-extension&utm_medium=extension';
 const brandUrl = (b, extra = '') => `${ADSNOOP}/?page=${encodeURIComponent(b.id)}&name=${encodeURIComponent(b.name)}${extra}&${UTM}`;
 const searchUrl = q => `${ADSNOOP}/?q=${encodeURIComponent(q)}&${UTM}`;
 const open = url => { chrome.tabs.create({url}); window.close(); };
 const show = (...nodes) => main.replaceChildren(...nodes.filter(Boolean));
+const setDock = (...nodes) => { dock.replaceChildren(...nodes.filter(Boolean)); dock.hidden = !dock.childNodes.length; };
 let tabId = null, site = '';
 
 if (!/^https:\/\/adsnoop\.co\.uk$/.test(ADSNOOP)) document.getElementById('env').hidden = false;
+document.getElementById('openapp').addEventListener('click', () => open(`${ADSNOOP}/?${UTM}`));
 
 function badge(text) {
   if (tabId == null) return;
   try { chrome.action.setBadgeBackgroundColor({tabId, color: '#0071e3'}); chrome.action.setBadgeText({tabId, text}); } catch {}
+}
+
+// The site you're on, shown under the logo: its icon, address and page title.
+function showTab(tab, host) {
+  const fav = document.getElementById('fav');
+  const letter = () => fav.replaceChildren((host || '?').charAt(0));
+  if (/^(https:|data:image\/)/.test(tab?.favIconUrl || '')) fav.replaceChildren($('img', {src: tab.favIconUrl, alt: '', onerror: letter})); else letter();
+  document.getElementById('tabhost').textContent = host;
+  document.getElementById('tabtitle').textContent = (tab?.title || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  document.getElementById('tab').hidden = false;
 }
 
 function searchForm(value = '') {
@@ -32,59 +45,104 @@ function searchForm(value = '') {
 }
 const siteLabel = host => (host || '').split('.')[0].replace(/-/g, ' ');
 
-function brandHead(data) {
-  const b = data.brand;
+function avatar(b) {
+  const initial = () => $('div', {class: 'avatar', 'aria-hidden': 'true'}, b.name.charAt(0));
   const pic = b.picture || b.logo;
-  return $('div', {class: 'brand'},
-    pic ? $('img', {src: pic, alt: '', onerror: e => e.target.remove()}) : null,
-    $('div', {}, $('h1', {}, b.name), $('div', {class: 'site'}, data.site)));
+  return pic ? $('img', {class: 'avatar', src: pic, alt: '', onerror: e => e.target.replaceWith(initial())}) : initial();
+}
+
+function brandCard(data) {
+  const b = data.brand, m = data.match || {};
+  const sub = [b.handle ? '@' + b.handle : '', b.category || ''].filter(Boolean).join(' · ') || 'Advertiser on Facebook and Instagram';
+  const chips = [
+    m.linkedOnSite ? $('span', {class: 'chip green'}, '✓ Linked on this site') : null,
+    m.adsLinkToSite ? $('span', {class: 'chip blue'}, `Ads point to ${data.site}`) : null,
+    m.nameMatches && !(m.linkedOnSite && m.adsLinkToSite) ? $('span', {class: 'chip'}, 'Name matches') : null,
+  ].filter(Boolean);
+  return $('section', {class: 'card'},
+    $('div', {class: 'brand'}, avatar(b), $('div', {}, $('h1', {}, b.name), $('div', {class: 'sub'}, sub))),
+    chips.length ? $('div', {class: 'chips'}, chips) : null);
+}
+
+function status(data) {
+  return $('div', {class: 'status'}, $('span', {class: 'dot', 'aria-hidden': 'true'}), `Matched to ${data.site}`, $('span', {class: 'r'}, 'UK ads'));
+}
+
+function adTile(ad, b) {
+  const label = ad.title || 'Live ad';
+  return $('button', {class: 'ad', title: label, 'aria-label': label, onclick: () => open(brandUrl(b))},
+    ad.image ? $('img', {src: ad.image, alt: '', loading: 'lazy', onerror: e => e.target.replaceWith($('span', {class: 'noimg'}, label))}) : $('span', {class: 'noimg'}, ad.video ? 'Video ad' : label),
+    ad.video ? $('span', {class: 'play', 'aria-hidden': 'true'}, '▶') : null,
+    ad.reach ? $('span', {class: 'reach'}, fmt(ad.reach) + ' reach') : null);
 }
 
 function notRight(data) {
-  return $('div', {class: 'foot'},
+  return $('div', {class: 'small'},
     $('button', {class: 'link', onclick: () => open(searchUrl(siteLabel(data.site)))}, 'Not the right brand?'),
-    $('span', {}, 'UK ads · Meta Ad Library'));
+    $('span', {}, 'Source: Meta Ad Library'));
 }
 
 function renderFound(data) {
   const b = data.brand, a = data.ads;
   const count = a.count + (a.more ? '+' : '');
+  const grid = (data.grid?.length ? data.grid : data.top || []).slice(0, 9);
   badge(a.count > 99 || a.more && a.count >= 99 ? '99+' : String(a.count));
+  const minis = [
+    [String(a.newThisWeek), 'new this week'],
+    typeof a.instagram === 'number' ? [String(a.instagram) + (a.more ? '+' : ''), 'on Instagram'] : null,
+    typeof a.facebook === 'number' ? [String(a.facebook) + (a.more ? '+' : ''), 'on Facebook'] : null,
+  ].filter(Boolean);
   show(
-    brandHead(data),
-    $('div', {class: 'stats'},
-      $('div', {class: 'stat'}, $('b', {}, count), $('span', {}, a.count === 1 && !a.more ? 'ad live in the UK' : 'ads live in the UK')),
-      $('div', {class: 'stat'}, $('b', {}, String(a.newThisWeek)), $('span', {}, 'launched this week'))),
-    data.summary ? $('div', {class: 'summary'}, $('span', {class: 'k'}, '✦ AI summary'), $('p', {}, data.summary)) : null,
-    data.top?.length ? $('div', {class: 'label'}, 'Top ads by UK reach') : null,
-    data.top?.length ? $('div', {class: 'grid'}, data.top.map(ad =>
-      $('button', {class: 'ad', title: ad.title || 'Open on AdSnoop', 'aria-label': ad.title || 'Live ad', onclick: () => open(brandUrl(b))},
-        ad.image ? $('img', {class: 'img', src: ad.image, alt: '', loading: 'lazy', onerror: e => e.target.replaceWith($('span', {class: 'noimg'}, 'Ad'))}) : $('span', {class: 'noimg'}, 'Video'),
-        ad.reach ? $('span', {class: 't'}, fmt(ad.reach) + ' reach') : null))) : null,
-    $('div', {class: 'actions'},
-      $('button', {class: 'btn primary', onclick: () => open(brandUrl(b))}, `See all ${b.name}'s ads →`),
-      $('button', {class: 'btn secondary', onclick: () => open(brandUrl(b, '&do=pin'))}, '☆ Pin as a competitor')),
-    $('p', {class: 'remix'}, $('button', {class: 'link', onclick: () => open(brandUrl(b))}, '✦ Remix any of their ads for your brand')),
+    status(data),
+    brandCard(data),
+    $('section', {class: 'card'},
+      $('div', {class: 'count'},
+        $('div', {}, $('div', {class: 'n'}, count), $('div', {class: 'l'}, a.count === 1 && !a.more ? 'ad running in the UK right now' : 'ads running in the UK right now')),
+        $('span', {class: 'live'}, $('i', {'aria-hidden': 'true'}), 'Running now')),
+      $('div', {class: 'mini'}, minis.map(([n, l]) => $('div', {}, $('b', {}, n), $('span', {}, l))))),
+    data.summary ? $('section', {class: 'card summary'}, $('span', {class: 'k'}, '✦ WHAT THEY’RE PUSHING'), $('p', {}, data.summary)) : null,
+    grid.length ? $('div', {class: 'head'}, $('b', {}, 'Their biggest ads right now'), $('span', {}, 'by UK reach')) : null,
+    grid.length ? $('div', {class: 'grid'}, grid.map(ad => adTile(ad, b))) : null);
+  setDock(
+    $('div', {class: 'row'},
+      $('button', {class: 'btn primary grow', onclick: () => open(brandUrl(b))}, `See all ${count} ads →`),
+      $('button', {class: 'btn secondary', onclick: () => open(brandUrl(b, '&do=pin'))}, '☆ Track')),
+    $('div', {class: 'row'}, $('button', {class: 'btn secondary', onclick: () => open(brandUrl(b))}, '✦ Remix one of their ads for your brand')),
     notRight(data));
 }
 
 function renderNoAds(data) {
   badge('0');
-  show(brandHead(data),
-    $('div', {class: 'msg', style: 'margin-top:14px'}, $('p', {}, `${data.brand.name} isn't running any ads in the UK right now.`)),
-    $('div', {class: 'actions'}, $('button', {class: 'btn primary', onclick: () => open(brandUrl(data.brand))}, 'Open on AdSnoop →')),
+  show(status(data), brandCard(data),
+    $('section', {class: 'card msg'}, $('h1', {}, 'No ads running right now'), $('p', {}, `${data.brand.name} isn't running any ads in the UK at the moment. Track them and AdSnoop will show you when they start.`)));
+  setDock(
+    $('div', {class: 'row'},
+      $('button', {class: 'btn primary grow', onclick: () => open(brandUrl(data.brand, '&do=pin'))}, '☆ Track this brand'),
+      $('button', {class: 'btn secondary', onclick: () => open(brandUrl(data.brand))}, 'Open')),
     notRight(data));
 }
 
 function renderMessage(title, text, value = '', retry = false) {
-  show($('div', {class: 'msg'}, $('h1', {}, title), $('p', {}, text)),
-    retry ? $('div', {class: 'actions'}, $('button', {class: 'btn secondary', onclick: () => run()}, 'Try again')) : null,
-    searchForm(value));
+  setDock();
+  show($('section', {class: 'card msg'},
+    $('div', {class: 'art', 'aria-hidden': 'true'}, $('img', {src: 'eyes.svg', alt: ''})),
+    $('h1', {}, title), $('p', {}, text),
+    retry ? $('div', {class: 'row', style: 'margin-top:12px'}, $('button', {class: 'btn secondary', onclick: () => run()}, 'Try again')) : null,
+    searchForm(value)));
+}
+
+function renderLoading() {
+  setDock();
+  const sk = (w, h, r = 8) => $('div', {class: 'sk', style: `width:${w};height:${h}px;border-radius:${r}px`});
+  show(
+    $('div', {class: 'loadnote'}, $('span', {class: 'ring', 'aria-hidden': 'true'}), $('span', {}, $('b', {}, "Finding this brand's ads…"), site ? ` Checking ${site}` : '')),
+    $('section', {class: 'card'}, $('div', {class: 'skrow'}, sk('52px', 52, 26), $('div', {style: 'flex:1;display:grid;gap:7px'}, sk('55%', 14), sk('35%', 11)))),
+    $('section', {class: 'card'}, $('div', {class: 'skrow'}, sk('70px', 30), sk('45%', 12))),
+    $('div', {class: 'grid'}, Array.from({length: 6}, () => $('div', {class: 'sk', style: 'aspect-ratio:4/5;border-radius:12px'}))));
 }
 
 async function run() {
-  show($('div', {class: 'loading'}, $('span', {class: 'ring', 'aria-hidden': 'true'}),
-    $('p', {}, $('b', {}, "Finding this brand's ads…"), $('br'), site ? `Checking ${site}` : 'Checking the site')));
+  renderLoading();
   let data = null, status = 0;
   try {
     const r = await fetch(`${ADSNOOP}/api/lookup?site=${encodeURIComponent(site)}`, {signal: AbortSignal.timeout(90000)});
@@ -104,5 +162,6 @@ chrome.tabs.query({active: true, currentWindow: true}, ([tab]) => {
   try { url = new URL(tab?.url || ''); } catch {}
   if (!url || !/^https?:$/.test(url.protocol)) return renderMessage("Open a brand's website", "Go to a brand's own website, then click AdSnoop again to see the ads it's running. Or search for a brand here.");
   site = url.hostname;
+  showTab(tab, site.replace(/^www\./, ''));
   run();
 });
