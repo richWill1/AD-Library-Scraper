@@ -1262,31 +1262,28 @@ function positionLine(cols,val,unit){unit=unit||"";
  return 'You rank <b>#'+pos+' of '+r.length+'</b>'+(avg!=null?' · competitor average '+fmtN(avg)+unit:'');
 }
 const spendMoney=value=>new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP",notation:value>=1000?"compact":"standard",maximumFractionDigits:value>=1000?1:0}).format(value).replace("K","k");
-const spendDate=value=>new Date(value).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
-function spendOptions(selected,inherit){
- const model=globalThis.AdSnoopSpend;
- return (inherit?'<option value=""'+(!selected?' selected':'')+'>Use default category</option>':'')+model.categories.map(c=>'<option value="'+c.id+'"'+(c.id===selected?' selected':'')+(c.currency!=="GBP"?' disabled':'')+'>'+esc(c.label+(c.currency!=="GBP"?' — US reach required':''))+'</option>').join("");
-}
 function spendHTML(cols){
- const model=globalThis.AdSnoopSpend,brand=activeBrand();if(!model||!brand)return "";
- const defaultId=model.category(brand.spendCategory).id;
- const items=cols.map(c=>({...c,estimate:model.estimate(c.d,c.spendCategory||defaultId,state.coverage)}));
- const avg=model.average(items),benchmark=model.category(defaultId);
- const summary='<div class="spend-summary"><div><span>Average modelled competitor spend</span><strong aria-live="polite">'+(avg.count?'≈'+spendMoney(avg.value):'—')+'</strong><small>'+avg.count+' of '+avg.total+' competitor'+(avg.total===1?'':'s')+' included · your brand excluded</small></div><label class="spend-default" for="spendDefault">Default category<select id="spendDefault" aria-label="Default spend category" data-spend-category="'+esc(brand.id)+'">'+spendOptions(defaultId,false)+'</select><small>'+(benchmark.cpm==null?'£'+benchmark.perThousand.toFixed(2)+' per 1,000 ad-level reach':'£'+benchmark.cpm.toFixed(2)+' CPM × '+benchmark.frequency.toFixed(2)+' frequency')+'</small></label></div>';
- const rows=items.map(c=>{
-  const e=c.estimate;
-  const details=e.eligible?'<small>'+fmtN(e.reach)+' ad-level reach · '+e.reported+'/'+e.total+' ads report reach</small><small>Earliest launch '+esc(spendDate(e.earliest))+' · checked '+esc(spendDate(e.checked))+'</small>':'<small>'+esc(e.reason)+'</small>';
-  const choice=c.mine?'<span class="spend-category-label">'+esc(e.benchmark.label)+'<small>Uses the default category</small></span>':'<label class="spend-choice"><span class="sr-only">Spend category for '+esc(c.name)+'</span><select aria-label="Spend category for '+esc(c.name)+'" data-spend-category="'+esc(c.id)+'">'+spendOptions(c.spendCategory||"",true)+'</select></label>';
-  return '<div class="spend-row'+(c.mine?' me':'')+'"><div class="spend-brand"><b>'+esc(c.name)+'</b><span>'+(c.mine?'Your brand':'Competitor')+'</span>'+details+'</div>'+choice+'<div class="spend-value"><b>'+(e.eligible?'≈'+spendMoney(e.value):'—')+'</b>'+(e.eligible?'<small>'+spendMoney(e.low)+'–'+spendMoney(e.high)+' scenario</small>':'<small>Estimate unavailable</small>')+'</div></div>';
- }).join("");
- return '<section class="bm spend-panel" aria-labelledby="spendTitle"><div class="spend-heading"><div><p class="eyebrow">Spend benchmark</p><h3 id="spendTitle">A rough view of their ad spend</h3></div><span class="spend-badge">Modelled estimate</span></div><p class="spend-intro">UK spend associated with the active ads we can see. Each brand’s ads cover different launch dates.</p>'+summary+'<div class="spend-rows">'+rows+'</div><p class="spend-note">Cumulative estimates for observed active ads. Stopped ads are excluded; these figures do not establish monthly budgets.</p><details class="cmp-how"><summary>How spend is estimated</summary><p>Reported ad-level reach ÷ 1,000 × category frequency × category CPM. The fallback averages the five GBP categories’ combined multipliers (£40.88 per 1,000 reach). Category figures are supplied benchmarks; Fashion (UK &amp; ROW) includes markets beyond the UK.</p><p>Frequency’s reporting period and whether it was measured per ad, campaign or account are unverified. Audiences can overlap across ads: reach here counts ad-level exposure, not unique people across the brand. Matching the frequency to this scope is an assumption.</p><p>The scenario band varies the modelled figure by ±50% to illustrate sensitivity. It is not a confidence interval or an accuracy claim. Estimates require a complete UK ad collection and reach for at least 70% of ads. Missing reach is excluded without extrapolation; reported zero reach counts as data.</p><p>The competitor average gives each included competitor equal weight and excludes your brand. Launch dates vary, so use it as a rough comparison of observed active ads. US CPMs are kept separate and require US reach data.</p></details></section>';
-}
-function setSpendCategory(id,value){
- const model=globalThis.AdSnoopSpend,t=tracker(),b=t.brands.find(x=>x.id===t.active);
- if(!model||!b||value&&!model.categories.some(c=>c.id===value&&c.currency==="GBP"))return false;
- const target=id===b.id?b:b.competitors.find(c=>c.id===id);if(!target)return false;
- if(value)target.spendCategory=value;else delete target.spendCategory;
- saveTracker(t);return true;
+ const model=globalThis.AdSnoopSpend;
+ const rivals=cols.filter(c=>!c.mine);
+ if(!model||!rivals.length)return "";
+ const items=rivals.map(c=>({id:c.id,estimate:model.estimate(c.d,"average",state.coverage)}));
+ const avg=model.average(items);
+ const value=avg.count?"≈"+spendMoney(avg.value):"—";
+ let detail;
+ if(avg.count){
+  const count=avg.count===avg.total?String(avg.count):avg.count+" of "+avg.total;
+  detail="UK active ads to date · "+count+" competitor"+(avg.total===1?"":"s");
+ }else if(state.coverage!=="GB"){
+  detail="Choose UK coverage to see an estimate";
+ }else if(rivals.some(c=>!c.d||c.d.status==="running"||c.d.status==="queued")){
+  detail="Collecting ad data";
+ }else{
+  detail="Insufficient reach data for an estimate";
+ }
+ return `<section class="bm spend-tile" aria-labelledby="spendTitle">
+  <div><h3 id="spendTitle">Modelled avg. competitor spend</h3><p>${detail}</p></div>
+  <strong aria-live="polite">${value}</strong>
+ </section>`;
 }
 function overviewHTML(cols){
  const ready=cols.filter(c=>c.b);
@@ -1358,7 +1355,7 @@ function compareHTML(){
  const pane=cmp.tab==="remix"?remixTabHTML(cols):cmp.tab==="mix"?mixHTML(cols):cmp.tab==="activity"?activityHTML(cols):cmp.tab==="messaging"?messagingCmpHTML(cols):overviewHTML(cols);
  const when=cols.map(c=>c.b&&c.b.generatedAt).filter(Boolean).sort()[0];
  const anim=cmp.anim;cmp.anim=false;
- return '<div class="cmp-wrap cmp2">'+hint+brandStrip(cols)+trackerPickerHTML(activeBrand())+tabsHTML()+'<div class="cmp-pane'+(anim?' in':'')+'" role="tabpanel">'+pane+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh</button><span class="intel-sub">All accessible active '+(state.coverage==="GB"?"UK":"UK + EU")+' ads per brand from Meta’s Ad Library'+(when?', collected '+new Date(when).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):'')+'. Activity and format signals aren’t measures of performance. Spend uses the category assumptions shown above.</span></div></div>';
+ return '<div class="cmp-wrap cmp2">'+hint+brandStrip(cols)+trackerPickerHTML(activeBrand())+tabsHTML()+'<div class="cmp-pane'+(anim?' in':'')+'" role="tabpanel">'+pane+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh</button><span class="intel-sub">All accessible active '+(state.coverage==="GB"?"UK":"UK + EU")+' ads per brand from Meta’s Ad Library'+(when?', collected '+new Date(when).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):'')+'. Activity and format signals aren’t measures of performance.</span></div></div>';
 }
 // Messaging tab: what is rising, what lasts, and how it compares with your brand.
 // Messaging map: deterministic rules applied to loaded ad copy. Ported from
@@ -2052,13 +2049,6 @@ $("searchForm").addEventListener("submit",e=>{
 $("coverage").addEventListener("change",e=>{state.coverage=e.target.value;if(state.view==="tracker"||state.view==="compare")renderCards();else if(state.query)searchClient(state.query)});
 $("sort").value=state.sort;
 $("sort").addEventListener("change",e=>{state.sort=e.target.value;state.limit=25;renderCards()});
-document.addEventListener("change",e=>{
- const select=e.target.closest("[data-spend-category]");if(!select)return;
- const id=select.dataset.spendCategory;
- if(setSpendCategory(id,select.value)){
-  renderCards();document.querySelector('[data-spend-category="'+id+'"]')?.focus({preventScroll:true});
- }
-});
 document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest(".viewtab");if(!t||!["ArrowLeft","ArrowRight"].includes(e.key))return;const tabs=[...document.querySelectorAll(".viewtab")];const next=tabs[(tabs.indexOf(t)+(e.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length];if(next){e.preventDefault();setView(next.dataset.view);requestAnimationFrame(()=>document.querySelector('.viewtab[aria-selected="true"]')?.focus())}});
 document.addEventListener("click",e=>{
  let b=e.target.closest("[data-query]");if(b){$("searchInput").value=b.dataset.query;searchClient(b.dataset.query);$("research").scrollIntoView({behavior:"smooth"});return}

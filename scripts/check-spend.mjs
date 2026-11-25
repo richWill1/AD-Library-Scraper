@@ -46,31 +46,26 @@ assert.equal(avg.value,estimate.value/2);
 assert.equal(model.average([{id:'me',mine:true,estimate}]).value,null);
 assert.equal(model.average([{id:'us',estimate:{...estimate,benchmark:model.category('fashion-us')}}]).count,0);
 
-// Exercise the production renderer and persistence functions, with only their
-// environment dependencies supplied, so numeric zero and unsafe names render correctly.
+// The tracker uses the same blended benchmark even for legacy selections with saved categories.
 const app=fs.readFileSync('public/live/app.js','utf8');
-let saved;
-const tracker={active:'10',brands:[{id:'10',name:'My brand',spendCategory:'furniture',competitors:[{id:'20',name:'Strachan',spendCategory:'kitchens'}]}]};
-Object.assign(context,{state:{coverage:'GB'},activeBrand:()=>tracker.brands[0],tracker:()=>tracker,saveTracker:t=>saved=t,fmtN:n=>Number(n).toLocaleString('en-GB'),esc:s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))});
+context.state={coverage:'GB'};
 vm.runInContext(app.slice(app.indexOf('const spendMoney='),app.indexOf('function overviewHTML(')),context);
-const html=context.spendHTML([{id:'10',name:'My brand',mine:true,d:strachan},{id:'20',name:'Strachan <script>',spendCategory:'furniture',d:strachan}]);
-assert.ok(html.includes('≈£8.5k'));
-assert.ok(html.includes('1 of 1 competitor included'));
-assert.ok(html.includes('Strachan &lt;script&gt;'));
-assert.ok(!html.includes('Strachan <script>'));
-assert.ok(html.includes('26 Oct 2026'));
-assert.ok(context.spendHTML([{id:'20',name:'Zero',d:data([row('1',0)])}]).includes('≈£0'));
+const html=context.spendHTML([
+ {id:'10',mine:true,d:data([row('1',900000)])},
+ {id:'20',name:'Strachan',spendCategory:'furniture',d:strachan},
+ {id:'30',d:data(strachan.rows,{complete:false})}
+]);
+assert.ok(html.includes('≈£7.1k'));
+assert.ok(html.includes('1 of 2 competitors'));
+assert.ok(!html.includes('Strachan'));
+assert.ok(!html.includes('<select'));
+assert.ok(context.spendHTML([{id:'20',d:data([row('1',0)])}]).includes('≈£0'));
+assert.ok(context.spendHTML([{id:'20',d:{status:'running'}}]).includes('Collecting ad data'));
+assert.ok(context.spendHTML([{id:'20',d:data([row('1',null)])}]).includes('Insufficient reach data'));
+assert.equal(context.spendHTML([{id:'10',mine:true,d:strachan}]),'');
 context.state.coverage='EU_UK';
-assert.ok(context.spendHTML([{id:'20',name:'Strachan',d:strachan}]).includes('Choose UK coverage'));
-assert.ok(!context.spendHTML([{id:'20',name:'Strachan',d:strachan}]).includes('≈£8.5k'));
-context.state.coverage='GB';
-assert.equal(context.setSpendCategory('10','mobility'),true);
-assert.equal(saved.brands[0].spendCategory,'mobility');
-assert.equal(context.setSpendCategory('20',''),true);
-assert.equal('spendCategory' in saved.brands[0].competitors[0],false);
-assert.equal(context.setSpendCategory('20','fashion-us'),false);
-assert.equal(context.setSpendCategory('20','<invalid>'),false);
-assert.equal(context.setSpendCategory('999','furniture'),false);
+assert.ok(context.spendHTML([{id:'20',d:strachan}]).includes('Choose UK coverage'));
+assert.ok(!context.spendHTML([{id:'20',d:strachan}]).includes('≈£7.1k'));
 
 // Round-trip the real account sanitizer without contacting Clerk.
 const account=fs.readFileSync('app/api/account/route.ts','utf8');
@@ -80,4 +75,4 @@ assert.equal(clean.brands[0].spendCategory,'furniture');
 assert.equal(clean.brands[0].competitors[0].spendCategory,'kitchens');
 assert.equal('spendCategory' in clean.brands[0].competitors[1],false);
 assert.equal('spendCategory' in context.clean({brands:[{id:'10',name:'Legacy'}]}).brands[0],false);
-console.log('Spend checks passed: Strachan calibration, category maths, missing/zero reach, deduplication, coverage, dates, currency separation, competitor averages, escaped rendering and account persistence.');
+console.log('Spend checks passed: Strachan calibration, category maths, missing/zero reach, deduplication, coverage, dates, currency separation, competitor averages, compact tile rendering and legacy account settings.');

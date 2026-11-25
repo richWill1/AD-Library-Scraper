@@ -1,12 +1,10 @@
 # Category-based modelled media spend
 
-Status: implemented in the Competitor Insights / My competitors overview; deployment is separate.
-
 ## Product behaviour
 
-The overview shows a rounded estimate for each tracked brand and an equal-weight competitor average that excludes the user's own brand. A default category applies to the tracked group; each competitor can override it or inherit the default. Category choices persist on the device and round-trip through the existing signed-in account tracker.
+The My competitors overview shows one rounded average for the selected competitors with eligible UK data. It gives each competitor equal weight and excludes the user's own brand. Every estimate uses the same blended benchmark. Previously saved category settings do not affect this tile.
 
-The label is **Modelled estimate**. The scope is cumulative UK spend associated with the observed active ads, with each brand's earliest launch date and collection date shown. The UI does not call it monthly spend. Advertisers can cover different launch dates, which limits interpretation of their average.
+The estimate covers cumulative spend associated with observed active ads. Advertisers can cover different launch dates, which limits interpretation of their average.
 
 ## Supplied benchmarks
 
@@ -19,20 +17,20 @@ The label is **Modelled estimate**. The scope is cumulative UK spend associated 
 | Kitchens | GBP | 15.65 | 4.05 | 63.3825 |
 | Other | GBP | 7.76 | 2.77 | 21.4952 |
 
-The unknown-category fallback is the arithmetic mean of the five GBP **combined multipliers**: £40.87644 per 1,000 reach. It is not the product of the separate average CPM and average frequency. It gives each category equal weight, rather than weighting by the benchmark sample's spend. Supplied sample spend totals are not competitor budgets.
+The blended benchmark is the arithmetic mean of the five GBP **combined multipliers**: £40.87644 per 1,000 reach. It is not the product of the separate average CPM and average frequency. It gives each category equal weight, rather than weighting by the benchmark sample's spend. Supplied sample spend totals are not competitor budgets.
 
-US rates are retained separately; the US option is disabled because the available comparison reach is UK reach. The UK & ROW fashion benchmark also includes markets beyond the UK.
+The UK benchmark excludes US rates. The UK & ROW fashion benchmark also includes markets beyond the UK.
 
 ```
-modelled spend = sum(reported per-ad UK reach) / 1,000 × frequency × CPM
+modelled spend = sum(reported per-ad UK reach) / 1,000 × £40.87644
 competitor average = sum(eligible competitor estimates) / eligible competitor count
 ```
 
-The average and individual estimates remain distinct from observed spend. Each row also shows a ±50% sensitivity scenario. This band is an illustrative model variation, not a statistical confidence interval or a calibrated error range.
+The result is a modelled estimate of cumulative spend across the active ads observed.
 
 ## Initial calibration
 
-On 25 November 2026, Strachan's complete active-ad dataset contained 58 ads with reach for all 58, totalling 174,518 per-ad UK reach. Earliest launch: 26 October 2026. Applying furniture frequency 3.80 and CPM £12.86 gives £8,528.35 (displayed as approximately £8.5k).
+On 25 November 2026, Strachan's complete active-ad dataset contained 58 ads with reach for all 58, totalling 174,518 per-ad UK reach. Earliest launch: 26 October 2026. Applying furniture frequency 3.80 and CPM £12.86 gave £8,528.35 in the initial category-specific test. The blended rate gives approximately £7.1k for the same dataset.
 
 An initial operator spot-check was encouraging, but the actual reporting period and campaign coverage were not independently matched. One advertiser does not establish accuracy across categories. Operator-supplied actual budgets remain private and are not used to fit an accuracy interval.
 
@@ -44,7 +42,7 @@ An initial operator spot-check was encouraging, but the actual reporting period 
 - Sum only reported reach; never extrapolate missing reach or treat it as measured zero.
 - Exclude ineligible estimates from the average and display the included competitor count against the full count. Loading/error states never become a zero budget.
 - Partial fallback collections and UK + EU comparisons are excluded from this UK model.
-- Category overrides are validated in the account API; legacy trackers remain valid without category fields.
+- The account API preserves legacy category settings for compatibility.
 
 ## Interpretation limits
 
@@ -57,6 +55,6 @@ For monthly budget estimates, obtain period-matched delivery and frequency. Hist
 ## Implementation and checks
 
 - `public/live/spend.js`: standalone benchmark/calculation model, loaded before the main app.
-- `public/live/app.js`: overview panel, selectors, saved choices and explanation.
+- `public/live/app.js`: compact average tile.
 - `app/api/account/route.ts`: optional category validation and persistence.
 - `scripts/check-spend.mjs`: run with Node 22.13+; verifies Strachan, coverage gates, missing/zero reach, duplicates, dates, currencies, averages, rendering and account sanitisation.
