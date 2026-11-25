@@ -737,6 +737,26 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 .cb-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto}
 .cb-rank{font-size:12px;font-weight:700;color:#86868b;font-variant-numeric:tabular-nums}
 .cb.me .cb-rank{color:#0071e3}
+.cb-help{font-size:12px;line-height:1.5;color:#6e6e73;margin:0 0 10px}
+.cb .cb-name{cursor:default}
+.cb-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.cb-actions button{flex:1 0 auto;min-height:34px;border:1px solid #d9e2ee;border-radius:9px;padding:6px 9px;background:#f5f9ff;color:#0066cc;font:inherit;font-size:11.5px;font-weight:600;cursor:pointer}
+.cb-actions button:hover{background:#e8f2ff;border-color:#0071e3}
+.cb-actions .cb-remove{flex:0 1 auto;background:#fff;color:#6e6e73;border-color:#e8e8ed}
+.cb-actions .cb-remove:hover{background:#fff4f2;color:#b42318;border-color:#efc2bc}
+.cb-view{align-self:flex-start;font-size:12px;color:#0066cc;padding:4px 0;margin-top:2px}
+.cb-view:hover{text-decoration:underline}
+.cb-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:160px;border:1px dashed #c1ccdc;border-radius:16px;background:#f8faff;color:#0066cc;font:inherit;padding:18px;text-align:center;cursor:pointer}
+.cb-add:hover{border-color:#0071e3;background:#eff6ff}
+.cb-add>span{font-size:28px;line-height:1}.cb-add>b{font-size:13px}.cb-add>small{font-size:11.5px;color:#6e6e73}
+.trk-on.trk-picker{margin:0 0 20px;border-color:#c8dafa;background:linear-gradient(135deg,#f6f9ff,#fff)}
+.trk-picker-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.trk-picker-head>div{min-width:0;overflow-wrap:anywhere}
+.trk-picker-head .ghost{flex:none}
+.trk-undo{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin-bottom:16px;border-radius:12px;background:#edf5ff;color:#245b9e;font-size:13px}
+.trk-undo button{flex:none;border:0;border-radius:8px;background:#fff;color:#0066cc;padding:7px 12px;font:inherit;font-weight:600;cursor:pointer}
+.trk-chip button[data-tk="changecomp"]{width:auto;height:auto;padding:5px 9px;border-radius:99px;font-size:11px;color:#0066cc}
+@media(max-width:650px){.cb-actions button{min-height:40px}.trk-on.trk-picker{padding:18px}.trk-picker-head h3{font-size:21px}.trk-undo{align-items:flex-start}}
 .mx-none{flex:1;display:flex;align-items:center;padding:0 10px;font-size:12px;color:#a1a1a6}
 .cb-name small{font-size:11.5px;color:#86868b}
 .cb.me .cb-name small{color:#0071e3;font-weight:500}
@@ -797,6 +817,31 @@ body.has-tabs .loadbar{top:calc(var(--navh) + 62px)!important}
 .bm-h small{display:block;font-size:12px;color:#86868b;margin-top:2px}
 .bm-f{margin:12px 0 0;font-size:12px;color:#6e6e73;line-height:1.45}
 .bm-f b{color:#1d1d1f}
+/* Category-based spend estimates */
+.spend-panel{padding:24px;margin:0 0 20px;min-width:0;background:linear-gradient(135deg,#f4f8ff,#fff 65%)}
+.spend-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.spend-heading .eyebrow{margin:0 0 5px;color:#0066cc}
+.spend-heading h3{margin:0;font-size:23px;letter-spacing:-.035em;text-transform:none;color:#1d1d1f}
+.spend-badge{border:1px solid #cdddf4;border-radius:99px;padding:5px 10px;background:#edf4ff;color:#245b9e;font-size:11px;font-weight:600;white-space:nowrap}
+.spend-intro,.spend-note{font-size:13px;line-height:1.5;color:#6e6e73;margin:9px 0 18px}
+.spend-summary{display:grid;grid-template-columns:1fr minmax(200px,320px);gap:24px;align-items:center;padding:20px 0;border-top:1px solid #dfe7f2;border-bottom:1px solid #dfe7f2}
+.spend-summary>div>span{display:block;font-size:13px;color:#424245}
+.spend-summary strong{display:block;font-size:40px;font-weight:650;letter-spacing:-.055em;line-height:1.25;color:#1d1d1f;margin:4px 0}
+.spend-panel small{display:block;color:#6e6e73;font-size:11.5px;line-height:1.5;letter-spacing:0}
+.spend-default{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:#424245;min-width:0}
+.spend-panel select{width:100%;max-width:100%;min-width:0;border:1px solid #d2d9e4;border-radius:10px;padding:9px 28px 9px 10px;background:#fff;color:#1d1d1f;font-size:12px}
+.spend-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(120px,.7fr);gap:16px;align-items:center;padding:17px 0;border-bottom:1px solid #e8edf4}
+.spend-row.me{background:#eef5ff;margin:0 -10px;padding:17px 10px}
+.spend-brand{min-width:0;overflow-wrap:anywhere}
+.spend-brand>b{font-size:14px;font-weight:600;color:#1d1d1f}
+.spend-brand>span{display:block;font-size:11px;color:#86868b;margin:1px 0 6px}
+.spend-choice{display:block;min-width:0}
+.spend-category-label{font-size:12px;color:#424245;overflow-wrap:anywhere}
+.spend-value{text-align:right;min-width:0}
+.spend-value>b{display:block;font-size:22px;letter-spacing:-.035em;color:#1d1d1f;font-weight:650;white-space:nowrap}
+.spend-note{margin:14px 0 0}
+.spend-panel .cmp-how{border-top:1px solid #e3e9f2;padding-top:14px;margin-top:14px}
+@media(max-width:650px){.spend-panel{padding:18px 16px}.spend-summary{grid-template-columns:1fr;gap:16px}.spend-default{max-width:100%}.spend-row{grid-template-columns:minmax(0,1fr) auto;gap:10px}.spend-choice,.spend-category-label{grid-column:1/-1;grid-row:2}.spend-value{grid-column:2;grid-row:1}.spend-heading h3{font-size:21px}.spend-value>b{font-size:20px}.spend-value small{max-width:140px}.spend-summary strong{font-size:36px}}
 .rb{display:flex;flex-direction:column;gap:7px}
 .rb-row{display:grid;grid-template-columns:minmax(80px,120px) 1fr auto;align-items:center;gap:10px;font-size:13px}
 .rb-n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#424245}
@@ -1246,7 +1291,7 @@ body.tracker-mode main#research{padding-top:8px!important}
 <section id="radarDemo" class="trk-home-demo" aria-label="Try the competitor radar" hidden></section><footer class="foot space-foot" data-space="footer"><div class="space-bg" aria-hidden="true"><canvas class="space-canvas"></canvas><div class="foot-glow"></div></div><div class="footin"><div class="foot-brand"><img src="/brand/adsnoop-wordmark-light.svg" alt="AdSnoop" width="132" height="34"><p>See what your competitors are putting out there.</p></div><nav class="foot-links" aria-label="Footer"><button data-view="discover">Discover</button><button data-view="saved">Saved ideas</button><a href="/tracker">My competitors</a><a href="/christmas-ads">Christmas ads</a><a href="/black-friday-ads">Black Friday ads</a><a href="/meta-updates">Meta ads updates</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><button type="button" id="analytics-settings" hidden>Analytics settings</button><a href="#top" data-scrolltop>Back to top ↑</a></nav><p class="foot-note">Data from Meta’s public Ad Library. Not affiliated with Meta. UK reach figures are Meta’s own estimates. Spend, conversions and verified creative performance aren’t available for commercial ads. Previews depend on the source media collector, and format and funnel labels may be inferred.</p></div></footer>
 <div id="modalOverlay" class="overlay"><div role="dialog" aria-modal="true" aria-labelledby="modalTitle" class="modal"><div class="modalhead"><div><p class="eyebrow">Creative research</p><h2 id="modalTitle"></h2></div><button class="close" id="closeModal" aria-label="Close details">×</button></div><div id="modalContent"></div></div></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div><div id="comparisonBar" class="cmpbar"><span id="compareCount">0 of 3 selected</span><button class="pill sm" id="compareOpen">Compare ads</button><button class="square" id="compareClear" aria-label="Clear comparison" style="background:#333338;color:white;border-color:#555">×</button></div>
-<script src="/brand/eyes-interaction.js" defer></script><script src="/brand/hero-space.js" defer></script><script src="/brand/messaging-story.js" defer></script><script src="/brand/loadstory.js"></script><script src="/live/app.js" defer></script><aside id="analytics-choice" aria-labelledby="analytics-heading" hidden style="position:fixed;bottom:12px;left:12px;z-index:9999;width:min(390px,calc(100% - 24px));background:white;color:#222;border:1px solid #bbb;border-radius:12px;padding:16px;box-shadow:0 4px 20px #0002;font-size:14px">
+<script src="/brand/eyes-interaction.js" defer></script><script src="/brand/hero-space.js" defer></script><script src="/brand/messaging-story.js" defer></script><script src="/brand/loadstory.js"></script><script src="/live/spend.js" defer></script><script src="/live/app.js" defer></script><aside id="analytics-choice" aria-labelledby="analytics-heading" hidden style="position:fixed;bottom:12px;left:12px;z-index:9999;width:min(390px,calc(100% - 24px));background:white;color:#222;border:1px solid #bbb;border-radius:12px;padding:16px;box-shadow:0 4px 20px #0002;font-size:14px">
 <strong id="analytics-heading">Analytics cookies</strong>
 <p>With your permission, AdSnoop uses Google Analytics cookies to measure page visits and interactions. You can change your choice in the footer. <a style="text-decoration:underline" href="https://policies.google.com/technologies/partner-sites">How Google uses this data</a></p>
 <button class="ghost" type="button" id="analytics-decline">Decline</button> <button class="ghost" type="button" id="analytics-allow">Allow analytics</button>

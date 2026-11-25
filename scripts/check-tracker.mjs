@@ -1,0 +1,60 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+
+const source=fs.readFileSync('public/live/app.js','utf8');
+const context=vm.createContext({URLSearchParams});
+let stored,writes=0;
+const reset=()=>{stored={active:'100',brands:[{id:'100',name:'My brand',spendCategory:'furniture',competitors:Array.from({length:5},(_,i)=>({id:String(200+i),name:'Competitor '+i,spendCategory:'kitchens'}))},{id:'900',name:'Other tracked brand',competitors:[]}]};writes=0;context.trk={removed:null,mode:null};};
+Object.assign(context,{COMP_MAX:5,validB:b=>b&&/^\d{1,30}$/.test(b.id)&&typeof b.name==='string',tracker:()=>structuredClone(stored),saveTracker:t=>{stored=structuredClone(t);writes++;}});
+vm.runInContext(source.slice(source.indexOf('function replaceCompetitor('),source.indexOf('function addBrand(')),context);
+reset();
+assert.equal(context.replaceCompetitor('100','202',{id:'300',name:'Replacement'}),'ok');
+assert.equal(stored.brands[0].competitors.length,5); // Atomic swap even with all slots full.
+assert.equal(stored.brands[0].competitors[2].id,'300');
+assert.equal(stored.brands[0].competitors[1].spendCategory,'kitchens');
+assert.equal('spendCategory' in stored.brands[0].competitors[2],false);
+assert.equal(context.replaceCompetitor('100','300',{id:'100',name:'Self'}),'self');
+assert.equal(context.replaceCompetitor('100','300',{id:'201',name:'Duplicate'}),'exists');
+assert.equal(context.replaceCompetitor('100','999',{id:'301',name:'Missing'}),'missing');
+assert.equal(context.replaceCompetitor('100','300',{id:'bad',name:'Bad'}),'invalid');
+assert.equal(writes,1);
+reset();
+assert.equal(context.replaceTrackedBrand('100',{id:'500',name:'New own brand'}),'ok');
+assert.equal(stored.active,'500');
+assert.equal(stored.brands.length,2);
+assert.equal(stored.brands[0].competitors.length,5);
+assert.equal(stored.brands[1].name,'Other tracked brand');
+assert.equal('spendCategory' in stored.brands[0],false);
+assert.equal(context.replaceTrackedBrand('500',{id:'900',name:'Already tracked'}),'exists');
+reset();
+assert.equal(context.replaceTrackedBrand('100',{id:'202',name:'Competitor becomes my brand'}),'ok');
+assert.equal(stored.brands[0].competitors.length,4);
+assert.ok(!stored.brands[0].competitors.some(c=>c.id==='202'));
+reset();
+assert.equal(context.removeTrackedCompetitor('100','202'),'ok');
+assert.equal(stored.brands[0].competitors.length,4);
+assert.equal(context.undoTrackedCompetitor(),'ok');
+assert.equal(stored.brands[0].competitors[2].id,'202');
+assert.equal(stored.brands[0].competitors[2].spendCategory,'kitchens');
+assert.equal(context.undoTrackedCompetitor(),'missing');
+assert.equal(context.removeTrackedCompetitor('100','999'),'missing');
+context.removeTrackedCompetitor('100','202');
+stored.brands[0].competitors.push({id:'600',name:'New selection'});
+assert.equal(context.undoTrackedCompetitor(),'full');
+
+// The card itself no longer routes back to the ad library. Ad navigation is a
+// separate labelled link opening a new tab; selection controls stay in the tracker.
+Object.assign(context,{cmp:{},fmtN:String,esc:s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),logoHTML:()=>'',cmpStatusChip:()=>''});
+vm.runInContext(source.slice(source.indexOf('function brandStrip('),source.indexOf('function tabsHTML(')),context);
+const html=context.brandStrip([{id:'100',name:'My brand',mine:true},{id:'200',name:'Competitor <script>'}]);
+assert.ok(!html.includes('data-page='));
+assert.ok(html.includes('data-tk="changebrand"'));
+assert.ok(html.includes('data-tk="changecomp"'));
+assert.ok(html.includes('data-tk="rm"'));
+assert.ok(html.includes('data-tk="addcomp"'));
+assert.ok(html.includes('target="_blank"'));
+assert.ok(html.includes('Competitor &lt;script&gt;'));
+const full=context.brandStrip([{id:'100',name:'Mine',mine:true},...Array.from({length:5},(_,i)=>({id:String(200+i),name:'Competitor'}))]);
+assert.ok(!full.includes('data-tk="addcomp"'));
+console.log('Tracker checks passed: full-slot replacement, own-brand changes, competitor preservation, duplicate/self protection, undo with original settings, escaped card controls and explicit ad navigation.');
