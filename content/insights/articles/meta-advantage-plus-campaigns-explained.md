@@ -1,18 +1,18 @@
 ---
-title: "Meta Advantage+: What's the Market's View Right Now?"
-seoTitle: "Is Meta Advantage+ Worth It? The Market's View (2026)"
-description: "Meta says Advantage+ is a $75bn business. Independent tests and agency data are more mixed. Where the market agrees, where it doesn't, and our take."
+title: "Meta Advantage+ in the UK: What's the Market's View Right Now?"
+seoTitle: "Is Meta Advantage+ Worth It for UK Advertisers? (2026)"
+description: "Advantage+ is now Meta's default. What the tests, spend data and agencies say, what's different for UK advertisers, and our take for UK brands."
 category: strategy-optimisation
 status: draft
 publishedAt: 2026-11-26
 author: AdSnoop Editorial
 art: control-dials
 artAlt: "Illustration of three glowing switches for budget, audience and placements, all switched on, beside a set of slider controls"
-keywords: [meta advantage+, advantage+ vs manual, is advantage+ worth it, advantage+ sales campaigns, meta ads automation, incrementality, customer lifecycle strategy, new customer acquisition]
+keywords: [meta advantage+ uk, advantage+ vs manual, is advantage+ worth it, uk facebook ads, meta location fee uk, advantage+ sales campaigns, customer lifecycle strategy, uk ecommerce meta ads]
 related: [roas-vs-poas-meta-ads-profitability, meta-conversions-api-explained]
 cta:
-  heading: "When Meta picks the audience, creative does the work"
-  text: "Search an advertiser to see the concepts, formats and offers their active Meta ads are built on, and which ones they have kept running longest."
+  heading: "See what UK brands are running"
+  text: "Search any UK advertiser to see the concepts, formats and offers in their active Meta ads, and which ones they have kept running longest."
   label: "Search competitor ads"
   href: "/"
 sources:
@@ -23,108 +23,128 @@ sources:
     url: "https://tinuiti.com/research-insights/research/digital-ads-benchmark-report-q1-2026/"
     publisher: "Tinuiti"
     note: "Based on Tinuiti-managed advertisers, mostly US retail."
-  - title: "Meta is pushing Advantage+ campaigns relentlessly"
-    url: "https://www.wickedreports.com/blog/meta-is-pushing-advantage-campaigns-relentlessly"
-    publisher: "Wicked Reports, November 2025"
-  - title: "For Meta marketers, automation isn't always the advantage (but it's complicated)"
-    url: "https://www.adexchanger.com/measurement/for-meta-marketers-automation-isnt-always-the-advantage-but-its-complicated/"
-    publisher: "AdExchanger, October 2025"
+  - title: "Meta to charge advertisers a fee to offset Europe's digital taxes"
+    url: "https://finance.yahoo.com/news/meta-charge-advertisers-fee-offset-182506077.html"
+    publisher: "Reuters, March 2026"
+  - title: "Three notable changes to the UK ICO's guidance on cookies"
+    url: "https://www.insideprivacy.com/advertising-marketing/three-notable-changes-to-the-uk-icos-guidance-on-cookies-and-a-hint-of-a-more-permissive-approach-to-advertising-cookies-in-the-future/"
+    publisher: "Covington (Inside Privacy), on the ICO's April 2026 guidance"
+  - title: "Landmark junk food ad ban to protect kids' health"
+    url: "https://www.gov.uk/government/news/landmark-junk-food-ad-ban-to-protect-kids-health"
+    publisher: "GOV.UK, January 2026"
+  - title: "Meta pauses new Commercial Terms due 20 November 2026"
+    url: "https://www.relevantaudience.com/meta/meta-pauses-commercial-terms-20-november-2026/"
+    publisher: "Relevant Audience, November 2026"
   - title: "Meta's Customer Lifecycle Strategy is now live for all advertisers"
     url: "https://commonthreadco.com/blogs/coachs-corner/meta-customer-lifecycle-strategy-all-advertisers-bfcm-2026"
     publisher: "Common Thread Collective, October 2026"
   - title: "Customer Lifecycle Strategy, Attribution Updates, and More"
     url: "https://www.jonloomer.com/customer-lifecycle-strategy/"
     publisher: "Jon Loomer"
-  - title: "Meta Is Removing Placement Controls From Ad Sets"
-    url: "https://www.jonloomer.com/meta-removing-placement-controls-ad-sets/"
-    publisher: "Jon Loomer, August 2026"
-  - title: "Advantage+ campaign experience for Sales, App and Leads"
-    url: "https://developers.facebook.com/docs/marketing-api/advantage-campaigns"
-    publisher: "Meta for Developers"
+  - title: "How Much Does Facebook Ads Cost: A 2026 Pricing Guide for UK Businesses"
+    url: "https://www.edgedigital.net/how-much-does-facebook-ads-cost/"
+    publisher: "Edge Digital"
+    note: "UK agency benchmarks; treat as indicative."
 ---
 
-Ask Meta about Advantage+ and you'll hear a success story. Its automated ad products passed a $75 billion annual revenue run rate this year, according to the company's finance chief. Ask the people who measure what ads actually cause, or the agencies spending clients' money, and the picture gets more complicated.
+Advantage+ is now the default for every Sales, Leads and App campaign a UK advertiser builds. Meta says its automated ad products passed a $75 billion annual revenue run rate this year. The people who measure what ads actually cause are less sure it's always the best option.
 
-We reviewed the independent studies, agency spend data, trade press and practitioner debate from the past 18 months. Here's what the market thinks of Advantage+ at the end of 2026, and what we'd do about it.
+We reviewed the independent studies, spend data, UK agency guidance and practitioner debate from the past 18 months. Here's the market's view, what's different if you advertise in the UK, and what we'd do.
 
 :::takeaways
-- **The market's view, in one line:** Advantage+ is very good at finding buyers fast, but it overstates how many of them it created. Nearly everyone uses it. Fewer trust it with everything.
-- Independent incrementality tests slightly favour manual campaigns over time. Advantage+ tends to win early and fade.
-- Big US retailers have been pulling budget back from Advantage+ sales campaigns, even as Meta's wider automation keeps growing.
-- **Our take:** keep Advantage+ as your engine, but control who counts as a new customer and judge it on your own sales data.
+- **The market's view:** Advantage+ is very good at finding buyers fast, but Ads Manager overstates how many it created. Nearly everyone uses it. Fewer trust it with everything.
+- **Most of the hard data is American.** UK advertisers face extra factors the studies don't cover: a 2% Meta location fee, stricter cookie consent and UK-only advertising rules.
+- **Our take for UK brands:** keep Advantage+ as your engine, protect a clean read on new customers, and judge it on your own sales after fees.
 :::
 
 ## The scoreboard
 
 | Signal | What it shows |
 | --- | --- |
-| **Meta** | The Advantage+ suite passed a $75bn+ annual run rate in 2026. Advantage+ is now the default for Sales, Leads and App campaigns |
-| **Haus, 640 incrementality tests** | Manual campaigns beat Advantage+ on incremental return for 58% of brands. Advantage+ was about 9% ahead at the midpoint of tests but 12% behind by the end |
-| **Tinuiti spend data** | Advantage+ sales campaigns fell from 38% of retail Meta spend in Q1 2025 to 20% in Q1 2026 |
-| **Wicked Reports, 55,661 campaigns** | Advantage+'s cost per genuinely new customer roughly doubled between May 2024 and May 2025, while manual campaigns got cheaper |
-| **Agencies and media buyers** | Sharply split. Plenty publish tests where Advantage+ wins on ROAS. Others report rising costs they can't diagnose |
+| **Haus, 640 incrementality tests** | Manual campaigns beat Advantage+ on incremental return for 58% of brands. Advantage+ was about 9% ahead midway through tests but 12% behind by the end |
+| **Tinuiti spend data** | Advantage+ sales campaigns fell from 38% of retail Meta spend in Q1 2025 to 20% in Q1 2026, as advertisers took back control |
+| **UK agencies** | Mostly positive for ecommerce, provided tracking and creative are strong. The common complaint is lost control and visibility |
+| **Media buyers** | Split. Some report clearly lower costs with Advantage+. Others see costs rise with no way to diagnose why |
 
-Two caveats before reading too much into it. The Haus brands spent around $14 million a year on Meta on average, and Tinuiti's data comes from its own, mostly US, clients. Neither is a typical UK small business. Several of these studies also pre-date Meta's latest delivery-system changes.
+Both big datasets come from large, mostly US advertisers. Haus's average brand spent around $14 million a year on Meta. That's a long way from a typical UK independent brand, so treat the numbers as direction, not a benchmark.
 
 ## Where the market agrees
 
-**1. Meta works.** This gets lost in the Advantage+ argument. Haus found Meta was behind 77 of the 100 highest-lift tests ever run on its platform, with an average lift of about 19% to a brand's main goal. The debate is about *how* to buy Meta, not whether to.
+**Meta works.** Haus found Meta behind 77 of the 100 highest-lift tests ever run on its platform. The argument is about *how* to buy Meta, not whether to.
 
-**2. Advantage+ finds intent fast.** It's at its strongest early in a campaign. Haus suggests it may suit short promotions and sale periods where a fast ramp-up matters, like Black Friday.
+**Advantage+ is fastest off the mark.** It does best early in a campaign, which is why Haus suggests it suits short promotions and sale periods like Black Friday and the January sales.
 
-**3. Ads Manager flatters it.** This is the most consistent complaint. Advantage+ leans towards people already likely to buy, including existing customers, because they're the easiest sales. Haus found Advantage+ over-reported its results by about 12 percentage points more than manual campaigns. Haus's strategy chief put it simply: the algorithm may be too good at finding people who would have bought anyway.
+**Ads Manager flatters it.** Advantage+ leans towards people already likely to buy, including existing customers. Haus found it over-reported its results by about 12 percentage points more than manual campaigns did.
 
-**4. Creative and tracking matter more than settings.** Fans and sceptics agree here. With targeting automated, the variety of your creative and the quality of the conversion data you send Meta drive results.
+**Creative and tracking matter more than settings.** With targeting automated, the variety of your ads and the quality of the conversion data you send Meta drive results.
 
-**5. Losing control is the real frustration.** In August 2026 Meta started [removing placement exclusions from ad sets](https://www.jonloomer.com/meta-removing-placement-controls-ad-sets/) for most conversion campaigns. The opportunity score also nudges advertisers to switch more automation on. Much of the anger online is about transparency, not results.
+## What's different in the UK
 
-## Where it doesn't
+### 1. There's a 2% fee Ads Manager doesn't show in your ROAS
 
-The big open question is whether Meta's newer delivery system has closed the gap. Agencies that consolidated into Advantage+ in 2026 often report better costs. The independent incrementality data mostly comes from before those changes. Haus itself said things may have improved and urged brands to test for themselves.
+Since 1 July 2026, Meta has added a **2% location fee** to ads delivered to UK audiences, passing on the UK's Digital Services Tax, as [Reuters reported](https://finance.yahoo.com/news/meta-charge-advertisers-fee-offset-182506077.html). It's charged on top of your spend and is based on where the audience is, not where your business is. Your in-platform ROAS won't include it, so your real return is slightly lower than Ads Manager says.
 
-The other split is on budget. Some agencies put 60–70% into Advantage+ as a "scaling engine". Haus warns against defaulting to a 50/50 split. Its data showed brands that moved from a skewed set-up to a balanced one did worse, so pick a lead approach and test it.
+UK costs also climb steeply in the run-up to Christmas. UK agency benchmarks put Q4 CPMs [35–60% above](https://www.edgedigital.net/how-much-does-facebook-ads-cost/) quieter months. That's when Advantage+ is most tempting and when it's most important to check what it's really delivering.
 
-## What's changed in the last few weeks
+### 2. UK cookie rules mean Meta sees less of your data
 
-The most useful new tool isn't in Advantage+ at all. In October 2026 Meta made **Customer Lifecycle Strategy** available to all advertisers, according to [Common Thread Collective](https://commonthreadco.com/blogs/coachs-corner/meta-customer-lifecycle-strategy-all-advertisers-bfcm-2026). It lets an ad set in a manual Sales campaign choose to **acquire new customers only**.
+UK law loosened cookie consent in 2026, but only for things like basic analytics. The ICO's [April 2026 guidance](https://www.insideprivacy.com/advertising-marketing/three-notable-changes-to-the-uk-icos-guidance-on-cookies-and-a-hint-of-a-more-permissive-approach-to-advertising-cookies-in-the-future/) still treats advertising pixels as needing consent. When UK visitors decline, the Meta pixel misses their purchases.
 
-It's not magic. As [Jon Loomer points out](https://www.jonloomer.com/customer-lifecycle-strategy/), it only excludes the people you've defined in the Existing Customers segment in your Advertising Settings. If that list is incomplete, past buyers still get through. And expect your cost per result to rise, because you're removing the easiest sales.
+<span class="ins-label-interp">Interpretation</span> That matters more for Advantage+ than for manual campaigns, because it relies almost entirely on the conversion data you send. A well-set-up [Conversions API](/insights/meta-conversions-api-explained) that respects your consent banner is the single biggest thing most UK brands can do to help it.
 
-## Our take
+### 3. Advantage+ doesn't know UK advertising rules
 
-The market isn't saying "turn Advantage+ off". It's saying "stop taking its numbers at face value". We agree. For most UK ecommerce brands, we'd:
+Automation decides who sees which ads and, increasingly, what they look like. It doesn't know UK law, and you're still responsible for your ads.
 
-1. **Keep Advantage+ as the engine,** especially for sale periods and broad prospecting.
-2. **Define your existing customers properly.** Keep a customer list synced to your Existing Customers segment. It powers both exclusions and the new-customer setting.
-3. **Run a manual Sales campaign set to "acquire new customers"** alongside it. That gives you a clean read on what a new customer really costs.
-4. **Judge both on new customers from your own sales data,** not ROAS in Ads Manager. Our [ROAS vs POAS guide](/insights/roas-vs-poas-meta-ads-profitability) explains why.
-5. **Fix tracking first.** Both approaches learn from the events you send. A patchy pixel or [Conversions API](/insights/meta-conversions-api-explained) set-up misleads them.
-6. **Test before you believe.** If you can, pause ads in one region for a few weeks and compare sales. It's the only way to know what Meta is really adding.
+- **Food and drink brands:** since 5 January 2026, paid online ads for identifiable "less healthy" food and drink products have been [banned in the UK](https://www.gov.uk/government/news/landmark-junk-food-ad-ban-to-protect-kids-health). If your product catalogue includes in-scope items, make sure automated catalogue ads can't pick them up.
+- **Alcohol and other age-restricted products:** set a minimum age in Advantage+ audience controls. It's treated as a hard limit, unlike age ranges, which are only suggestions.
+- **AI-generated creative:** Meta planned new terms making advertisers solely responsible for AI-made ad content. It [paused them in November](https://www.relevantaudience.com/meta/meta-pauses-commercial-terms-20-november-2026/) after scrutiny including from the UK's Competition and Markets Authority. Either way, check anything Meta generates before it runs.
+
+### 4. Smaller budgets give Meta less to learn from
+
+Meta's learning phase works best with around 50 conversions a week per ad set. Plenty of UK independents don't get near that. With less data, Advantage+ has less to go on, and testing it properly is harder.
+
+## The new tool worth knowing about
+
+In October 2026 Meta made **Customer Lifecycle Strategy** available to all advertisers, according to [Common Thread Collective](https://commonthreadco.com/blogs/coachs-corner/meta-customer-lifecycle-strategy-all-advertisers-bfcm-2026). It lets an ad set in a manual Sales campaign choose to **acquire new customers only**.
+
+It isn't magic. As [Jon Loomer points out](https://www.jonloomer.com/customer-lifecycle-strategy/), it only excludes the people you've defined in the Existing Customers segment in your Advertising Settings. Expect your cost per result to rise, because you're removing the easiest sales.
+
+## Our take for UK brands
+
+The market isn't saying "turn Advantage+ off". It's saying "stop taking its numbers at face value". For most UK ecommerce brands, we'd:
+
+1. **Keep Advantage+ as the engine,** especially for Black Friday, Christmas and January sales.
+2. **Fix consent-aware tracking first.** Get the Conversions API working alongside your cookie banner before judging any campaign.
+3. **Define your existing customers.** Sync a customer list to your Existing Customers segment. It powers both exclusions and the new-customer setting.
+4. **Run a manual "acquire new customers" campaign alongside it** for a clean read on what a new UK customer really costs.
+5. **Judge on new customers and profit after the 2% fee,** using your own sales data, not Ads Manager ROAS. Our [ROAS vs POAS guide](/insights/roas-vs-poas-meta-ads-profitability) shows how.
+6. **Check compliance yourself.** Review catalogue product sets and any AI-generated creative against UK rules.
 
 :::example When we'd lean manual
-- **New ad accounts** with little purchase history to learn from.
-- **Lead generation** where Advantage+ is finding cheap form-fillers rather than real prospects.
-- **Brands with a large customer base** where repeat buyers could easily soak up "prospecting" budget.
+- **New UK ad accounts** with little purchase history.
+- **Lead generation** where Advantage+ finds cheap form-fillers rather than real prospects.
+- **Food, drink and age-restricted brands** that need tight control over which products appear and who sees them.
 :::
 
 ## Creative is the new targeting
 
-Whichever way you lean, the one big lever left is the ad itself. Different concepts reach different people: a price comparison finds bargain hunters, a founder story finds brand fans. The brands doing well with Advantage+ run genuinely different creative, not ten versions of one image. That's also why it pays to see what competitors are putting money behind.
+With Meta choosing the audience, the one big lever left is the ad itself. A price comparison finds bargain hunters, a founder story finds brand fans. The UK brands doing well with Advantage+ run genuinely different creative, not ten versions of one image. That's also why it pays to see what your UK competitors are putting money behind.
 
 :::impact
 ### Who this affects
 
-Anyone running Meta Sales, Leads or App campaigns, which now default to Advantage+.
+Any UK advertiser running Meta Sales, Leads or App campaigns, which now default to Advantage+.
 
 ### What changes
 
-Less control over targeting and placements, more reliance on Meta's judgement, and a bigger gap between what Ads Manager reports and what actually grows the business.
+Less control over targeting and placements, more reliance on Meta's judgement, and a bigger gap between what Ads Manager reports and what actually grows a UK business once fees and consent are factored in.
 
 ### Recommended action
 
-Keep Advantage+, set up your Existing Customers segment, run a new-customers-only campaign alongside it, and measure on new customers from your own data.
+Keep Advantage+, fix consent-aware tracking, run a new-customers-only campaign alongside it, and measure on new customers and profit after fees.
 
 ### When no action is needed
 
-If new customers are growing in line with your Meta spend, Advantage+ is doing its job. Leave it alone.
+If new UK customers are growing in line with your Meta spend, after fees, Advantage+ is doing its job. Leave it alone.
 :::
