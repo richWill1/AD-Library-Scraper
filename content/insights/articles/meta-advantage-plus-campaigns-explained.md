@@ -1,17 +1,17 @@
 ---
-title: "Meta Advantage+ Explained: What to Automate and What to Keep Control Of"
-seoTitle: "Meta Advantage+ Campaigns Explained (2026)"
-description: "Advantage+ is now a setting, not a campaign type. What Meta automates, what you still control, the 2026 placement changes and when to keep a manual hand."
+title: "Meta Advantage+: Use It, But Don't Trust Its Scorecard"
+seoTitle: "Meta Advantage+ in 2026: Is It Worth It? Our Take"
+description: "Advantage+ is now Meta's default. Our take after reviewing the tests and practitioner debate: switch it on, but judge it on new customers, not Ads Manager ROAS."
 category: strategy-optimisation
 status: draft
 publishedAt: 2026-11-26
 author: AdSnoop Editorial
 art: control-dials
 artAlt: "Illustration of three glowing switches for budget, audience and placements, all switched on, beside a set of slider controls"
-keywords: [meta advantage+, advantage+ sales campaigns, advantage+ audience, advantage+ placements, advantage+ shopping campaigns, meta ads automation, audience controls, value rules]
-related: [meta-conversions-api-explained, meta-ads-video-vs-static-vs-carousel]
+keywords: [meta advantage+, advantage+ sales campaigns, advantage+ vs manual, advantage+ shopping campaigns, meta ads automation, incrementality, new customer acquisition]
+related: [roas-vs-poas-meta-ads-profitability, meta-conversions-api-explained]
 cta:
-  heading: "When targeting is automated, creative does the work"
+  heading: "When Meta picks the audience, creative does the work"
   text: "Search an advertiser to see the concepts, formats and offers their active Meta ads are built on, and which ones they have kept running longest."
   label: "Search competitor ads"
   href: "/"
@@ -19,162 +19,100 @@ sources:
   - title: "Advantage+ campaign experience for Sales, App and Leads"
     url: "https://developers.facebook.com/docs/marketing-api/advantage-campaigns"
     publisher: "Meta for Developers"
-    note: "Defines the three settings that give a campaign Advantage+ status, and the API deprecation timeline."
-  - title: "Advantage+ campaign experience for sales and app"
-    url: "https://developers.facebook.com/blog/post/2025/06/03/advantage-plus-campaign-experience-for-sales-and-app/"
-    publisher: "Meta for Developers blog, June 2025"
-  - title: "Advantage+ audience (Marketing API)"
-    url: "https://developers.facebook.com/docs/marketing-api/audiences/reference/targeting-expansion/advantage-audience/"
-    publisher: "Meta for Developers"
+  - title: "For Meta marketers, automation isn't always the advantage (but it's complicated)"
+    url: "https://www.adexchanger.com/measurement/for-meta-marketers-automation-isnt-always-the-advantage-but-its-complicated/"
+    publisher: "AdExchanger, October 2025"
+    note: "Reports Haus's analysis of 640 incrementality tests."
+  - title: "Meta is pushing Advantage+ campaigns relentlessly"
+    url: "https://www.wickedreports.com/blog/meta-is-pushing-advantage-campaigns-relentlessly"
+    publisher: "Wicked Reports, November 2025"
+    note: "Analysis of 55,661 campaigns reconciled against orders."
   - title: "Meta Clarifies Upcoming Placement Control Changes"
     url: "https://www.jonloomer.com/meta-placement-control-changes/"
     publisher: "Jon Loomer"
-    note: "Practitioner analysis of the 2026 placement changes and the remaining controls."
-  - title: "Advantage+ Campaign Setup is Here"
-    url: "https://www.jonloomer.com/qvt/advantage-plus-campaign-setup-is-here/"
-    publisher: "Jon Loomer"
-    note: "Practitioner walkthrough, including opportunity score behaviour."
-  - title: "About the learning phase"
-    url: "https://www.facebook.com/business/help/112167992830700"
-    publisher: "Meta Business Help Centre"
+  - title: "Advantage+ audience (Marketing API)"
+    url: "https://developers.facebook.com/docs/marketing-api/audiences/reference/targeting-expansion/advantage-audience/"
+    publisher: "Meta for Developers"
 ---
 
-If you learned Meta advertising a couple of years ago, you probably think of Advantage+ as a campaign type: the "Advantage+ shopping campaign" you chose instead of a manual one. That choice no longer exists. Since 2025, Meta has merged its manual and Advantage+ set-up flows into one, and **Advantage+ is now a status a campaign earns from its settings**, not a box you tick at the start.
+Ask ten Meta advertisers about Advantage+ and you'll get ten strong opinions. Agencies post split tests where it beats manual campaigns every time. Others say it quietly spends their budget on people who were going to buy anyway. Meta, meanwhile, has made the argument mostly academic: it's now the default.
 
-That change matters because most of the useful decisions have moved. The question is no longer "manual or Advantage+?" It is which of a handful of levers you hand to Meta, which ones you keep, and which ones Meta has quietly taken away. This guide covers all three, with a focus on what a UK advertiser running Sales or Leads campaigns actually sees in Ads Manager today.
+We went through the independent tests, the agency write-ups and the practitioner debate. Here's where we landed.
 
 :::takeaways
-- A Sales, Leads or App campaign counts as Advantage+ when three settings are on: Advantage+ campaign budget, Advantage+ audience and Advantage+ placements. Turn one off and the campaign loses its Advantage+ status.
-- With Advantage+ audience, a few inputs are hard limits that Meta respects: location, minimum age, language and excluded custom audiences. Age range, gender, interests and included audiences are only suggestions.
-- In 2026 Meta began removing ad-set placement choices for Sales, Leads, App promotion and Engagement campaigns. Account-level exclusions, placement value rules and per-placement creative are what remain.
-- Automation works best with reliable conversion data, enough volume and a steady supply of distinct creative. Without those, keeping a manual hand on the levers that are still available is reasonable.
+- **Our verdict:** for most UK ecommerce brands, switch Advantage+ on. But don't judge it by the ROAS in Ads Manager. Judge it by how many *new* customers it brings in, using your own sales data.
+- Advantage+ is very good at finding people likely to buy. The catch is that some of them would have bought anyway.
+- Exclude existing customers from prospecting, and keep a small amount of budget for controlled tests.
+- With targeting automated, your creative is now the main thing you control.
 :::
 
-## What "Advantage+" means now
+## First, what's actually changed
 
-Meta's [developer documentation](https://developers.facebook.com/docs/marketing-api/advantage-campaigns) describes a single campaign set-up for the Sales, App promotion and Leads objectives. Whether the campaign is treated as Advantage+ depends on three levers:
+Advantage+ used to be a separate campaign type you chose. Now it's a status. Meta's [documentation](https://developers.facebook.com/docs/marketing-api/advantage-campaigns) says a Sales, Leads or App campaign is Advantage+ when three settings are on: campaign budget, audience and placements. New campaigns start with all three switched on.
 
-| Lever | What Meta automates | What breaks Advantage+ status |
-| --- | --- | --- |
-| **Advantage+ campaign budget** | Moves one campaign budget between ad sets towards the best results | Setting budgets at ad set level instead |
-| **Advantage+ audience** | Finds people to reach, using your inputs as a starting point | Turning it off and setting strict targeting in every ad set |
-| **Advantage+ placements** | Spreads delivery across Facebook, Instagram, Messenger, Threads and Audience Network | Excluding placements or devices at ad set level |
+In 2026, Meta has also been [removing ad-set placement choices](https://www.jonloomer.com/meta-placement-control-changes/) for Sales, Leads, App and Engagement campaigns. Turning off Reels or Audience Network for one ad set is going away. What's left is account-wide exclusions and bid adjustments called value rules.
 
-<span class="ins-label">Verified</span> Meta's documentation states that all three must be enabled for a campaign to carry Advantage+ status, and that placement exclusions set at ad account level do not break it.
+So the real question isn't "Advantage+ or manual?" It's "how do I make sure Advantage+ is doing something useful?"
 
-The "Advantage+" name also appears on features that automate only one part of an ad, such as Advantage+ creative enhancements and Advantage+ catalogue ads. Those are settings within a campaign, not a campaign type, which is a common source of confusion when people compare notes.
+## The case for it
 
-### How we got here
+The fans have a point. Meta's machine learning has far more data on who buys than any interest list you could build. Agencies regularly publish tests where Advantage+ beats a matching manual campaign on ROAS. Running one well-funded campaign also beats spreading budget across lots of small ones that never get enough data to learn.
 
-- **Early 2025:** Meta began testing a streamlined set-up that removed the choice between a manual campaign and an Advantage+ shopping campaign.
-- **29 May 2025:** Meta [extended the new set-up](https://developers.facebook.com/blog/post/2025/06/03/advantage-plus-campaign-experience-for-sales-and-app/) to more advertisers for sales and app campaigns. Advantage+ shopping campaigns are now described as Advantage+ sales campaigns.
-- **Marketing API v24 to v26:** the old way of creating Advantage+ shopping campaigns through the API is being switched off in stages, and legacy campaigns have to be migrated to the new structure.
-- **August to October 2026:** Meta began removing manual placement choices from ad sets for most conversion-focused objectives (covered below).
+For a brand with decent tracking, a broad UK market and a steady flow of creative, it's also much less work.
 
-## What you still control
+## The case against it
 
-The most useful thing to understand about Advantage+ audience is the difference between **controls** and **suggestions**. Meta's [Advantage+ audience documentation](https://developers.facebook.com/docs/marketing-api/audiences/reference/targeting-expansion/advantage-audience/) says the "non-negotiable business constraints" are not expanded. Everything else can be.
+The sceptics have better evidence than you might expect.
 
-| Type | Examples | How Meta treats it |
-| --- | --- | --- |
-| **Audience controls** | Locations, minimum age, languages, excluded custom audiences | Hard limits. Ads will not be shown outside them |
-| **Audience suggestions** | Age range, gender, included custom audiences, lookalikes, interests | A starting point. Meta can and will go beyond them |
-| **Account-level controls** | Account-wide location limits, minimum age, placement exclusions, excluded employees | Hard limits applied across every campaign in the ad account |
+Measurement firm Haus looked at **640 incrementality tests** over 18 months. These test whether ads caused sales, rather than just being near them. <span class="ins-label">Verified</span> Manual campaigns won 58% of the tests and Advantage+ 42%, according to [AdExchanger's report](https://www.adexchanger.com/measurement/for-meta-marketers-automation-isnt-always-the-advantage-but-its-complicated/). Haus's own strategy chief suggested the algorithm may be *too* good at finding likely buyers, reaching people who would have bought anyway. She also stressed the results were close and pre-date Meta's latest delivery updates.
 
-In practice this means:
+Wicked Reports went through **55,661 campaigns** and matched them to real orders. It found Advantage+'s cost to acquire a genuinely new customer roughly doubled between May 2024 and May 2025, while manual campaigns got cheaper. Its [conclusion](https://www.wickedreports.com/blog/meta-is-pushing-advantage-campaigns-relentlessly) was that Advantage+ looked like it was capturing existing demand rather than creating new customers.
 
-- **Use controls for real business constraints.** If you only deliver to Great Britain, set the location. If you sell alcohol, set the minimum age. These are respected.
-- **Don't expect suggestions to fence anything in.** An age range of 35 to 55 or an interest in "home improvement" is a hint about where to start. If you need people outside a group never to see the ad, it has to be an exclusion or a control.
-- **Exclusions are your main precision tool.** Excluding existing customers, recent purchasers or employees is respected even with Advantage+ on.
+The recurring complaint in agency write-ups and forums is the same: Advantage+ drifts towards your existing customers, because they're the easiest sales. That makes the ROAS look great while growth stalls. Meta used to offer a cap on spend to existing customers. It removed it in the new set-up.
 
-:::note Minimum age
-The minimum-age control in Advantage+ audience accepts a value up to 25. If your product legally requires a higher age, or you must exclude people outside an age band entirely, check what your campaign set-up allows before relying on it, and consider whether Advantage+ audience is appropriate for that campaign.
+:::note Read the evidence fairly
+None of these studies cover your account. Haus's average brand spent over $1 million a month, and both datasets pre-date some of Meta's 2025 and 2026 changes. Treat them as a reason to measure carefully, not a reason to switch Advantage+ off.
 :::
 
-### What's gone: the existing-customer budget cap
+## Our take
 
-Advantage+ shopping campaigns used to let you cap the share of budget spent on existing customers. That setting has been removed in the new set-up. Meta's documentation suggests a workaround: build a custom audience of existing customers, then run two ad sets in the same campaign, one including that audience with a spend limit and one excluding it, using the same creative in both.
+Both sides are right, and they're measuring different things. Advantage+ is excellent at *finding sales*. Whether it *creates* sales is a separate question, and Ads Manager can't answer it for you.
 
-<span class="ins-label-interp">Interpretation</span> If you mainly care about acquiring new customers, the simpler route is often to exclude existing customers from your prospecting campaign and run a separate, smaller campaign aimed at them. You lose some of Meta's flexibility, but you gain a clean read on what each group costs.
+So use it, but set it up so it has to earn its keep:
 
-## The 2026 placement changes
+1. **Exclude existing customers from prospecting.** Upload a customer list and add it as an exclusion. Meta treats [exclusions as hard limits](https://developers.facebook.com/docs/marketing-api/audiences/reference/targeting-expansion/advantage-audience/), even with Advantage+ on. Run a separate, smaller campaign for repeat buyers if you want one.
+2. **Measure new customers, not ROAS.** Check your Shopify or till data each month. If Meta spend goes up and new customers don't, something's off. Our [ROAS vs POAS guide](/insights/roas-vs-poas-meta-ads-profitability) explains why a good-looking ROAS can still lose money.
+3. **Fix tracking first.** Advantage+ optimises towards whatever you send it. If your pixel and [Conversions API](/insights/meta-conversions-api-explained) are patchy, it's learning from bad data.
+4. **Block junk placements at account level.** If Audience Network or similar placements bring cheap clicks that never buy, exclude them in your ad account settings. That doesn't break Advantage+ status.
+5. **Keep 10–20% for controlled tests.** A small manual or tightly structured campaign gives you something to compare against. If you can, run a holdout test now and then: pause ads in one region and see what happens to sales.
+6. **Treat the opportunity score as a suggestion.** It goes up when you switch more automation on. That's not the same as making more money.
 
-The biggest change of the year is to placements. For campaigns using the Sales, Leads, App promotion and Engagement objectives, Meta has been removing the option to choose or exclude placements at ad set level. Awareness and Traffic campaigns keep manual placements for now. Jon Loomer's [analysis of the change](https://www.jonloomer.com/meta-placement-control-changes/) notes that Meta's own documentation widened the list beyond Sales and Leads.
-
-Meta points advertisers to three replacements:
-
-1. **Account-level placement exclusions by objective.** Found in the ad account's controls, these block placements for every campaign with a given objective. They are a blunt tool, but they are a true exclusion.
-2. **Placement value rules.** These let you raise or lower your bid for a placement, device platform or operating system. They steer spend rather than stop it, and only a limited set of placements is available.
-3. **Creative customised for each placement.** Supplying vertical video for Stories and Reels and square or 4:5 assets for feeds makes the ads that do appear in those places work better.
-
-:::verify
-Meta is rolling the placement change out gradually, so two ad accounts can show different options on the same day. Check what your own Ads Manager offers, and Meta's Business Help Centre page on placement settings, before you restructure campaigns around it.
+:::example When we'd hold back
+- **A brand-new ad account** with little purchase data. Give Meta a starting point with audience suggestions first.
+- **Lead generation with quality problems.** Advantage+ finds cheap form-fillers brilliantly. Fix what you optimise for first, such as qualified leads sent back through the Conversions API.
+- **Very small budgets.** If you can't get anywhere near 50 conversions a week, Meta has little to learn from, automated or not.
 :::
-
-<span class="ins-label-interp">Interpretation</span> If you used to exclude Audience Network because it produced cheap, low-quality clicks or leads, the account-level exclusion is the closest replacement. If you just preferred feeds over Reels, a value rule is a gentler way to express that, and worth testing before you exclude anything.
-
-:::cta heading="See where competitors build for" label="Search an advertiser" href="/" placement="inline_placements"
-AdSnoop shows whether a competitor's active Meta ads are video or static, so you can see who is producing vertical video for Reels and Stories and who is relying on feed images.
-:::
-
-## When to lean into Advantage+
-
-Meta's automation is only as good as what it learns from. It tends to suit you when most of these are true:
-
-| Condition | Why it matters |
-| --- | --- |
-| **Reliable conversion tracking** | Meta optimises towards the events you send. Gaps or duplicates mislead it. See our guide to the [Conversions API](/insights/meta-conversions-api-explained) |
-| **Enough conversion volume** | Meta's learning phase typically needs around 50 optimisation events per ad set in a week. One well-funded campaign learns faster than five thin ones |
-| **A broad or national market** | A UK-wide ecommerce brand gives Meta plenty of room. A single-postcode service business does not |
-| **A steady flow of distinct creative** | With targeting automated, creative is the main way you tell Meta who the ad is for |
-| **An optimisation event that reflects value** | Purchases or qualified leads, not cheap proxies like landing page views |
-
-## When to keep more control
-
-Automation is the default, but it is not always the right answer. Keeping some settings manual is reasonable when:
-
-- **You have little data.** A new pixel or ad account gives Meta nothing to learn from. Audience suggestions, such as a customer list or a lookalike, can give it a starting point.
-- **Lead quality is the problem.** Advantage+ will find people who fill in forms cheaply. If your sales team says the leads are poor, fix the optimisation event first, for example by sending qualified leads back through the Conversions API, rather than only tightening targeting.
-- **You have legal or operational limits.** Age-restricted products, regulated sectors and businesses that only serve certain areas should set those as controls or account-level settings, and check them after every change.
-- **You need a clean test.** Comparing two audiences or two offers is hard when Meta is free to blur them together. A short, deliberately structured test can be worth losing Advantage+ status for.
-- **New and existing customers need separating.** With the budget cap gone, exclusions and separate campaigns are how you keep acquisition and retention spend apart.
-
-:::example A simple structure for a UK ecommerce brand
-A hypothetical homeware brand spending a few thousand pounds a month might run:
-
-- **One Advantage+ Sales campaign for prospecting**, with UK location as a control, existing customers excluded and several distinct creative concepts in rotation.
-- **One smaller campaign for existing customers**, aimed at a customer list, focused on new ranges and repeat purchase.
-- **Account-level exclusions** only for placements they have evidence against.
-
-The structure and spend level are illustrative. The point is to consolidate where Meta needs data and separate only where you need a clear answer.
-:::
-
-## Opportunity score is a guide, not a goal
-
-Ads Manager gives campaigns an **opportunity score**, and Meta's recommendations to raise it usually involve switching more automation on. Practitioners such as Jon Loomer have [noted](https://www.jonloomer.com/qvt/advantage-plus-campaign-setup-is-here/) that a campaign starts with a high score when every Advantage+ setting is applied, and that most customisations lower it.
-
-<span class="ins-label-interp">Interpretation</span> Treat the score as a list of things to consider, not a measure of how well your campaign is performing. A lower score caused by a deliberate exclusion that protects your margin is a fine trade. Judge each recommendation on your own results, ideally by testing it against what you have now.
 
 ## Creative is the new targeting
 
-When Meta chooses the audience, budget split and placements, the main thing you still fully control is the ad itself. Different concepts, formats and messages reach different people. An ad built around a price comparison finds bargain hunters, while a founder story finds people who care about the brand.
+When Meta chooses the audience, placements and budget split, the one big lever you still hold is the ad itself. A price-comparison ad finds bargain hunters. A founder story finds people who care about the brand. Different concepts reach different people.
 
-That is why creative volume and variety have become the real levers in an Advantage+ account. It is also why it pays to know what your competitors are running. Our guides to [video, static and carousel formats](/insights/meta-ads-video-vs-static-vs-carousel) and [how often to refresh creative](/insights/how-often-to-refresh-meta-ad-creatives) cover the practical side.
+That's why the brands doing well with Advantage+ tend to run lots of genuinely different creative, not ten versions of the same image. It's also why it pays to see what your competitors are putting money behind.
 
 :::impact
 ### Who this affects
 
-Anyone running Meta campaigns with the Sales, Leads, App promotion or Engagement objectives, and especially advertisers who built their accounts on manual targeting, placement exclusions or the old Advantage+ shopping campaign.
+Anyone running Meta Sales, Leads or App campaigns, which now default to Advantage+.
 
 ### What changes
 
-Advantage+ status now comes from three settings rather than a campaign choice. Several manual controls have been removed or turned into suggestions, and ad-set placement choices are being phased out for most conversion objectives.
+Less control over targeting and placements, more reliance on Meta's judgement, and a bigger gap between what Ads Manager reports and what actually grows the business.
 
 ### Recommended action
 
-Audit each active campaign: which of the three Advantage+ levers is on, which audience inputs are controls and which are only suggestions, and which placement exclusions you relied on. Move true business limits to controls or account-level settings, and put your effort into conversion tracking and creative.
+Keep Advantage+ on, exclude existing customers from prospecting, and judge results on new customers from your own sales data.
 
 ### When no action is needed
 
-If your campaigns already use broad targeting with sensible controls, your conversion tracking is sound and results are stable, there is no need to restructure. Check your account-level placement settings once, then leave Meta to optimise.
+If your new-customer numbers are growing in line with Meta spend, leave it alone. That's Advantage+ doing its job.
 :::
