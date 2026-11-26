@@ -196,7 +196,7 @@ function page({ title, description, canonical, ogImage, ogType = 'website', json
 <meta property="og:type" content="${ogType}"><meta property="og:site_name" content="AdSnoop"><meta property="og:locale" content="en_GB"><meta property="og:url" content="${SITE}${canonical}">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}${ogImage}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(description)}"><meta name="twitter:image" content="${SITE}${ogImage}">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="/brand/favicon-dark.svg">
+<link rel="icon" type="image/png" sizes="1024x1024" href="/favicon.png">
 <link rel="alternate" type="application/rss+xml" title="AdSnoop Insights" href="/insights/feed.xml">
 <link rel="stylesheet" href="/live/header.css"><link rel="stylesheet" href="/insights-assets/insights.css?v=${cssV}">${extraHead}
 ${jsonLd.map(o => `<script type="application/ld+json">${json(o)}</script>`).join('')}
