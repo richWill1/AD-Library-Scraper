@@ -1,14 +1,14 @@
 ---
-title: "Meta Advantage+: Use It, But Don't Trust Its Scorecard"
-seoTitle: "Meta Advantage+ in 2026: Is It Worth It? Our Take"
-description: "Advantage+ is now Meta's default. Our take after reviewing the tests and practitioner debate: switch it on, but judge it on new customers, not Ads Manager ROAS."
+title: "Meta Advantage+: What's the Market's View Right Now?"
+seoTitle: "Is Meta Advantage+ Worth It? The Market's View (2026)"
+description: "Meta says Advantage+ is a $75bn business. Independent tests and agency data are more mixed. Where the market agrees, where it doesn't, and our take."
 category: strategy-optimisation
 status: draft
 publishedAt: 2026-11-26
 author: AdSnoop Editorial
 art: control-dials
 artAlt: "Illustration of three glowing switches for budget, audience and placements, all switched on, beside a set of slider controls"
-keywords: [meta advantage+, advantage+ sales campaigns, advantage+ vs manual, advantage+ shopping campaigns, meta ads automation, incrementality, new customer acquisition]
+keywords: [meta advantage+, advantage+ vs manual, is advantage+ worth it, advantage+ sales campaigns, meta ads automation, incrementality, customer lifecycle strategy, new customer acquisition]
 related: [roas-vs-poas-meta-ads-profitability, meta-conversions-api-explained]
 cta:
   heading: "When Meta picks the audience, creative does the work"
@@ -16,88 +16,100 @@ cta:
   label: "Search competitor ads"
   href: "/"
 sources:
-  - title: "Advantage+ campaign experience for Sales, App and Leads"
-    url: "https://developers.facebook.com/docs/marketing-api/advantage-campaigns"
-    publisher: "Meta for Developers"
-  - title: "For Meta marketers, automation isn't always the advantage (but it's complicated)"
-    url: "https://www.adexchanger.com/measurement/for-meta-marketers-automation-isnt-always-the-advantage-but-its-complicated/"
-    publisher: "AdExchanger, October 2025"
-    note: "Reports Haus's analysis of 640 incrementality tests."
+  - title: "The Meta Report: Lessons from 640 Haus Incrementality Experiments"
+    url: "https://www.haus.io/blog/the-meta-report-lessons-from-640-haus-incrementality-experiments"
+    publisher: "Haus, July 2025"
+  - title: "Digital Ads Benchmark Report Q1 2026"
+    url: "https://tinuiti.com/research-insights/research/digital-ads-benchmark-report-q1-2026/"
+    publisher: "Tinuiti"
+    note: "Based on Tinuiti-managed advertisers, mostly US retail."
   - title: "Meta is pushing Advantage+ campaigns relentlessly"
     url: "https://www.wickedreports.com/blog/meta-is-pushing-advantage-campaigns-relentlessly"
     publisher: "Wicked Reports, November 2025"
-    note: "Analysis of 55,661 campaigns reconciled against orders."
-  - title: "Meta Clarifies Upcoming Placement Control Changes"
-    url: "https://www.jonloomer.com/meta-placement-control-changes/"
+  - title: "For Meta marketers, automation isn't always the advantage (but it's complicated)"
+    url: "https://www.adexchanger.com/measurement/for-meta-marketers-automation-isnt-always-the-advantage-but-its-complicated/"
+    publisher: "AdExchanger, October 2025"
+  - title: "Meta's Customer Lifecycle Strategy is now live for all advertisers"
+    url: "https://commonthreadco.com/blogs/coachs-corner/meta-customer-lifecycle-strategy-all-advertisers-bfcm-2026"
+    publisher: "Common Thread Collective, October 2026"
+  - title: "Customer Lifecycle Strategy, Attribution Updates, and More"
+    url: "https://www.jonloomer.com/customer-lifecycle-strategy/"
     publisher: "Jon Loomer"
-  - title: "Advantage+ audience (Marketing API)"
-    url: "https://developers.facebook.com/docs/marketing-api/audiences/reference/targeting-expansion/advantage-audience/"
+  - title: "Meta Is Removing Placement Controls From Ad Sets"
+    url: "https://www.jonloomer.com/meta-removing-placement-controls-ad-sets/"
+    publisher: "Jon Loomer, August 2026"
+  - title: "Advantage+ campaign experience for Sales, App and Leads"
+    url: "https://developers.facebook.com/docs/marketing-api/advantage-campaigns"
     publisher: "Meta for Developers"
 ---
 
-Ask ten Meta advertisers about Advantage+ and you'll get ten strong opinions. Agencies post split tests where it beats manual campaigns every time. Others say it quietly spends their budget on people who were going to buy anyway. Meta, meanwhile, has made the argument mostly academic: it's now the default.
+Ask Meta about Advantage+ and you'll hear a success story. Its automated ad products passed a $75 billion annual revenue run rate this year, according to the company's finance chief. Ask the people who measure what ads actually cause, or the agencies spending clients' money, and the picture gets more complicated.
 
-We went through the independent tests, the agency write-ups and the practitioner debate. Here's where we landed.
+We reviewed the independent studies, agency spend data, trade press and practitioner debate from the past 18 months. Here's what the market thinks of Advantage+ at the end of 2026, and what we'd do about it.
 
 :::takeaways
-- **Our verdict:** for most UK ecommerce brands, switch Advantage+ on. But don't judge it by the ROAS in Ads Manager. Judge it by how many *new* customers it brings in, using your own sales data.
-- Advantage+ is very good at finding people likely to buy. The catch is that some of them would have bought anyway.
-- Exclude existing customers from prospecting, and keep a small amount of budget for controlled tests.
-- With targeting automated, your creative is now the main thing you control.
+- **The market's view, in one line:** Advantage+ is very good at finding buyers fast, but it overstates how many of them it created. Nearly everyone uses it. Fewer trust it with everything.
+- Independent incrementality tests slightly favour manual campaigns over time. Advantage+ tends to win early and fade.
+- Big US retailers have been pulling budget back from Advantage+ sales campaigns, even as Meta's wider automation keeps growing.
+- **Our take:** keep Advantage+ as your engine, but control who counts as a new customer and judge it on your own sales data.
 :::
 
-## First, what's actually changed
+## The scoreboard
 
-Advantage+ used to be a separate campaign type you chose. Now it's a status. Meta's [documentation](https://developers.facebook.com/docs/marketing-api/advantage-campaigns) says a Sales, Leads or App campaign is Advantage+ when three settings are on: campaign budget, audience and placements. New campaigns start with all three switched on.
+| Signal | What it shows |
+| --- | --- |
+| **Meta** | The Advantage+ suite passed a $75bn+ annual run rate in 2026. Advantage+ is now the default for Sales, Leads and App campaigns |
+| **Haus, 640 incrementality tests** | Manual campaigns beat Advantage+ on incremental return for 58% of brands. Advantage+ was about 9% ahead at the midpoint of tests but 12% behind by the end |
+| **Tinuiti spend data** | Advantage+ sales campaigns fell from 38% of retail Meta spend in Q1 2025 to 20% in Q1 2026 |
+| **Wicked Reports, 55,661 campaigns** | Advantage+'s cost per genuinely new customer roughly doubled between May 2024 and May 2025, while manual campaigns got cheaper |
+| **Agencies and media buyers** | Sharply split. Plenty publish tests where Advantage+ wins on ROAS. Others report rising costs they can't diagnose |
 
-In 2026, Meta has also been [removing ad-set placement choices](https://www.jonloomer.com/meta-placement-control-changes/) for Sales, Leads, App and Engagement campaigns. Turning off Reels or Audience Network for one ad set is going away. What's left is account-wide exclusions and bid adjustments called value rules.
+Two caveats before reading too much into it. The Haus brands spent around $14 million a year on Meta on average, and Tinuiti's data comes from its own, mostly US, clients. Neither is a typical UK small business. Several of these studies also pre-date Meta's latest delivery-system changes.
 
-So the real question isn't "Advantage+ or manual?" It's "how do I make sure Advantage+ is doing something useful?"
+## Where the market agrees
 
-## The case for it
+**1. Meta works.** This gets lost in the Advantage+ argument. Haus found Meta was behind 77 of the 100 highest-lift tests ever run on its platform, with an average lift of about 19% to a brand's main goal. The debate is about *how* to buy Meta, not whether to.
 
-The fans have a point. Meta's machine learning has far more data on who buys than any interest list you could build. Agencies regularly publish tests where Advantage+ beats a matching manual campaign on ROAS. Running one well-funded campaign also beats spreading budget across lots of small ones that never get enough data to learn.
+**2. Advantage+ finds intent fast.** It's at its strongest early in a campaign. Haus suggests it may suit short promotions and sale periods where a fast ramp-up matters, like Black Friday.
 
-For a brand with decent tracking, a broad UK market and a steady flow of creative, it's also much less work.
+**3. Ads Manager flatters it.** This is the most consistent complaint. Advantage+ leans towards people already likely to buy, including existing customers, because they're the easiest sales. Haus found Advantage+ over-reported its results by about 12 percentage points more than manual campaigns. Haus's strategy chief put it simply: the algorithm may be too good at finding people who would have bought anyway.
 
-## The case against it
+**4. Creative and tracking matter more than settings.** Fans and sceptics agree here. With targeting automated, the variety of your creative and the quality of the conversion data you send Meta drive results.
 
-The sceptics have better evidence than you might expect.
+**5. Losing control is the real frustration.** In August 2026 Meta started [removing placement exclusions from ad sets](https://www.jonloomer.com/meta-removing-placement-controls-ad-sets/) for most conversion campaigns. The opportunity score also nudges advertisers to switch more automation on. Much of the anger online is about transparency, not results.
 
-Measurement firm Haus looked at **640 incrementality tests** over 18 months. These test whether ads caused sales, rather than just being near them. <span class="ins-label">Verified</span> Manual campaigns won 58% of the tests and Advantage+ 42%, according to [AdExchanger's report](https://www.adexchanger.com/measurement/for-meta-marketers-automation-isnt-always-the-advantage-but-its-complicated/). Haus's own strategy chief suggested the algorithm may be *too* good at finding likely buyers, reaching people who would have bought anyway. She also stressed the results were close and pre-date Meta's latest delivery updates.
+## Where it doesn't
 
-Wicked Reports went through **55,661 campaigns** and matched them to real orders. It found Advantage+'s cost to acquire a genuinely new customer roughly doubled between May 2024 and May 2025, while manual campaigns got cheaper. Its [conclusion](https://www.wickedreports.com/blog/meta-is-pushing-advantage-campaigns-relentlessly) was that Advantage+ looked like it was capturing existing demand rather than creating new customers.
+The big open question is whether Meta's newer delivery system has closed the gap. Agencies that consolidated into Advantage+ in 2026 often report better costs. The independent incrementality data mostly comes from before those changes. Haus itself said things may have improved and urged brands to test for themselves.
 
-The recurring complaint in agency write-ups and forums is the same: Advantage+ drifts towards your existing customers, because they're the easiest sales. That makes the ROAS look great while growth stalls. Meta used to offer a cap on spend to existing customers. It removed it in the new set-up.
+The other split is on budget. Some agencies put 60–70% into Advantage+ as a "scaling engine". Haus warns against defaulting to a 50/50 split. Its data showed brands that moved from a skewed set-up to a balanced one did worse, so pick a lead approach and test it.
 
-:::note Read the evidence fairly
-None of these studies cover your account. Haus's average brand spent over $1 million a month, and both datasets pre-date some of Meta's 2025 and 2026 changes. Treat them as a reason to measure carefully, not a reason to switch Advantage+ off.
-:::
+## What's changed in the last few weeks
+
+The most useful new tool isn't in Advantage+ at all. In October 2026 Meta made **Customer Lifecycle Strategy** available to all advertisers, according to [Common Thread Collective](https://commonthreadco.com/blogs/coachs-corner/meta-customer-lifecycle-strategy-all-advertisers-bfcm-2026). It lets an ad set in a manual Sales campaign choose to **acquire new customers only**.
+
+It's not magic. As [Jon Loomer points out](https://www.jonloomer.com/customer-lifecycle-strategy/), it only excludes the people you've defined in the Existing Customers segment in your Advertising Settings. If that list is incomplete, past buyers still get through. And expect your cost per result to rise, because you're removing the easiest sales.
 
 ## Our take
 
-Both sides are right, and they're measuring different things. Advantage+ is excellent at *finding sales*. Whether it *creates* sales is a separate question, and Ads Manager can't answer it for you.
+The market isn't saying "turn Advantage+ off". It's saying "stop taking its numbers at face value". We agree. For most UK ecommerce brands, we'd:
 
-So use it, but set it up so it has to earn its keep:
+1. **Keep Advantage+ as the engine,** especially for sale periods and broad prospecting.
+2. **Define your existing customers properly.** Keep a customer list synced to your Existing Customers segment. It powers both exclusions and the new-customer setting.
+3. **Run a manual Sales campaign set to "acquire new customers"** alongside it. That gives you a clean read on what a new customer really costs.
+4. **Judge both on new customers from your own sales data,** not ROAS in Ads Manager. Our [ROAS vs POAS guide](/insights/roas-vs-poas-meta-ads-profitability) explains why.
+5. **Fix tracking first.** Both approaches learn from the events you send. A patchy pixel or [Conversions API](/insights/meta-conversions-api-explained) set-up misleads them.
+6. **Test before you believe.** If you can, pause ads in one region for a few weeks and compare sales. It's the only way to know what Meta is really adding.
 
-1. **Exclude existing customers from prospecting.** Upload a customer list and add it as an exclusion. Meta treats [exclusions as hard limits](https://developers.facebook.com/docs/marketing-api/audiences/reference/targeting-expansion/advantage-audience/), even with Advantage+ on. Run a separate, smaller campaign for repeat buyers if you want one.
-2. **Measure new customers, not ROAS.** Check your Shopify or till data each month. If Meta spend goes up and new customers don't, something's off. Our [ROAS vs POAS guide](/insights/roas-vs-poas-meta-ads-profitability) explains why a good-looking ROAS can still lose money.
-3. **Fix tracking first.** Advantage+ optimises towards whatever you send it. If your pixel and [Conversions API](/insights/meta-conversions-api-explained) are patchy, it's learning from bad data.
-4. **Block junk placements at account level.** If Audience Network or similar placements bring cheap clicks that never buy, exclude them in your ad account settings. That doesn't break Advantage+ status.
-5. **Keep 10–20% for controlled tests.** A small manual or tightly structured campaign gives you something to compare against. If you can, run a holdout test now and then: pause ads in one region and see what happens to sales.
-6. **Treat the opportunity score as a suggestion.** It goes up when you switch more automation on. That's not the same as making more money.
-
-:::example When we'd hold back
-- **A brand-new ad account** with little purchase data. Give Meta a starting point with audience suggestions first.
-- **Lead generation with quality problems.** Advantage+ finds cheap form-fillers brilliantly. Fix what you optimise for first, such as qualified leads sent back through the Conversions API.
-- **Very small budgets.** If you can't get anywhere near 50 conversions a week, Meta has little to learn from, automated or not.
+:::example When we'd lean manual
+- **New ad accounts** with little purchase history to learn from.
+- **Lead generation** where Advantage+ is finding cheap form-fillers rather than real prospects.
+- **Brands with a large customer base** where repeat buyers could easily soak up "prospecting" budget.
 :::
 
 ## Creative is the new targeting
 
-When Meta chooses the audience, placements and budget split, the one big lever you still hold is the ad itself. A price-comparison ad finds bargain hunters. A founder story finds people who care about the brand. Different concepts reach different people.
-
-That's why the brands doing well with Advantage+ tend to run lots of genuinely different creative, not ten versions of the same image. It's also why it pays to see what your competitors are putting money behind.
+Whichever way you lean, the one big lever left is the ad itself. Different concepts reach different people: a price comparison finds bargain hunters, a founder story finds brand fans. The brands doing well with Advantage+ run genuinely different creative, not ten versions of one image. That's also why it pays to see what competitors are putting money behind.
 
 :::impact
 ### Who this affects
@@ -110,9 +122,9 @@ Less control over targeting and placements, more reliance on Meta's judgement, a
 
 ### Recommended action
 
-Keep Advantage+ on, exclude existing customers from prospecting, and judge results on new customers from your own sales data.
+Keep Advantage+, set up your Existing Customers segment, run a new-customers-only campaign alongside it, and measure on new customers from your own data.
 
 ### When no action is needed
 
-If your new-customer numbers are growing in line with Meta spend, leave it alone. That's Advantage+ doing its job.
+If new customers are growing in line with your Meta spend, Advantage+ is doing its job. Leave it alone.
 :::
