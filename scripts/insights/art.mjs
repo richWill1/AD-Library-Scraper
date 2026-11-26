@@ -113,6 +113,19 @@ ${dots}`;
 <circle cx="880" cy="340" r="84" fill="rgba(7,11,29,.7)" stroke="#fff" stroke-width="5"/>
 <path d="M842 342 L870 370 L922 312" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>`;
   },
+  // Three Advantage+ switches (budget, audience, placements) on, beside manual sliders.
+  'control-dials'(id, c) {
+    const toggle = (y) => `<g transform="translate(200 ${y})">${glass(0, 0, 440, 110, 26)}
+<rect x="30" y="38" width="200" height="14" rx="7" fill="rgba(255,255,255,.38)"/><rect x="30" y="64" width="130" height="10" rx="5" fill="rgba(255,255,255,.18)"/>
+<rect x="290" y="27" width="118" height="56" rx="28" fill="${c}"/><rect x="290" y="27" width="118" height="56" rx="28" fill="${c}" opacity=".35" filter="url(#${id}-blur)"/>
+<circle cx="380" cy="55" r="22" fill="#fff"/></g>`;
+    const slider = (x, knob, col) => `<path d="M${x} 150V530" stroke="rgba(255,255,255,.18)" stroke-width="8" stroke-linecap="round"/>
+<path d="M${x} ${knob}V530" stroke="${col}" stroke-width="8" stroke-linecap="round"/>
+<circle cx="${x}" cy="${knob}" r="22" fill="#fff"/><circle cx="${x}" cy="${knob}" r="40" fill="${col}" opacity=".3" filter="url(#${id}-blur)"/>`;
+    return `${toggle(130)}${toggle(282)}${toggle(434)}
+${glass(720, 110, 300, 460, 30)}
+${slider(800, 250, c)}${slider(870, 380, 'rgba(100,210,255,.9)')}${slider(940, 300, c)}`;
+  },
   // Fallback: concentric signal rings in the category colour.
   rings(id, c) {
     return `<g transform="translate(600 340)">${[60, 120, 180, 240, 300].map((r, i) => `<circle r="${r}" fill="none" stroke="${i % 2 ? 'rgba(255,255,255,.18)' : c}" stroke-width="${i === 0 ? 8 : 2}" opacity="${1 - i * .15}"/>`).join('')}
