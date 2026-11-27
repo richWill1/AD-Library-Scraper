@@ -4,7 +4,7 @@ export const runtime='nodejs';
 export async function GET(req:NextRequest){
  if(process.env.RENDER_SERVICE_ID==='srv-db3ufoad0e5s73f5dudg'||process.env.META_ACCESS_TOKEN?.trim())return NextResponse.json({error:'This route is for the credential-free preview.'},{status:404});
   const url=new URL('/api/ads','https://ad-library-scraper-94t0.onrender.com');
-  for(const key of ['q','page','after','coverage','discover']){
+  for(const key of ['q','page','after','coverage','discover','status']){
    const v=req.nextUrl.searchParams.get(key);if(v!==null)url.searchParams.set(key,v);
   }
   try{

@@ -78,7 +78,7 @@ async function resolveByName(q){
  feedback("");
  let d=null,ok=false;
  try{
-  const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(25000)});
+  const r=await fetch("/api/advertisers?"+new URLSearchParams({q}),{cache:"no-store",signal:AbortSignal.timeout(45000)});
   ok=r.ok;try{d=await r.json()}catch{d=null}
   if(r.status===429)d=Object.assign(d||{},{code:"RATE_LIMITED",status:"lookup_failed"});
  }catch{d=null}
@@ -1220,14 +1220,14 @@ function cmpStatusChip(c){
 }
 function brandStrip(cols){
  const ready=cols.filter(c=>c.b),rank=[...ready].sort((x,y)=>y.b.total-x.b.total);
- return '<p class="cb-help">Your selected brands. Use Change to swap a selection; View ads opens a separate tab.</p><div class="cb-strip" role="list">'+cols.map(c=>{
+ return '<p class="cb-help">Your selected brands. Use Change to swap a selection. Browse current and past ads for each brand.</p><div class="cb-strip" role="list">'+cols.map(c=>{
   const r=c.b?rank.indexOf(c)+1:0;
   const change='<button type="button" data-tk="'+(c.mine?'changebrand':'changecomp')+'" data-id="'+esc(c.id)+'" aria-label="'+esc(c.mine?'Change my brand':'Change competitor '+c.name)+'">'+(c.mine?'Change my brand':'Change competitor')+'</button>';
-  return '<div class="cb'+(c.mine?' me':'')+'" role="listitem"><div class="cb-name">'+logoHTML(c.id,c.name,"")+'<span><b>'+esc(c.name)+'</b><small>'+(c.mine?'Your brand':'Competitor')+'</small></span></div><div class="cb-foot">'+cmpStatusChip(c)+(r?'<span class="cb-rank" title="Rank by active ads">#'+r+'</span>':'')+'</div><div class="cb-actions">'+change+(!c.mine?'<button type="button" class="cb-remove" data-tk="rm" data-id="'+esc(c.id)+'" aria-label="Remove '+esc(c.name)+' from competitors">Remove</button>':'')+'</div><a class="cb-view" href="/?'+new URLSearchParams({page:c.id,name:c.name}).toString()+'" target="_blank" rel="noopener noreferrer" aria-label="View ads for '+esc(c.name)+' in a new tab">View ads ↗</a></div>';
+  return '<div class="cb'+(c.mine?' me':'')+'" role="listitem"><div class="cb-name">'+logoHTML(c.id,c.name,"")+'<span><b>'+esc(c.name)+'</b><small>'+(c.mine?'Your brand':'Competitor')+'</small></span></div><div class="cb-foot">'+cmpStatusChip(c)+(r?'<span class="cb-rank" title="Rank by active ads">#'+r+'</span>':'')+'</div><div class="cb-actions">'+change+(!c.mine?'<button type="button" class="cb-remove" data-tk="rm" data-id="'+esc(c.id)+'" aria-label="Remove '+esc(c.name)+' from competitors">Remove</button>':'')+'</div><button type="button" class="cb-view" data-history-page="'+esc(c.id)+'">Current & past ads</button><a class="cb-view" href="/?'+new URLSearchParams({page:c.id,name:c.name}).toString()+'" target="_blank" rel="noopener noreferrer" aria-label="View ads for '+esc(c.name)+' in a new tab">Active ads ↗</a></div>';
  }).join("")+(cols.filter(c=>!c.mine).length<COMP_MAX?'<button type="button" class="cb-add" data-tk="addcomp"><span aria-hidden="true">+</span><b>Add competitor</b><small>Choose who to track</small></button>':'')+'</div>';
 }
 function tabsHTML(){
- const t=[["overview","Overview"],["mix","Creative mix"],["activity","Creative activity"],["messaging","Messaging"],["remix","Remix ads ✦"]];
+ const t=[["overview","Overview"],["history","Current & past ads"],["mix","Creative mix"],["activity","Creative activity"],["messaging","Messaging"],["remix","Remix ads ✦"]];
  return '<div class="cmp-tabs" role="tablist" aria-label="Comparison sections">'+t.map(([k,l])=>'<button role="tab" aria-selected="'+(cmp.tab===k)+'" class="'+(cmp.tab===k?'on':'')+'" data-action="cmptab" data-tab="'+k+'">'+l+'</button>').join("")+'</div>';
 }
 function evidenceHTML(ev){
@@ -1350,7 +1350,7 @@ function activityHTML(cols){
  const ageCols=[["a","≤7 days","#0071e3"],["b","8–29 days","#5ea8ff"],["c","30–89 days","#a8cfff"],["d","90+ days","#d5e6fb"]];
  const ages='<div class="bm"><div class="bm-h"><h4>Recently launched vs long-running</h4><small>Active ads by age</small></div><div class="mx-legend static">'+ageCols.map(a=>'<span><i style="background:'+a[2]+'"></i>'+a[1]+'</span>').join("")+'</div><div class="mx-bars">'+ready.map(c=>{const b=c.b,t=Math.max(1,b.age.a+b.age.b+b.age.c+b.age.d);return '<div class="mx-row'+(c.mine?' me':'')+'"><span class="mx-n">'+esc(c.name)+'</span><span class="mx-bar">'+ageCols.map(a=>{const n=b.age[a[0]];if(!n)return "";const w=n/t*100;return '<span class="mx-seg" style="--w:'+w.toFixed(2)+'%;background:'+a[2]+'" title="'+esc(c.name+" · "+a[1]+": "+n+" ads ("+Math.round(w)+"%)")+'">'+(w>=9?'<em class="dk">'+Math.round(w)+'%</em>':'')+'</span>'}).join("")+'</span></div>'}).join("")+'</div></div>';
  const changes=ready.map(c=>{const ch=c.b.change;return '<div class="ob-row'+(c.mine?' me':'')+'"><span>'+esc(c.name)+'</span>'+(ch?'<span><b class="up">+'+ch.added+'</b> newly observed · <b class="down">−'+ch.gone+'</b> no longer active <small>since '+new Date(ch.since).toLocaleDateString("en-GB",{day:"numeric",month:"short"})+'</small></span>':'<span class="intel-sub">Tracking from today</span>')+'</div>'}).join("");
- return '<div class="bm"><div class="bm-h"><h4>Creative momentum</h4><small>When currently active ads launched (Meta delivery start dates)</small></div><div class="ac">'+head+rows+'</div><p class="bm-f">These count launches of ads that are still running today. AdSnoop can’t see ads that launched and already stopped, so this isn’t a creative refresh rate.</p></div>'+ages+'<div class="bm"><div class="bm-h"><h4>Observed changes</h4><small>Ad IDs seen in this browser between complete checks at least a day apart</small></div><div class="ob">'+changes+'</div><p class="bm-f">“Newly observed” means active now but not at your last check; it may have launched earlier. History is kept on this device for now.</p></div>';
+ return '<div class="bm"><div class="bm-h"><h4>Creative momentum</h4><small>When currently active ads launched (Meta delivery start dates)</small></div><div class="ac">'+head+rows+'</div><p class="bm-f">These count launches of ads that are still running today. Stopped ads are excluded from this comparison; browse Current & past ads to inspect available history. This isn’t a creative refresh rate.</p></div>'+ages+'<div class="bm"><div class="bm-h"><h4>Observed changes</h4><small>Ad IDs seen in this browser between complete checks at least a day apart</small></div><div class="ob">'+changes+'</div><p class="bm-f">“Newly observed” means active now but not at your last check; it may have launched earlier. History is kept on this device for now.</p></div>';
 }
 function messagingCmpHTML(cols){
  const ready=cols.filter(c=>c.b);if(!ready.length)return '<div class="op-empty"><span class="cmp-wait"></span> Collecting ads…</div>';
@@ -1374,6 +1374,61 @@ function messagingCmpHTML(cols){
  const offers='<div class="bm k-off"><div class="bm-h"><h4>How hard each brand pushes offers</h4><small>Share of ads with a price incentive, free first step or payment option</small></div>'+rankBars(cols,b=>b.offers,b=>b.offers+"% of ads ("+b.offerN+")",b=>b.offers+'%')+'</div>';
  return (diff||"")+leads+offers+'<p class="cmp-note">Themes come from the same rules as the Messaging tab, applied to every collected ad’s text. Claims aren’t verified. For one brand’s full theme breakdown, open it and use the Messaging tab.</p>';
 }
+// Ad history is separate from cmp.data: benchmarks always use active ads only.
+const adHistory={page:'',status:'ALL',coverage:'',rows:[],cursor:null,loading:false,error:'',seq:0,limit:12};
+function historyBrands(){return compareBrands()}
+async function loadAdHistory(more=false){
+ const brands=historyBrands();
+ if(!brands.some(b=>b.id===adHistory.page))adHistory.page=brands[0]?.id||'';
+ if(!adHistory.page)return;
+ const seq=++adHistory.seq,page=adHistory.page,status=adHistory.status,coverage=state.coverage;
+ if(!more){adHistory.rows=[];adHistory.cursor=null;adHistory.limit=12;}
+ adHistory.coverage=coverage;adHistory.loading=true;adHistory.error='';renderCards();
+ try{
+  const params=new URLSearchParams({page,q:page,status,coverage});
+  if(more&&adHistory.cursor)params.set('after',adHistory.cursor);
+  const data=await request('/api/ads?'+params,'GET',null,AbortSignal.timeout(30000));
+  if(seq!==adHistory.seq)return;
+  const seen=new Set(adHistory.rows.map(a=>a.id));
+  for(const a of data.ads||[])if(a.pageId===page&&!seen.has(a.id)){seen.add(a.id);adHistory.rows.push(a);}
+  adHistory.cursor=data.nextCursor||null;
+  if(more)adHistory.limit+=12;
+ }catch(e){if(seq!==adHistory.seq)return;adHistory.error=e.message||'Ads could not be loaded. Try again.';}
+ finally{if(seq===adHistory.seq){adHistory.loading=false;renderCards();}}
+}
+function adHistoryHTML(cols){
+ const selected=cols.find(c=>c.id===adHistory.page);
+ if(!selected||adHistory.coverage!==state.coverage){
+  if(!selected)adHistory.page=cols[0]?.id||'';
+  if(!adHistory.loading)setTimeout(()=>loadAdHistory(),0);
+  return '<p role="status">Loading ad history…</p>';
+ }
+ const controls='<div class="history-controls"><label>Advertiser <select id="historyBrand" aria-label="Ad history advertiser">'+cols.map(c=>'<option value="'+esc(c.id)+'"'+(c.id===adHistory.page?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label><div role="group" aria-label="Ad status">'+[['ACTIVE','Active'],['INACTIVE','Inactive'],['ALL','All ads']].map(([value,label])=>'<button type="button" class="ghost" data-history-status="'+value+'" aria-pressed="'+(adHistory.status===value)+'">'+label+'</button>').join('')+'</div><button class="ghost" data-history-action="refresh"'+(adHistory.loading?' disabled':'')+'>Refresh ads</button></div>';
+ const cards=adHistory.rows.slice(0,adHistory.limit).map(a=>{
+  // Missing stop dates do not establish that a historical ad is still active.
+  const label=adHistory.status==='ACTIVE'?'Active':adHistory.status==='INACTIVE'?'Inactive':a.stop&&Date.parse(a.stop)<Date.now()?'Ended':'Status not reported';
+  return '<article class="history-card">'+thumbHTML(a.id,'history-thumb',false)+'<div><span class="tag">'+esc(label)+'</span><h4>'+esc(a.title||'Ad creative')+'</h4><p class="history-copy">'+esc(a.copy||'No copy provided by Meta.')+'</p><p class="intel-sub">Started: '+esc(formatDate(a.start))+(a.stop?' · Ended: '+esc(formatDate(a.stop)):'')+'</p><a class="linkbutton" href="'+esc(metaUrl(a.id))+'" target="_blank" rel="noopener noreferrer">View full ad on Meta ↗</a></div></article>';
+ }).join('');
+ const empty=!adHistory.loading&&!adHistory.error&&!adHistory.rows.length?'<p role="status">No '+(adHistory.status==='ALL'?'available':adHistory.status.toLowerCase())+' ads returned for '+esc(selected.name)+'. This does not mean the brand has never advertised.</p>':'';
+ const error=adHistory.error?'<p role="alert">'+esc(adHistory.error)+' <button class="linkbutton" data-history-action="'+(adHistory.rows.length?'more':'refresh')+'">Retry</button></p>':'';
+ const more=adHistory.rows.length>adHistory.limit||adHistory.cursor?'<button class="ghost" data-history-action="more"'+(adHistory.loading?' disabled':'')+'>Show more ads</button>':'';
+ return '<section class="ad-history"><h3>Current and past ads</h3><p class="intel-sub">Browse ads Meta makes available for this advertiser. Past ads may be incomplete or unavailable. Comparison figures continue to use active ads only.</p>'+controls+error+empty+'<div class="history-grid">'+cards+'</div>'+(adHistory.loading?'<p role="status">Loading ads…</p>':'')+more+'</section>';
+}
+document.addEventListener('change',e=>{
+ if(e.target.id!=='historyBrand')return;
+ adHistory.page=e.target.value;void loadAdHistory();
+});
+document.addEventListener('click',e=>{
+ const open=e.target.closest('[data-history-page]');
+ if(open){adHistory.page=open.dataset.historyPage;cmp.tab='history';void loadAdHistory();return;}
+ const status=e.target.closest('[data-history-status]');
+ if(status){adHistory.status=status.dataset.historyStatus;void loadAdHistory();return;}
+ const action=e.target.closest('[data-history-action]');
+ if(!action||adHistory.loading)return;
+ if(action.dataset.historyAction==='more'&&adHistory.limit<adHistory.rows.length){adHistory.limit+=12;renderCards();}
+ else void loadAdHistory(action.dataset.historyAction==='more');
+});
+
 function compareHTML(){
  const brands=compareBrands(),mine=myBrand();
  if(!brands.length)return '<div class="cmp-empty"><h3>Compare your brand with your competitors</h3><p><a href="/tracker">Set up My competitors →</a></p></div>';
@@ -1382,7 +1437,7 @@ function compareHTML(){
  const cols=brands.map(b=>{const c={...b,d:cmp.data.get(b.id)};c.b=bench(c);return c});
  {let k=0;cmp.colors=new Map(cols.map(c=>[c.id,c.mine?"#0071e3":BRAND_PAL[k++%BRAND_PAL.length]]))}
  const hint=!mine?'<p class="cmp-hint">Add your brand in <a href="/tracker">My competitors</a> to unlock the Opportunity Radar.</p>':'';
- const pane=cmp.tab==="remix"?remixTabHTML(cols):cmp.tab==="mix"?mixHTML(cols):cmp.tab==="activity"?activityHTML(cols):cmp.tab==="messaging"?messagingCmpHTML(cols):overviewHTML(cols);
+ const pane=cmp.tab==="history"?adHistoryHTML(cols):cmp.tab==="remix"?remixTabHTML(cols):cmp.tab==="mix"?mixHTML(cols):cmp.tab==="activity"?activityHTML(cols):cmp.tab==="messaging"?messagingCmpHTML(cols):overviewHTML(cols);
  const when=cols.map(c=>c.b&&c.b.generatedAt).filter(Boolean).sort()[0];
  const anim=cmp.anim;cmp.anim=false;
  return '<div class="cmp-wrap cmp2">'+hint+brandStrip(cols)+trackerPickerHTML(activeBrand())+tabsHTML()+'<div class="cmp-pane'+(anim?' in':'')+'" role="tabpanel">'+pane+'</div><div class="cmp-foot"><button class="ghost" data-action="cmpreload">Refresh</button><span class="intel-sub">All accessible active '+(state.coverage==="GB"?"UK":"UK + EU")+' ads per brand from Meta’s Ad Library'+(when?', collected '+new Date(when).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):'')+'. Activity and format signals aren’t measures of performance.</span></div></div>';
@@ -1963,7 +2018,7 @@ const sourceRank={history:4,known:3,popular:3,meta:1};
 function suggestRank(term,list){
  const best=new Map();
  for(const s of list){
-  const score=nameScore(term,s.name);if(!score)continue;
+  const score=Math.max(nameScore(term,s.name),s.source==="directory"?Math.min(5,Math.max(0,Number(s.score)||0)):0);if(!score)continue;
   const key=canonicalName(s.name),cur=best.get(key),item={...s,score};
   // One row per advertiser name; prefer an entry that already has a Page ID.
   if(!cur||(!cur.id&&item.id)||(Boolean(cur.id)===Boolean(item.id)&&(sourceRank[item.source]||0)>(sourceRank[cur.source]||0)))best.set(key,cur&&!item.count?{...item,count:cur.count}:item);
@@ -1987,7 +2042,7 @@ function renderSuggest(state_){
  const box=$("suggest"),input=$("searchInput");
  if(state_==="hide"||(!suggest.items.length&&state_!=="loading"&&state_!=="empty"&&state_!=="limited")){box.hidden=true;input.setAttribute("aria-expanded","false");return}
  box.hidden=false;input.setAttribute("aria-expanded","true");
- const head=state_==="loading"?'<li class="sg-status"><span class="sg-dots"><i></i><i></i><i></i></span>Finding advertisers…</li>':state_==="empty"?'<li class="sg-status">No advertisers found yet. Press Enter to search ads mentioning “'+esc(suggest.term)+'”.</li>':state_==="limited"?'<li class="sg-status">Keep typing, or press Enter to search.</li>':"";
+ const head=state_==="loading"?'<li class="sg-status"><span class="sg-dots"><i></i><i></i><i></i></span>Finding advertisers…</li>':state_==="empty"?'<li class="sg-status">No advertisers found yet. Press Enter to look up “'+esc(suggest.term)+'”.</li>':state_==="limited"?'<li class="sg-status">Keep typing, or press Enter to search.</li>':"";
  const firstCat=suggest.items.findIndex(x=>x.source==="category");
  box.innerHTML=head+suggest.items.map((s,i)=>(i===firstCat?'<li class="sg-group" role="presentation">Advertisers running ads about “'+esc(suggest.term)+'”</li>':'')+(s.phrase?'<li role="option" id="sg-'+i+'" class="sg-item sg-phrase'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'"><span class="sg-text"><strong>🔍 '+esc(s.name)+'</strong><small>Narrower search</small></span></li>':s.all?'<li role="option" id="sg-'+i+'" class="sg-item sg-all'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'"><span class="sg-text"><strong>See all advertisers running ads about “'+esc(s.name)+'” →</strong></span></li>':'<li role="option" id="sg-'+i+'" class="sg-item'+(i===suggest.active?' active':'')+'" aria-selected="'+(i===suggest.active)+'" data-sg="'+i+'">'+logoHTML(s.id,s.name,"md sg-logo")+'<span class="sg-text"><strong>'+esc(s.name)+'</strong><small>'+(s.source==="category"?s.count+" ad"+(s.count===1?"":"s")+" about it"+(s.reach?" · UK reach "+compactNumber(s.reach):""):s.source==="history"?'Searched before':s.source==="known"?'Verified advertiser':s.source==="popular"?'Popular UK advertiser':s.count?s.count+(s.count>=100?"+":"")+" ads seen":"Advertiser directory")+'</small></span><span class="sg-go">↗</span></li>')).join("");
  input.setAttribute("aria-activedescendant",suggest.active>=0?"sg-"+suggest.active:"");
@@ -2032,8 +2087,22 @@ function onSearchInput(){
    const list=await fetchSuggestions(term);
    if($("searchInput").value.trim()!==term)return;
    suggest.items=suggestRank(term,mergeSuggestions(local,list));
-   // Few advertisers are named after the words: also list who runs ads about them.
-   if(suggest.items.length<4&&canonicalName(term).length>=4){
+   // Show directory matches immediately; don't hold them behind category research.
+   renderSuggest(suggest.items.length?"":"loading");
+   let exact=suggest.items.some(a=>a.id&&canonicalName(a.name)===canonicalName(term));
+   if(!exact&&canonicalName(term).length>=4){
+    try{
+     const r=await fetch("/api/advertisers?"+new URLSearchParams({q:term}),{cache:"no-store",signal:AbortSignal.timeout(40000)});
+     const d=await r.json();
+     if($("searchInput").value.trim()!==term)return;
+     const named=(r.ok&&Array.isArray(d.advertisers)?d.advertisers:[]).filter(a=>/^\d{3,30}$/.test(a.id||"")).map(a=>({...a,source:"directory",score:d.resolved?5:nameScore(term,a.name)}));
+     suggest.items=suggestRank(term,mergeSuggestions(suggest.items,named));
+     exact=suggest.items.some(a=>a.id&&canonicalName(a.name)===canonicalName(term));
+     renderSuggest(suggest.items.length?"":"loading");
+    }catch{}
+   }
+   // Category research is only a fallback when there is no exact advertiser.
+   if(!exact&&suggest.items.length<4&&canonicalName(term).length>=4){
     renderSuggest(suggest.items.length?"":"loading");
     const cat=await fetchCategorySuggestions(term);
     if($("searchInput").value.trim()!==term)return;
@@ -2047,7 +2116,7 @@ function onSearchInput(){
    if(err.name==="AbortError")return;
    renderSuggest(suggest.items.length?"":err.code==="RATE_LIMITED"?"limited":"hide");
   }
- },350);
+ },650);
 }
 function chooseSuggestion(i){
  const s=suggest.items[i];if(!s)return;

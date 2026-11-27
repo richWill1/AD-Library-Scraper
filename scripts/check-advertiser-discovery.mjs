@@ -201,3 +201,25 @@ assert.match(named.advertisers.find(a => a.id === '555').picture, /555\/picture/
 }
 
 console.log('Advertiser discovery checks passed: general names and domains, no cross-brand auto-open, picker when ambiguous, lookup failure kept separate.');
+
+// A previously unknown Page can be discovered from stopped campaigns, without
+// counting those campaigns as active ads or accepting unrelated ad-text mentions.
+const historicalMock = async input => {
+ const u = new URL(String(input));
+ if(u.pathname.endsWith('/ads_archive')){
+  const historical=u.searchParams.get('ad_active_status')==='ALL';
+  return json({data:historical?[
+   {id:'123',page_id:'555555',page_name:'Dormant Example'},
+   {id:'124',page_id:'666666',page_name:'Unrelated Brand'},
+  ]:[]});
+ }
+ if(u.pathname.endsWith('/pages/search'))return json({data:[]});
+ return new Response('',{status:404});
+};
+const historical = await discoverTradingName('Dormant Example',{token:'history-token',fetch:historicalMock});
+assert.equal(historical.status,'resolved');
+assert.equal(historical.advertisers[0].id,'555555');
+assert.equal(historical.advertisers[0].activeAds,false);
+assert.equal(historical.advertisers[0].adCount,0);
+assert.equal(historical.advertisers.length,1);
+console.log('Historical advertiser discovery passed without a hard-coded brand mapping.');
