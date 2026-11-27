@@ -94,7 +94,7 @@ function score(input:string,name:string){
  while(i<a.length&&j<b.length){if(a[i]===b[j]){i++;j++;continue;}if(++errors>1)return 0;if(a.length>=b.length)i++;if(b.length>=a.length)j++;}
  return errors+a.length-i+b.length-j<=1?1:0;
 }
-export async function directorySearch(q:string,handle=false){
+async function directoryPages(){
  if(Date.now()-refreshed>60000)await refresh();
  const combined=new Map(pages);
  for(const p of knownAdvertisers)if(!combined.has(p.pageId))combined.set(p.pageId,{id:p.pageId,name:p.pageName,lastSeen:0,seen:[]});
@@ -105,7 +105,15 @@ export async function directorySearch(q:string,handle=false){
   if(!cur)combined.set(b.id,{id:b.id,name:b.name,alias:b.alias,lastSeen:0,seen:[]});
   else if(!cur.alias)combined.set(b.id,{...cur,alias:b.alias});
  }
+ return {combined,curated};
+}
+export async function directoryPage(id:string){
+ const {combined}=await directoryPages();
+ return combined.get(id)||null;
+}
+export async function directorySearch(q:string,handle=false){
+ const {combined,curated}=await directoryPages();
  return [...combined.values()].map(p=>({id:p.id,name:p.name,alias:p.alias,curated:curated.get(p.id),category:p.category,adCount:p.seen.length,lastSeen:p.lastSeen,
-  score:handle?Number(p.alias?.toLowerCase()===q.toLowerCase()):Math.max(score(q,p.name),p.alias?score(q,p.alias):0)}))
+  score:handle?Number(p.alias?.toLowerCase()===q.toLowerCase()):Math.max(score(q,p.name),p.alias?score(q,p.alias):0,...(knownAdvertisers.find(a=>a.pageId===p.id)?.aliases||[]).map(a=>score(q,a)))}))
  .filter(p=>p.score).sort((a,b)=>b.score-a.score||b.lastSeen-a.lastSeen).slice(0,12);
 }

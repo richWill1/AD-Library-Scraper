@@ -1,6 +1,8 @@
 export type AdvertiserIdentity={pageId:string;pageName:string;handle?:string;aliases:string[]};
 // Previously verified advertiser identities, not a source of current ad data.
 export const knownAdvertisers:AdvertiserIdentity[]=[
+ // Page-specific Ad Library link confirmed by the site owner. Identity only.
+ {pageId:'182455928490394',pageName:'My Pension Expert',aliases:['my pension expert','mypensionexpert']},
  // CareCo's own site links to this handle. The public Facebook Page card
  // links to this numeric ID, which ads_archive independently names CareCo.
  {pageId:'107666748486424',pageName:'CareCo',handle:'CareCoMobilityExperts',aliases:['careco','CareCoMobilityExperts','careco.co.uk']},

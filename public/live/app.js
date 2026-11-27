@@ -43,7 +43,7 @@ function canonicalName(value){
 }
 function directAdvertiser(query){
  const q=String(query||"").trim();
- if(/^\d{1,30}$/.test(q))return {id:q,name:"Facebook Page "+q};
+ // Resolve numeric IDs on the server too, preserving any saved Page name.
  const v=canonicalName(q);
  return knownPages.find(p=>p.aliases.some(a=>canonicalName(a)===v)||canonicalName(p.name)===v)||null;
 }
@@ -188,13 +188,13 @@ function identityLinks(){
  const id=state.page;if(!/^\d{1,30}$/.test(id||""))return "";
  const handle=state.identity&&state.identity.handle&&!/-\d{8,}$/.test(state.identity.handle)?state.identity.handle:"";
  const pageUrl="https://www.facebook.com/"+encodeURIComponent(handle||id);
- const lib="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=GB&view_all_page_id="+encodeURIComponent(id);
+ const lib="https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country="+(state.coverage==="GB"?"GB":"ALL")+"&view_all_page_id="+encodeURIComponent(id);
  let site="";if(state.identity&&state.identity.website){try{const h=new URL(state.identity.website).hostname.replace(/^www\./,"");site=' · <a href="'+esc(state.identity.website)+'" target="_blank" rel="noopener noreferrer">'+esc(h)+'</a>'}catch{}}
  const cat=state.identity&&state.identity.category?' · '+esc(state.identity.category):"";
- return '<span style="display:block;margin-top:6px;font-size:13px;font-weight:500"><a href="'+esc(pageUrl)+'" target="_blank" rel="noopener noreferrer">Facebook Page</a> · Page ID '+esc(id)+' · <a href="'+esc(lib)+'" target="_blank" rel="noopener noreferrer">Page Ad Library</a>'+site+cat+'</span>';
+ return '<span style="display:block;margin-top:6px;font-size:13px;font-weight:500"><a href="'+esc(pageUrl)+'" target="_blank" rel="noopener noreferrer">Facebook Page</a> · Page ID '+esc(id)+' · <a href="'+esc(lib)+'" target="_blank" rel="noopener noreferrer">All available ads on Meta</a>'+site+cat+'</span>';
 }
 function showHeader(){
- {const title=state.view==="intel"?state.brand+" — Intelligence":state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="tracker"?(!(auth.enabled&&!auth.signedIn)&&!auth.checking&&activeBrand()&&!trk.mode&&activeBrand().competitors.length?activeBrand().name+" vs competitors.":"My competitors."):state.view==="compare"?"You vs your competitors.":(state.brand?(state.rows.length||state.loading?state.brand+" — Active ads":state.brand+" — No active UK ads"):"The creative library.");
+ {const title=state.view==="intel"?state.brand+" — Intelligence":state.view==="saved"?"Your saved ideas.":state.view==="insights"?(state.brand?state.brand+" — Messaging":"Messaging map."):state.view==="tracker"?(!(auth.enabled&&!auth.signedIn)&&!auth.checking&&activeBrand()&&!trk.mode&&activeBrand().competitors.length?activeBrand().name+" vs competitors.":"My competitors."):state.view==="compare"?"You vs your competitors.":(state.brand?(state.rows.length||state.loading?state.brand+" — Active ads":state.brand+(state.adsFailed?" — Ads unavailable":" — No active ads found")):"The creative library.");
  $("heading").innerHTML=(state.view!=="saved"&&state.view!=="compare"&&state.view!=="tracker"&&state.brand&&state.page?logoHTML(state.page,state.brand,"lg",state.identity&&state.identity.picture,state.identity&&state.identity.logo):"")+'<span>'+esc(title)+'</span>';}
  {let base=state.view==="intel"?"":state.view==="saved"?"Ads saved in this browser.":state.view==="insights"?"Hooks, benefits, offers, proof and calls to action across the loaded ads.":state.view==="tracker"?(!(auth.enabled&&!auth.signedIn)&&!auth.checking&&activeBrand()&&!trk.mode&&activeBrand().competitors.length?"All of their live UK ads, side by side: opportunities, creative mix, launch activity and messaging.":"Track your brand against up to "+COMP_MAX+" competitors, from their live UK ads."):state.view==="compare"?"Your brand side by side with up to 5 pinned competitors, from their live UK ads.":state.adsFailed&&state.page?"The Page was identified, but Meta’s ad lookup failed. This does not mean there are zero ads.":state.loading&&state.brand?"Loading active UK ads…":state.brand&&state.page&&!state.rows.length?"Page found. Meta returned no active ads for this Page in the selected countries.":state.brand?"Loaded from Meta's public Ad Library. Refresh the search to update.":"Search a brand to discover its Facebook advertiser pages.";
   if(state.view==="discover"&&state.identity&&state.identity.evidence&&!state.loading&&!state.adsFailed)base=state.identity.evidence+(state.page&&!state.rows.length?" Page found, no active UK ads.":"");
@@ -372,7 +372,7 @@ function pickHTML(){
   return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(a.id)+'" data-name="'+esc(a.name)+'">'+body+'</button>';
  }).join("");
  const related=p.kind==="category"&&p.related&&p.related.length?'<div class="pick-related"><span>Narrow it down:</span>'+p.related.map(r=>'<button type="button" class="chip-q" data-query="'+esc(r)+'">'+esc(r)+'</button>').join("")+'</div>':"";
- return '<div class="start pick"><h3>'+esc(head)+'</h3><p class="pick-sub">'+esc(sub)+'</p>'+related+(cards?'<div class="start-grid">'+cards+'</div>':'')+'</div>';
+ return '<div class="start pick"><h3>'+esc(head)+'</h3><p class="pick-sub">'+esc(sub)+'</p>'+(["missing","failed"].includes(p.kind)?'<p>Already know the Page? Paste its Facebook Page or Ad Library link into the search above.</p>':'')+related+(cards?'<div class="start-grid">'+cards+'</div>':'')+'</div>';
 }
 function brandCard(b,i,extra){return '<button class="bcard" style="--i:'+i+'" data-page="'+esc(b.id)+'" data-name="'+esc(b.name)+'">'+logoHTML(b.id,b.name,"lg")+'<span><strong>'+esc(b.name)+'</strong><br><small'+(extra?' class="live"':'')+'>'+esc(extra||"Followed brand")+'</small></span><span class="go">Explore ads →</span></button>'}
 function startHTML(){
@@ -430,7 +430,7 @@ function renderCards(){
  if(state.view==="insights"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+messagingView()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";renderPinbar();return}
  if(state.view==="tracker"){const focused=document.activeElement,search=focused?.matches('#trkBrandQ,#trkCompQ')?{id:focused.id,start:focused.selectionStart,end:focused.selectionEnd}:null;setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+trackerHTML()+'</div>';if(search){const input=$(search.id);if(input){input.focus({preventScroll:true});if(search.start!=null)input.setSelectionRange(search.start,search.end)}}hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
  if(state.view==="compare"){setBar("hide");$("cards").innerHTML='<div style="grid-column:1/-1">'+compareHTML()+'</div>';hydrateThumbs();$("pager").innerHTML="";$("toolbar").style.display="none";showHeader();renderPinbar();return}
- const blank=state.view==="saved"?empty("No saved ads yet.","Save a creative from an advertiser search to find it here."):state.adsFailed&&state.page?empty("Meta lookup failed","The Page was identified, but its ads could not be loaded. Try again in a moment.",identityLinks()):state.page&&/^\d{1,30}$/.test(state.page)?empty("Page found, no active UK ads","Meta has no active ads for this Page in the selected countries. It can still be the right advertiser.",identityLinks()):empty("No ads to display.",state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
+ const blank=state.view==="saved"?empty("No saved ads yet.","Save a creative from an advertiser search to find it here."):state.adsFailed&&state.page?empty("Meta lookup failed","The Page was identified, but its ads could not be loaded. Try again in a moment.",identityLinks()):state.page&&/^\d{1,30}$/.test(state.page)?empty("Page found — no active ads found","No active ads were returned for this Page in the selected countries. Past ads may still be available in Meta’s Ad Library.",identityLinks()):empty("No ads to display.",state.brand?"Try a different platform filter or another advertiser.":"Search an advertiser above to begin.");
  $("cards").innerHTML=rows.length?rows.map(card).join(""):state.loading?loadingCards():(state.pick&&state.view==="discover"&&!state.loading?pickHTML():isStart()?startHTML():blank);
  renderPinbar();
  $("pager").innerHTML=hidden>0?'<button class="ghost" data-action="showmore">Show '+Math.min(25,hidden)+' more ads ('+hidden+' remaining)</button>':state.view==="discover"&&(state.cursor||state.needsPageStart)&&state.brand?'<button class="ghost" data-action="loadmore">Load more Meta ads</button>':"";
@@ -487,7 +487,7 @@ async function collectPageAds(q,page,signal,rows,cursor){
  const seen=new Set(rows.map(a=>a.id));let all=[...rows];
  while(cursor&&all.length<FULL_SET_CAP){
   const t=$("loadbarText");if(t)t.textContent="Gathering all of "+(state.brand||q)+"’s active ads · "+all.length+" found…";
-  const params=new URLSearchParams({q:q||page,coverage:state.coverage,page,after:cursor});
+  const params=new URLSearchParams({q:page||q,coverage:state.coverage,page,after:cursor});
   const data=await request("/api/ads?"+params,"GET",null,signal);
   for(const a of Array.isArray(data.ads)?data.ads:[])if(!seen.has(a.id)){seen.add(a.id);all.push(a)}
   cursor=data.nextCursor||null;
@@ -505,7 +505,7 @@ async function runSearch(query,page="",after="",moreBrands=false,appendAds=false
  }
  feedback(moreBrands?"Looking for more advertiser pages…":"");
  if(page)state.pick=null;
- const params=new URLSearchParams({q:q||page,coverage:state.coverage});
+ const params=new URLSearchParams({q:page||q,coverage:state.coverage});
  if(page)params.set("page",page);
  if(after)params.set("after",after);
  try{
