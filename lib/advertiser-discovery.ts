@@ -538,8 +538,8 @@ async function fetchSite(host: string, request: typeof fetch): Promise<{reached:
 
 type AdRow = {adId: string; pageId: string; pageName: string; captions: string[]; viaHost?: boolean};
 
-async function adsFromGraph(term: string, token: string, pageId: string, request: typeof fetch, cursor = ''): Promise<{ok: boolean; rows: AdRow[]; cursor: string}> {
-  const params = new URLSearchParams({ad_reached_countries: '["GB"]', ad_type: 'ALL', ad_active_status: 'ACTIVE', limit: pageId ? '5' : '50', fields: 'id,page_id,page_name,ad_creative_link_captions'});
+async function adsFromGraph(term: string, token: string, pageId: string, request: typeof fetch, cursor = '', status = 'ACTIVE'): Promise<{ok: boolean; rows: AdRow[]; cursor: string}> {
+  const params = new URLSearchParams({ad_reached_countries: '["GB"]', ad_type: 'ALL', ad_active_status: status, limit: pageId ? '5' : '50', fields: 'id,page_id,page_name,ad_creative_link_captions'});
   if (pageId) params.set('search_page_ids', JSON.stringify([pageId]));
   else params.set('search_terms', term.slice(0, 100));
   if (cursor) params.set('after', cursor);
@@ -552,8 +552,8 @@ async function adsFromGraph(term: string, token: string, pageId: string, request
   } catch { return {ok: false, rows: [], cursor: ''}; }
 }
 
-async function adsFromBackend(term: string, pageId: string, cursor: string, request: typeof fetch): Promise<{ok: boolean; rows: AdRow[]; cursor: string}> {
-  const params = new URLSearchParams({q: term.slice(0, 100) || 'brand', coverage: 'GB'});
+async function adsFromBackend(term: string, pageId: string, cursor: string, request: typeof fetch, status = 'ACTIVE'): Promise<{ok: boolean; rows: AdRow[]; cursor: string}> {
+  const params = new URLSearchParams({q: term.slice(0, 100) || 'brand', coverage: 'GB', status});
   if (pageId) params.set('page', pageId);
   if (cursor) params.set('after', cursor);
   try {
@@ -640,6 +640,17 @@ export async function discoverTradingName(query: string, opts: {token?: string; 
   const ads = groupAds(rows, slugs);
   const directory = [...(opts.directory || []), ...pageSearch.filter(p => !rows.some(r => r.pageId === p.id)).map(p => ({id: p.id, name: p.name}))];
   let result = decide(query, {ads, sites, directory, adsOk, sitesAttempted: hosts.length, sitesReached: siteSettled.filter(s => s.reached).length});
+  // Identity discovery must also work for advertisers whose campaigns have stopped.
+  // Historical matches become directory identities, never active-ad counts.
+  if (!result.advertisers.some(a => a.id && a.confidence === 'verified')) {
+    const history = await Promise.all(terms.map(term => token
+      ? adsFromGraph(term, token, '', request, '', 'ALL')
+      : adsFromBackend(term, '', '', request, 'ALL')));
+    const historicalPages = groupAds(history.flatMap(r => r.rows), slugs)
+      .filter(p => nameMatch(query, p.name) !== 'none')
+      .map(p => ({id: p.id, name: p.name}));
+    if (historicalPages.length) result = decide(query, {ads, sites, directory: [...directory, ...historicalPages], adsOk: adsOk || history.some(r => r.ok), sitesAttempted: hosts.length, sitesReached: siteSettled.filter(s => s.reached).length});
+  }
   // A Page found on the brand site, but not in the keyword sample, still needs an Ad Library check.
   const unchecked = result.advertisers.filter(a => a.id && a.activeAds == null).slice(0, 3);
   if (unchecked.length) {
