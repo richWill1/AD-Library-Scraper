@@ -471,7 +471,7 @@ export function exactIdentity(query: string, directory: DirectoryPage[] = []): F
     }
   }
   for (const page of directory) {
-    if ((keys.has(compactName(page.name)) || (!!page.curated && keys.has(compactName(page.curated)))) && !hits.has(page.id)) hits.set(page.id, {id: page.id, name: page.name, category: page.category, picture: `https://graph.facebook.com/${page.id}/picture?type=square&width=128&height=128`, evidence: 'This Page name matches the trading name exactly.', confidence: 'verified', activeAds: null});
+    if ((keys.has(compactName(page.name)) || (!!page.alias && keys.has(compactName(page.alias))) || (!!page.curated && keys.has(compactName(page.curated)))) && !hits.has(page.id)) hits.set(page.id, {id: page.id, name: page.name, category: page.category, picture: `https://graph.facebook.com/${page.id}/picture?type=square&width=128&height=128`, evidence: 'This Page name matches the trading name exactly.', confidence: 'verified', activeAds: null});
   }
   return hits.size === 1 ? [...hits.values()][0] : null;
 }

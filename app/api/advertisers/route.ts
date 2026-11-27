@@ -1,4 +1,4 @@
-import {directorySearch, observePage} from '@/lib/advertiser-directory';
+import {directorySearch, directoryPage, observePage} from '@/lib/advertiser-directory';
 import {discoverTradingName, exactIdentity, resolvePageReference, safeAlias, type DiscoveryResult} from '@/lib/advertiser-discovery';
 import {getMetaCredential} from '@/lib/meta-token-store';
 import {facebookIdentity, brandQuery, knownAdvertisers} from '@/lib/brand-search';
@@ -16,12 +16,27 @@ const clean = (v: unknown, max: number) => (typeof v === 'string' && v.length <=
 
 export async function GET(req: NextRequest) {
   const q = (req.nextUrl.searchParams.get('q') || '').trim();
-  if (q.length < 2 || q.length > 250) return NextResponse.json({advertisers: [], error: 'Enter a brand name.'}, {status: 400});
+  if (q.length < 2 || q.length > 2048) return NextResponse.json({advertisers: [], error: 'Enter a brand name.'}, {status: 400});
   const now = Date.now();
   const reply = (body: object, status = 200) => NextResponse.json(body, {status, headers: {'Cache-Control': 'no-store'}});
   const identity = facebookIdentity(q);
   if (identity?.invalid) return reply({advertisers: [], status: 'not_found', message: 'Paste a Facebook Page profile link, @handle or numeric Page ID.'});
-  if (identity?.id) return reply({advertisers: [{id: identity.id, name: 'Facebook Page ' + identity.id, evidence: 'Numeric Page ID from the link you pasted.', confidence: 'verified', activeAds: null}], resolved: true, status: 'resolved'});
+  const pageId = identity?.id || (/^\d{3,30}$/.test(q) ? q : '');
+  if (pageId) {
+    let saved = await directoryPage(pageId);
+    if (!saved) {
+      // Metadata identifies a Page even when the active-ad response is empty.
+      try {
+        const {token} = await getMetaCredential();
+        const hit = await resolvePageReference({url: `https://www.facebook.com/${pageId}`}, token || '');
+        if (hit.status === 'resolved' && hit.id === pageId && clean(hit.name, 120)) {
+          observePage(hit.id, hit.name, [], hit.handle, hit.category);
+          saved = {id: hit.id, name: hit.name, seen: [], lastSeen: Date.now()};
+        }
+      } catch { /* A supplied numeric ID can still be used to request ads. */ }
+    }
+    return reply({advertisers: [{id: pageId, name: saved?.name || 'Facebook Page ' + pageId, evidence: saved ? 'Matched a Facebook Page already identified.' : 'Numeric Page ID supplied. Ad availability has not been checked.', confidence: 'verified', activeAds: null}], resolved: true, status: 'resolved', source: 'page-id'});
+  }
   if (identity?.handle) {
     const handle = identity.handle;
     const verified = knownAdvertisers.find(p => p.handle?.toLowerCase() === handle.toLowerCase());
@@ -45,7 +60,6 @@ export async function GET(req: NextRequest) {
   const key = term.toLowerCase();
   const suggest = req.nextUrl.searchParams.get('suggest') === '1';
   const hit = found.get(key);
-  if (hit && now - hit.at < (hit.fail ? 20000 : TTL)) return reply(hit.body, hit.fail ? 503 : 200);
   let indexed: {id: string; name: string; alias?: string; category?: string; score?: number}[] = [];
   try { indexed = await directorySearch(term); } catch { indexed = []; }
   if (suggest) return reply({advertisers: indexed, source: 'directory', status: indexed.length ? 'choose' : 'not_found', resolved: false});
@@ -55,6 +69,8 @@ export async function GET(req: NextRequest) {
     found.set(key, {at: now, fail: false, body});
     return reply(body);
   }
+  // Recheck saved identities before cached misses: another lookup may have learned the Page.
+  if (hit && now - hit.at < (hit.fail ? 20000 : hit.body.status === 'not_found' ? 60000 : TTL)) return reply(hit.body, hit.fail ? 503 : 200);
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || 'shared';
   const bucket = rates.get(ip);
   if (bucket && now - bucket.at < 60000) { if (bucket.count >= 15) return reply({advertisers: [], status: 'lookup_failed', code: 'RATE_LIMITED', message: 'Please wait a minute before searching again.'}, 429); bucket.count++; }
